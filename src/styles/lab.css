@@ -1,0 +1,604 @@
+/* ── Monster Lab: a stage of monsters over a row of big keys ──────────────── */
+
+.lab {
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1.08fr) minmax(0, 1fr);
+  gap: var(--gap);
+}
+
+/* The stage is a little night scene the monsters stand in. */
+.stage {
+  position: relative;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  gap: var(--gap-s);
+  padding: var(--gap-s) var(--gap);
+  border-radius: var(--radius-l);
+  background:
+    radial-gradient(60% 80% at 80% 0%, rgba(255, 224, 138, 0.12), rgba(255, 224, 138, 0) 60%),
+    linear-gradient(180deg, #2b3196 0%, #20247a 60%, #1a1d66 100%);
+  border: 2px solid var(--edge);
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.stage-scene {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.stage-scene svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Monster pods ─────────────────────────────────────────────────────────── */
+
+.pod {
+  --c: var(--bloop);
+  --c-light: var(--bloop-light);
+  --c-dark: var(--bloop-dark);
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  transition: flex-grow var(--t-slow) var(--ease-out);
+}
+
+.pod[data-selected='true'] {
+  flex-grow: 1.75;
+}
+
+.pod[data-monster='boom'] {
+  --c: var(--boom);
+  --c-light: var(--boom-light);
+  --c-dark: var(--boom-dark);
+}
+.pod[data-monster='grumble'] {
+  --c: var(--grumble);
+  --c-light: var(--grumble-light);
+  --c-dark: var(--grumble-dark);
+}
+.pod[data-monster='spark'] {
+  --c: var(--spark);
+  --c-light: var(--spark-light);
+  --c-dark: var(--spark-dark);
+}
+.pod[data-monster='puff'] {
+  --c: var(--puff);
+  --c-light: var(--puff-light);
+  --c-dark: var(--puff-dark);
+}
+.pod[data-monster='mimic'] {
+  --c: var(--mimic);
+  --c-light: var(--mimic-light);
+  --c-dark: var(--mimic-dark);
+}
+
+.pod-hit {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  touch-action: none;
+  border-radius: var(--radius-m);
+  cursor: grab;
+}
+
+.pod-hit:active {
+  cursor: grabbing;
+}
+
+/* Spotlight + glowing platform for the monster on the keys. */
+.pod-hit::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 2%;
+  width: 92%;
+  height: 16%;
+  max-height: 34px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0));
+  transition: background var(--t-slow);
+}
+
+.pod[data-selected='true'] .pod-hit::before {
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--c) 75%, white), color-mix(in srgb, var(--c) 0%, transparent));
+  opacity: 0.8;
+}
+
+.pod-hit::after {
+  content: '';
+  position: absolute;
+  inset: -20% 8% 0;
+  background: conic-gradient(from 180deg at 50% 0%, transparent 160deg, rgba(255, 246, 207, 0.16) 175deg, rgba(255, 246, 207, 0.16) 185deg, transparent 200deg);
+  opacity: 0;
+  transition: opacity var(--t-slow);
+  pointer-events: none;
+}
+
+.pod[data-selected='true'] .pod-hit::after {
+  opacity: 1;
+}
+
+.pod .monster-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-width: 260px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  transform-origin: 50% 100%;
+  transition: transform var(--t-slow) var(--ease-pop);
+}
+
+.pod:not([data-selected='true']) .monster-wrap {
+  transform: scale(0.86);
+}
+
+.monster-wrap > .squish {
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 100%;
+  transform: scale(calc(var(--squish-x, 1) * var(--drag-x, 1)), calc(var(--squish-y, 1) * var(--drag-y, 1)));
+  transition: transform 90ms var(--ease-out);
+}
+
+.monster-wrap > .squish.springing {
+  transition: transform 420ms var(--ease-pop), filter 300ms;
+}
+
+.squish > .monster-svg {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+}
+
+.pod[data-sleeping='true'] .monster-wrap {
+  filter: saturate(0.45) brightness(0.8);
+}
+
+/* Name tag (readers and grown-ups; kids rely on the character). */
+.pod-name {
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  transform: translateX(-50%);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.pod-name small {
+  display: block;
+  font-size: 0.85em;
+  color: var(--ink-3);
+  font-weight: 500;
+  text-align: center;
+}
+
+@media (max-height: 420px) and (orientation: landscape) {
+  .pod-name small {
+    display: none;
+  }
+}
+
+/* Loop badge: shows a monster has a loop; tap to let it sleep (mute). */
+.loop-badge {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  z-index: 2;
+  width: clamp(32px, 7vmin, 46px);
+  height: clamp(32px, 7vmin, 46px);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--c);
+  color: #1a1d5c;
+  border: 3px solid #fff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+  font-size: clamp(16px, 3.6vmin, 24px);
+  transition: transform var(--t) var(--ease-pop);
+}
+
+.loop-badge:active {
+  transform: scale(0.88);
+}
+
+.loop-badge[data-sleeping='true'] {
+  background: #2b2f7a;
+  color: #cfd2ff;
+  border-color: #6b71bf;
+}
+
+.loop-badge[data-clearing='true'] {
+  animation: shake 0.3s linear infinite;
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  25% {
+    transform: rotate(-12deg);
+  }
+  75% {
+    transform: rotate(12deg);
+  }
+}
+
+.rec-dot {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--rec);
+  box-shadow: 0 0 0 3px rgba(255, 59, 85, 0.35);
+  animation: rec-dot 1s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes rec-dot {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.zzz {
+  position: absolute;
+  right: 18%;
+  top: 14%;
+  color: #cfd2ff;
+  font-weight: 700;
+  font-size: var(--fs-m);
+  pointer-events: none;
+  animation: zzz 2.4s ease-in-out infinite;
+}
+
+@keyframes zzz {
+  0% {
+    transform: translate(0, 6px) scale(0.8);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(10px, -18px) scale(1.1);
+    opacity: 0;
+  }
+}
+
+/* Selected monster's toys: costume + effect buddies. */
+.pod-tools {
+  flex: 0 0 auto;
+  display: grid;
+  grid-auto-flow: row;
+  grid-template-columns: var(--tool);
+  align-content: center;
+  gap: var(--gap-s);
+  padding-left: var(--gap-s);
+  z-index: 2;
+}
+
+.app[data-mode='maker'] .pod-tools {
+  grid-template-columns: repeat(2, calc(var(--tool) * 0.86));
+}
+
+.tool-btn {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 2.5px solid var(--edge);
+  color: var(--ink-2);
+  transition:
+    transform var(--t) var(--ease-pop),
+    background var(--t),
+    border-color var(--t);
+}
+
+.tool-btn:active {
+  transform: scale(0.88);
+}
+
+.tool-btn > svg {
+  width: 72%;
+  height: 72%;
+}
+
+.tool-btn[data-level='1'] {
+  border-color: var(--fx);
+  background: color-mix(in srgb, var(--fx) 28%, #151850);
+}
+
+.tool-btn[data-level='2'] {
+  border-color: #fff;
+  background: color-mix(in srgb, var(--fx) 55%, #151850);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--fx) 70%, transparent);
+}
+
+.tool-btn .pips {
+  position: absolute;
+  bottom: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 2px;
+}
+
+.tool-btn .pips i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(0, 0, 0, 0.3);
+}
+
+.tool-btn .pips i[data-on='true'] {
+  background: #fff;
+}
+
+.tool-costume {
+  color: var(--c-light);
+  border-color: color-mix(in srgb, var(--c) 60%, transparent);
+}
+
+/* Add Monster seat */
+.add-seat {
+  flex: 0 0 clamp(40px, 9vmin, 72px);
+  align-self: flex-end;
+  margin-bottom: 8%;
+  height: 60%;
+  min-height: 56px;
+  max-height: 170px;
+  display: grid;
+  place-items: center;
+  border: 3px dashed rgba(200, 206, 255, 0.35);
+  border-radius: var(--radius-m);
+  color: var(--ink-3);
+  font-size: clamp(22px, 5vmin, 36px);
+  transition:
+    border-color var(--t),
+    color var(--t),
+    transform var(--t-fast);
+}
+
+.add-seat:active {
+  transform: scale(0.94);
+}
+
+.add-seat:hover {
+  border-color: rgba(220, 226, 255, 0.7);
+  color: var(--ink);
+}
+
+/* ── Play surface ─────────────────────────────────────────────────────────── */
+
+.surface {
+  position: relative;
+  min-height: 0;
+  display: flex;
+  gap: var(--gap);
+  padding: var(--gap);
+  border-radius: var(--radius-l);
+  background: var(--panel);
+  border: 2px solid var(--edge);
+  box-shadow: var(--shadow);
+}
+
+.keys {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--gap-s);
+  touch-action: none;
+}
+
+.key {
+  --k: var(--key-0);
+  position: relative;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-m);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--k) 78%, white) 0%, var(--k) 38%, color-mix(in srgb, var(--k) 88%, black) 100%);
+  box-shadow:
+    0 7px 0 color-mix(in srgb, var(--k) 55%, black),
+    0 12px 18px rgba(4, 5, 30, 0.45),
+    inset 0 2px 0 rgba(255, 255, 255, 0.45);
+  margin-bottom: 7px;
+  transition:
+    transform 70ms var(--ease-out),
+    box-shadow 70ms var(--ease-out),
+    filter 120ms;
+  pointer-events: none; /* the .keys container handles touches (glissando) */
+}
+
+.key[data-down='true'] {
+  transform: translateY(6px);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--k) 55%, black),
+    0 4px 8px rgba(4, 5, 30, 0.4),
+    inset 0 2px 0 rgba(255, 255, 255, 0.45);
+  filter: brightness(1.18) saturate(1.1);
+}
+
+.key[data-glow='true'] {
+  filter: brightness(1.25);
+}
+
+.key .glyph {
+  width: 62%;
+  max-width: 64px;
+  aspect-ratio: 1;
+  opacity: 0.55;
+  pointer-events: none;
+  transition: transform 120ms var(--ease-pop);
+}
+
+.key[data-down='true'] .glyph {
+  transform: scale(1.18);
+}
+
+/* Pitch staircase: glyphs climb from low (left) to high (right). */
+.key .glyph-stair {
+  position: absolute;
+  left: 50%;
+  top: var(--glyph-y, 50%);
+  width: 58%;
+  transform: translate(-50%, -50%);
+}
+
+.key[data-down='true'] .glyph-stair {
+  transform: translate(-50%, -50%) scale(1.18);
+}
+
+.key .key-num {
+  position: absolute;
+  bottom: 8px;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.75);
+  pointer-events: none;
+}
+
+/* Drum pads: bigger, squarer, with an icon for every drum. */
+.keys[data-kind='drums'] .key {
+  border-radius: var(--radius-l);
+}
+
+.keys[data-kind='drums'] .key .glyph {
+  opacity: 0.85;
+  width: 58%;
+  max-width: 80px;
+}
+
+.key-ripple {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border-radius: 50%;
+  border: 4px solid rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+  animation: ripple 420ms var(--ease-out) forwards;
+}
+
+@keyframes ripple {
+  from {
+    transform: scale(0.4);
+    opacity: 1;
+  }
+  to {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+
+/* Mimic's voice button */
+.voice-btn {
+  flex: 0 0 auto;
+  width: clamp(72px, 16vmin, 140px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--radius-l);
+  background: radial-gradient(circle at 40% 30%, #ff8fbf 0%, var(--mimic) 60%, var(--mimic-dark) 100%);
+  color: #fff;
+  border: 3px solid #fff;
+  box-shadow: var(--shadow), inset 0 -6px 0 rgba(0, 0, 0, 0.18);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  touch-action: none;
+}
+
+.voice-btn svg {
+  width: 46%;
+  height: auto;
+}
+
+.voice-btn[data-recording='true'] {
+  animation: rec-pulse 0.9s ease-in-out infinite;
+  background: radial-gradient(circle at 40% 30%, #ff6b7f 0%, var(--rec) 70%);
+}
+
+.voice-btn[data-locked='true'] {
+  background: #2b2f7a;
+  border-color: #6b71bf;
+  color: #cfd2ff;
+}
+
+.voice-level {
+  width: 70%;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.voice-level i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #fff;
+  border-radius: 4px;
+}
+
+/* Tall screens (tablets, desktops): the stage gets the extra height, the
+   spotlight monster grows, and its toys move above its head. */
+@media (min-height: 560px) {
+  .lab {
+    grid-template-rows: minmax(0, 1.3fr) minmax(0, 1fr);
+  }
+  .pod {
+    flex-direction: column;
+  }
+  .pod[data-selected='true'] {
+    flex-grow: 2.3;
+  }
+  .pod .monster-wrap {
+    max-width: 360px;
+  }
+  .pod-tools,
+  .app[data-mode='maker'] .pod-tools {
+    order: -1;
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    grid-auto-columns: var(--tool);
+    justify-content: center;
+    padding: var(--gap-s) 0 0;
+  }
+}
+
+/* Portrait tablets: stage on top, keys below, both roomy. */
+@media (orientation: portrait) {
+  .lab {
+    grid-template-rows: minmax(0, 1fr) minmax(0, 0.8fr);
+  }
+}

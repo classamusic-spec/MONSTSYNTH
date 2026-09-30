@@ -1,0 +1,498 @@
+/* ── Logo ─────────────────────────────────────────────────────────────────── */
+
+.logo {
+  text-align: center;
+  pointer-events: none;
+}
+
+.logo-word {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0.9;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.logo-l .logo-word {
+  font-size: clamp(34px, 11vmin, 96px);
+}
+
+.logo-m .logo-word {
+  font-size: clamp(24px, 7vmin, 60px);
+}
+
+.logo-1 {
+  color: #fff;
+  text-shadow:
+    0 0.06em 0 #1b1f63,
+    0 0.1em 0.2em rgba(0, 0, 0, 0.35);
+}
+
+.logo-2 {
+  background: linear-gradient(90deg, #ff5fa2 0%, #ffb02e 30%, #ffe23a 45%, #4fd65c 62%, #2eb8ff 80%, #9a5cff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0.06em 0 #1b1f63);
+  font-size: 1.12em;
+}
+
+.logo-tag {
+  margin: 0.6em 0 0;
+  font-size: var(--fs-s);
+  color: var(--ink-2);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ── Wake overlay ─────────────────────────────────────────────────────────── */
+
+.wake {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 3vmin, 28px);
+  background: radial-gradient(70% 70% at 50% 45%, rgba(20, 22, 70, 0.55), rgba(8, 9, 36, 0.86));
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+.wake-btn {
+  width: clamp(92px, 26vmin, 190px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 30%, #fff4c4 0%, #ffd566 55%, #ffab2e 100%);
+  box-shadow:
+    0 0 0 10px rgba(255, 213, 102, 0.22),
+    0 0 60px rgba(255, 213, 102, 0.55);
+  animation: wake-pulse 1.6s ease-in-out infinite;
+}
+
+.wake-sun {
+  width: 50%;
+  color: #7a3b00;
+  animation: wake-tap 1.6s ease-in-out infinite;
+}
+
+.wake-sun svg {
+  width: 100%;
+  height: auto;
+}
+
+.wake-text {
+  margin: 0;
+  font-size: var(--fs-l);
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 3px 0 #1b1f63;
+}
+
+@keyframes wake-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.07);
+  }
+}
+
+@keyframes wake-tap {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0) rotate(-8deg);
+  }
+  75% {
+    transform: translateY(8%) rotate(-8deg) scale(0.92);
+  }
+}
+
+/* Monsters sleep while the overlay is up. */
+.app[data-awake='false'] .monster-svg .m-lid {
+  animation: none;
+  transform: scaleY(1);
+}
+
+.app[data-motion='reduce'] .wake-btn,
+.app[data-motion='reduce'] .wake-sun {
+  animation: none;
+}
+
+/* ── Rotate hint (phones held upright) ────────────────────────────────────── */
+
+.rotate-hint {
+  display: none;
+}
+
+@media (orientation: portrait) and (max-width: 600px) {
+  .rotate-hint {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    background: linear-gradient(180deg, var(--sky-2), var(--sky-0));
+    text-align: center;
+  }
+  .rotate-hint p {
+    font-size: 26px;
+    font-weight: 700;
+    margin: 0;
+  }
+  .rotate-monster {
+    width: 150px;
+    height: 150px;
+    animation: rotate-tilt 2.4s var(--ease-in-out) infinite;
+  }
+  .rotate-phone {
+    width: 64px;
+    color: var(--ink-2);
+    animation: rotate-phone 2.4s var(--ease-in-out) infinite;
+  }
+  .rotate-phone svg {
+    width: 100%;
+    height: auto;
+  }
+}
+
+@keyframes rotate-tilt {
+  0%,
+  30% {
+    transform: rotate(0);
+  }
+  60%,
+  100% {
+    transform: rotate(-90deg);
+  }
+}
+
+@keyframes rotate-phone {
+  0%,
+  30% {
+    transform: rotate(0);
+  }
+  60%,
+  100% {
+    transform: rotate(-90deg);
+  }
+}
+
+/* ── Speech bubbles ───────────────────────────────────────────────────────── */
+
+.bubble-layer {
+  position: fixed;
+  z-index: 45;
+  top: calc(var(--safe-t) + var(--gap) * 1.5);
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.bubble {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px 8px 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #6b5cff, #9a5cff);
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 30px rgba(20, 10, 80, 0.5);
+  font-weight: 700;
+  font-size: var(--fs-m);
+  white-space: nowrap;
+  animation: bubble-in 360ms var(--ease-pop);
+}
+
+.bubble-face {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px;
+}
+
+.bubble-face .monster-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.bubble-icon {
+  width: 22px;
+  height: 22px;
+}
+
+@keyframes bubble-in {
+  from {
+    transform: translateY(-14px) scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* ── Modals (grown-up quiz, confirmations) ────────────────────────────────── */
+
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  background: rgba(6, 7, 30, 0.7);
+  padding: 16px;
+}
+
+.modal {
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px;
+  border-radius: 22px;
+  background: #1b1f63;
+  border: 2px solid var(--edge-strong);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.modal h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.modal label {
+  font-size: 18px;
+  color: var(--ink-2);
+}
+
+.modal input {
+  font-size: 22px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 2px solid var(--edge-strong);
+  background: #11134a;
+  color: #fff;
+}
+
+.quiz-wrong {
+  margin: 0;
+  color: #ffb3c0;
+  font-size: 15px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-danger {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #5b6cff, #9a5cff);
+  color: #fff;
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 2px solid var(--edge);
+}
+
+.btn-danger {
+  background: #b3243a;
+  color: #fff;
+}
+
+/* ── Overlay sheets (Add Monster tray, Monster Magic panel) ───────────────── */
+
+.sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(6, 7, 30, 0.55);
+  padding: calc(var(--gap) + var(--safe-t)) calc(var(--gap) + var(--safe-r)) calc(var(--gap) + var(--safe-b)) calc(var(--gap) + var(--safe-l));
+  animation: fade-in 200ms ease-out;
+}
+
+.sheet {
+  position: relative;
+  width: min(900px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: var(--gap) calc(var(--gap) * 1.5) calc(var(--gap) * 1.5);
+  border-radius: var(--radius-l);
+  background: #1b1f63;
+  border: 2px solid var(--edge-strong);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45);
+  animation: sheet-in 320ms var(--ease-out);
+  touch-action: pan-y;
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: var(--gap);
+}
+
+.sheet-head h2 {
+  margin: 0;
+  font-size: var(--fs-l);
+}
+
+.sheet-close {
+  width: var(--tool);
+  height: var(--tool);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: calc(var(--tool) * 0.5);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+}
+
+/* ── Finale confetti ──────────────────────────────────────────────────────── */
+
+.finale {
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.finale .confetti {
+  position: absolute;
+  top: -40px;
+  width: 26px;
+  height: 26px;
+  animation: confetti-fall 2.4s cubic-bezier(0.3, 0.5, 0.6, 1) forwards;
+}
+
+@keyframes confetti-fall {
+  to {
+    transform: translateY(115vh) rotate(540deg);
+  }
+}
+
+.finale-title {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  color: #fff;
+  text-shadow:
+    0 4px 0 #6a3fe0,
+    0 10px 30px rgba(0, 0, 0, 0.4);
+  animation: finale-pop 2.6s var(--ease-pop) forwards;
+  white-space: nowrap;
+}
+
+@keyframes finale-pop {
+  0% {
+    transform: translate(-50%, -50%) scale(0.3);
+    opacity: 0;
+  }
+  15% {
+    transform: translate(-50%, -50%) scale(1.1);
+    opacity: 1;
+  }
+  80% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+  }
+}
+
+/* ── Coach hand (wordless hints) ──────────────────────────────────────────── */
+
+.coach-hand {
+  position: fixed;
+  z-index: 42;
+  width: clamp(40px, 9vmin, 70px);
+  color: #fff;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+  animation: coach-tap 1.3s ease-in-out infinite;
+}
+
+.coach-hand svg {
+  width: 100%;
+  height: auto;
+}
+
+@keyframes coach-tap {
+  0%,
+  100% {
+    transform: translate(-30%, 10%) rotate(-12deg);
+  }
+  50% {
+    transform: translate(-30%, -4%) rotate(-12deg) scale(0.92);
+  }
+}
+
+.coach-glow {
+  position: fixed;
+  z-index: 41;
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow: 0 0 0 4px rgba(255, 224, 102, 0.85);
+  animation: coach-glow 1.3s ease-out infinite;
+}
+
+@keyframes coach-glow {
+  from {
+    transform: scale(0.9);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}

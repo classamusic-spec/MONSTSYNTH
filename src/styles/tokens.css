@@ -1,0 +1,125 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   MONSTER SYNTH · design tokens
+   Calm night-sky base; the monsters bring the colour. Sizes scale with the
+   *short* side of the screen (vmin) because kids hold phones sideways and
+   height is the scarce dimension.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  color-scheme: dark;
+
+  /* Type */
+  --font: 'Fredoka Variable', 'Fredoka', ui-rounded, 'SF Pro Rounded', 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  --fs-xs: clamp(10px, 1.9vmin, 13px);
+  --fs-s: clamp(12px, 2.4vmin, 16px);
+  --fs-m: clamp(14px, 3vmin, 20px);
+  --fs-l: clamp(18px, 4.4vmin, 30px);
+  --fs-xl: clamp(26px, 7vmin, 56px);
+
+  /* Night sky */
+  --sky-0: #0b0d30;
+  --sky-1: #121444;
+  --sky-2: #1b1f63;
+  --sky-3: #272d88;
+  --hill-1: #2a2f8f;
+  --hill-2: #1f236f;
+  --hill-3: #171a55;
+  --star: #fff6cf;
+  --moon: #ffe08a;
+
+  /* Surfaces */
+  --panel: rgba(17, 19, 64, 0.8);
+  --panel-2: rgba(35, 40, 118, 0.72);
+  --panel-3: rgba(52, 58, 150, 0.55);
+  --edge: rgba(150, 162, 255, 0.2);
+  --edge-strong: rgba(176, 186, 255, 0.5);
+  --shadow: 0 10px 26px rgba(3, 4, 30, 0.45);
+
+  /* Ink */
+  --ink: #ffffff;
+  --ink-2: #d4d7ff;
+  --ink-3: #959be0;
+  --ink-dim: #6b71bf;
+
+  /* Monsters (identity colours from the character art) */
+  --bloop: #2eb8ff;
+  --bloop-light: #8fdcff;
+  --bloop-dark: #1476d6;
+  --boom: #ff7a2f;
+  --boom-light: #ffb27a;
+  --boom-dark: #d9501a;
+  --grumble: #4fd65c;
+  --grumble-light: #9cf08f;
+  --grumble-dark: #23a03a;
+  --spark: #ffd233;
+  --spark-light: #ffe98a;
+  --spark-dark: #e0a300;
+  --puff: #b9a5ff;
+  --puff-light: #f1edff;
+  --puff-dark: #7f69e0;
+  --mimic: #ff5fa2;
+  --mimic-light: #ffa3cb;
+  --mimic-dark: #d93a7e;
+
+  /* Effect buddies */
+  --echo: #3de0c8;
+  --gloop: #8be04e;
+  --chomper: #b061ff;
+  --wiggle: #ff5ccf;
+
+  /* Keys: one colour per key, low → high (shape + height also encode pitch) */
+  --key-0: #ff4f7e;
+  --key-1: #ff8a2b;
+  --key-2: #ffcf2e;
+  --key-3: #4cd964;
+  --key-4: #2fd0e8;
+  --key-5: #3f8cff;
+  --key-6: #9a5cff;
+  --key-7: #ff5fd0;
+
+  /* Actions */
+  --rec: #ff3b55;
+  --rec-dark: #c81f3a;
+  --play-1: #7b86ff;
+  --play-2: #4d4fe3;
+  --focus: #ffe066;
+  --good: #4cd964;
+
+  /* Layout */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --gap: clamp(6px, 1.5vmin, 16px);
+  --gap-s: clamp(4px, 0.9vmin, 10px);
+  --radius-s: clamp(10px, 1.8vmin, 16px);
+  --radius-m: clamp(14px, 2.8vmin, 26px);
+  --radius-l: clamp(18px, 3.8vmin, 36px);
+  --dock-btn: clamp(48px, 11.5vmin, 84px);
+  --dock-w: calc(var(--dock-btn) + var(--gap) * 1.2);
+  --play-size: clamp(64px, 17vmin, 132px);
+  --rec-size: clamp(52px, 13vmin, 100px);
+  --small-btn: clamp(42px, 10vmin, 76px);
+  --transport-w: calc(var(--play-size) + var(--gap) * 1.2);
+  --tool: clamp(38px, 8.5vmin, 60px);
+
+  /* Motion */
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --t-fast: 110ms;
+  --t: 220ms;
+  --t-slow: 420ms;
+  --beat: 0.6s;
+}
+
+/* Parent option: stronger contrast for panels, text and edges. */
+.app[data-contrast='high'] {
+  --panel: rgba(8, 9, 36, 0.95);
+  --panel-2: rgba(24, 28, 92, 0.95);
+  --edge: rgba(220, 225, 255, 0.55);
+  --edge-strong: rgba(255, 255, 255, 0.9);
+  --ink-2: #ffffff;
+  --ink-3: #e3e6ff;
+  --ink-dim: #c5c9ff;
+}
