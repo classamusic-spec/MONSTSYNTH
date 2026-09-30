@@ -81,6 +81,12 @@ export function recordNote(p: Project, trackId: string, note: NoteEvent, opts: I
   let clip = activeClip(track);
   const wasEmpty = !clip || clip.notes.length === 0;
   let next = p;
+  // You always hear what you record: recording wakes a sleeping monster, and
+  // joins it to the soloed group if someone else is soloed.
+  const silencedBySolo = p.tracks.some((t) => t.solo) && !track.solo;
+  if (track.sleeping || silencedBySolo) {
+    next = updateTrack(next, trackId, (t) => ({ ...t, sleeping: false, solo: t.solo || silencedBySolo }));
+  }
   if (!clip) {
     clip = createClip(p.loopBeats);
     const created = clip;

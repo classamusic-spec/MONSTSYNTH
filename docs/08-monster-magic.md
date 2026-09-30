@@ -42,6 +42,7 @@ Recording is an overdub looper, with guard rails:
 5. Caps: 3 notes per slot (4 for drums), 96 notes per loop; the oldest unprotected notes go first.
 6. **Auto-stop:** if nothing is played for two loops, recording turns itself off.
 7. A whole recording pass is **one undo step**; an empty pass leaves no undo step.
+8. **You always hear what you record:** recording on a sleeping monster wakes it, and if other monsters are soloed it joins the solo group.
 
 ## 5 · Songs (Monster Blocks)
 

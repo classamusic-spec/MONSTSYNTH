@@ -41,6 +41,16 @@ describe('recording into a project', () => {
     expect(activeClip(p.tracks[0])!.id).toBe(clipId);
   });
 
+  it('wakes a sleeping monster when you record on it', () => {
+    let p = createProject({ seed: 9 });
+    const id = p.tracks[0].id;
+    p = { ...p, tracks: p.tracks.map((t, i) => (i === 0 ? { ...t, sleeping: true } : i === 1 ? { ...t, solo: true } : t)) };
+    p = recordNote(p, id, note('a', 0), opts);
+    expect(p.tracks[0].sleeping).toBe(false);
+    expect(p.tracks[0].solo).toBe(true);
+    expect(p.tracks[1].solo).toBe(true);
+  });
+
   it('cycles effect buddies through three levels', () => {
     let p = createProject({ seed: 4 });
     const id = p.tracks[0].id;
