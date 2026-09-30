@@ -134,7 +134,7 @@
   display: none;
 }
 
-@media (orientation: portrait) and (max-width: 600px) {
+@media (orientation: portrait) and (max-width: 600px) and (pointer: coarse) {
   .rotate-hint {
     position: fixed;
     inset: 0;
@@ -714,4 +714,10 @@
   margin: 0;
   font-size: var(--fs-xs);
   color: var(--ink-3);
+}
+
+/* Bloop is awake on the rotate screen, even before the first tap. */
+.app .rotate-hint .monster-svg .m-lid {
+  transform: scaleY(0);
+  animation: blink 4s 1s infinite;
 }

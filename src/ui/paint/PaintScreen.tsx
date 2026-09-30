@@ -120,6 +120,8 @@ function distanceToStroke(s: Stroke, x: number, y: number, aspect: number): numb
   return best;
 }
 
+let greeted = false;
+
 export function PaintScreen() {
   const painting = useApp((s) => s.project.painting);
   const tracks = useApp((s) => s.project.tracks);
@@ -135,6 +137,8 @@ export function PaintScreen() {
   const size = useRef({ w: 1, h: 1 });
 
   useEffect(() => {
+    if (greeted) return;
+    greeted = true;
     say({ text: 'Draw your music!', icon: 'brush', monster: 'bloop' });
   }, []);
 

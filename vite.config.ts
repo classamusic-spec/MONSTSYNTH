@@ -6,10 +6,16 @@ import { VitePWA } from 'vite-plugin-pwa';
 // MONSTER SYNTH — tablet-first PWA.
 // `base: './'` keeps every asset path relative so the build also works from a sub-path
 // (static hosting, a preview link, or an embedded demo).
+// `VITE_DEMO=1` builds the embeddable single-file demo: no service worker, every
+// asset inlined (see scripts/build-demo.mjs).
+const demo = process.env.VITE_DEMO === '1';
+
 export default defineConfig({
   base: './',
+  resolve: demo ? { alias: { 'virtual:pwa-register': '/src/pwa-stub.ts' } } : undefined,
   plugins: [
     react(),
+    !demo &&
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: false,
@@ -40,11 +46,9 @@ export default defineConfig({
       },
     }),
   ],
-  build: {
-    target: 'es2022',
-    sourcemap: false,
-    chunkSizeWarningLimit: 900,
-  },
+  build: demo
+    ? { target: 'es2022', outDir: 'dist-demo', assetsInlineLimit: 10_000_000, cssCodeSplit: false, chunkSizeWarningLimit: 2000 }
+    : { target: 'es2022', sourcemap: false, chunkSizeWarningLimit: 900 },
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],

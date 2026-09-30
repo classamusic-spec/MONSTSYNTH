@@ -1,7 +1,7 @@
 export function Logo({ tagline = true, size = 'l' }: { tagline?: boolean; size?: 'l' | 'm' }) {
   return (
     <div className={`logo logo-${size}`}>
-      <div className="logo-word" aria-label="Monster Synth">
+      <div className="logo-word" role="img" aria-label="Monster Synth">
         <span className="logo-1" aria-hidden>
           MONSTER
         </span>

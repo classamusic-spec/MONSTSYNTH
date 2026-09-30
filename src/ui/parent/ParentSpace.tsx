@@ -7,6 +7,7 @@ import { getState, useApp } from '../../store/store';
 import { exportSongWav, safeFileName, saveFile } from '../../studio/export';
 import { studio } from '../../studio/studio';
 import { Icon } from '../icons/Icon';
+import { IS_DEMO } from '../../env';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PARENT SPACE — everything a grown-up may want to decide, kept out of the
@@ -69,9 +70,11 @@ function SongRow({ meta, current }: { meta: ProjectMeta; current: boolean }) {
         <button className="btn-secondary" onClick={() => void duplicateSong(meta.id)}>
           Copy
         </button>
-        <button className="btn-secondary" disabled={!!busy} onClick={() => void exportWav()}>
-          <Icon name="download" /> Save audio
-        </button>
+        {!IS_DEMO && (
+          <button className="btn-secondary" disabled={!!busy} onClick={() => void exportWav()}>
+            <Icon name="download" /> Save audio
+          </button>
+        )}
         {confirm ? (
           <>
             <button className="btn-danger" onClick={() => void deleteSong(meta.id)}>
@@ -258,6 +261,11 @@ export function ParentSpace() {
             <li>No analytics or tracking. Nothing your child makes leaves this device unless you save or share it here.</li>
             <li>Songs and recordings are stored in this browser’s local storage (IndexedDB) and saved automatically.</li>
           </ul>
+          {IS_DEMO && (
+            <p className="ps-note">
+              This is the web demo: saving audio files and recording with the microphone work in the installed app, not inside this preview.
+            </p>
+          )}
           {storage && (
             <p className="ps-note">
               Using {storage.used}. {storage.persisted ? 'Protected from automatic clean-up by the browser.' : 'The browser may clear this data if the device runs low on space — save audio files of favourite songs.'}

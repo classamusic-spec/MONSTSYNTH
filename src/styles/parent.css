@@ -6,7 +6,8 @@
   z-index: 80;
   background: rgba(6, 7, 30, 0.78);
   overflow-y: auto;
-  touch-action: pan-y;
+  /* Grown-ups may pinch-zoom here; the play space itself blocks zoom via touch-action. */
+  touch-action: pan-y pinch-zoom;
   overscroll-behavior: contain;
   padding: calc(12px + var(--safe-t)) calc(12px + var(--safe-r)) calc(12px + var(--safe-b)) calc(12px + var(--safe-l));
   animation: fade-in 200ms ease-out;

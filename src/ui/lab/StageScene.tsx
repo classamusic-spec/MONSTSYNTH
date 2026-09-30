@@ -22,10 +22,11 @@ export const StageScene = memo(function StageScene() {
             <stop offset="1" stopColor="rgba(255,224,138,0)" />
           </radialGradient>
         </defs>
-        <circle cx={612} cy={124} r={62} fill="url(#stage-glow)" />
-        <circle cx={612} cy={124} r={25} fill="url(#stage-moon)" />
-        <circle cx={604} cy={117} r={5} fill="#f2c24e" opacity={0.55} />
-        <circle cx={620} cy={134} r={3.5} fill="#f2c24e" opacity={0.5} />
+        {/* Placed where it stays visible for wide phone stages and tall portrait ones. */}
+        <circle cx={505} cy={106} r={62} fill="url(#stage-glow)" />
+        <circle cx={505} cy={106} r={25} fill="url(#stage-moon)" />
+        <circle cx={497} cy={99} r={5} fill="#f2c24e" opacity={0.55} />
+        <circle cx={513} cy={116} r={3.5} fill="#f2c24e" opacity={0.5} />
         <g fill="#fff6cf">
           {STARS.map(([x, y, r], i) => (
             <circle key={i} className="twinkle" cx={x} cy={y} r={r} style={{ animationDelay: `${(i * 0.73) % 4.8}s` }} />

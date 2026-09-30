@@ -269,6 +269,11 @@ export class AudioEngine {
     return this.voices.length;
   }
 
+  /** Voices sustaining with no release scheduled (held keys). Should be 0 when no finger is down. */
+  heldCount(): number {
+    return this.voices.filter((v) => v.endTime === Infinity).length;
+  }
+
   /** Output level 0..1 for UI meters (and automated tests). */
   meter(): number {
     if (!this.analyser) return 0;

@@ -26,7 +26,8 @@ createRoot(document.getElementById('root')!).render(
 window.addEventListener('pagehide', () => void flushSave());
 
 // Offline support when installed as an app. Skipped inside embedded previews.
-if ('serviceWorker' in navigator && import.meta.env.PROD && window.top === window.self) {
+// (VITE_DEMO is compared inline so the demo build drops this code entirely.)
+if (import.meta.env.VITE_DEMO !== '1' && import.meta.env.PROD && 'serviceWorker' in navigator && window.top === window.self) {
   window.addEventListener('load', () => {
     import('virtual:pwa-register')
       .then(({ registerSW }) => registerSW({ immediate: true }))

@@ -717,6 +717,8 @@ class Studio {
     return {
       state: this.ctx?.state ?? 'none',
       voices: this.engine?.voiceCount() ?? 0,
+      held: this.engine?.heldCount() ?? 0,
+      live: this.live.size,
       level: this.engine?.meter() ?? 0,
       beat: this.transport && this.ctx ? this.transport.beatAt(this.ctx.currentTime) : 0,
       playing: this.transport?.playing ?? false,
