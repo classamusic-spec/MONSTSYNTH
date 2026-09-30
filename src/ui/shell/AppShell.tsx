@@ -15,6 +15,7 @@ import { Coach } from './Coach';
 import { Finale } from './Finale';
 import { NavDock } from './NavDock';
 import { ParentGate } from './ParentGate';
+import { RestTime } from './RestTime';
 import { RotateHint } from './RotateHint';
 import { Sky } from './Sky';
 import { TransportRail } from './TransportRail';
@@ -83,6 +84,7 @@ export function AppShell() {
       <Finale />
       {overlay === 'tray' && <MonsterTray />}
       {overlay === 'magic' && <MagicPanel />}
+      <RestTime />
       <ParentGate />
       {overlay === 'parent' && <ParentSpace />}
       <WakeOverlay />

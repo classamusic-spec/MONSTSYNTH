@@ -20,7 +20,7 @@ Plain **Web Audio API** — no audio libraries, no sample packs. Every sound is 
 
 | Voice | Used by | Technique |
 |---|---|---|
-| `SynthVoice` | Bloop, Grumble, Puff, Mimic's "la" | 1–4 oscillators per pitch (+ noise), lowpass with envelope on `detune` (log-domain sweeps), or a 3-band **formant** bank for vowels; pitch envelope ("bloop" scoop, laser "pew"), vibrato, tempo-synced filter wobble, optional drive; chords = several pitch groups in one voice |
+| `SynthVoice` | Bloop, Grumble, Puff, Mimic's "la" | 1–4 oscillators per pitch — sine/triangle/saw/square or **wavetables** (`PeriodicWave` built from harmonic recipes: glass, organ, hollow) — (+ noise), lowpass with envelope on `detune` (log-domain sweeps), or a 3-band **formant** bank for vowels; pitch envelope ("bloop" scoop, laser "pew"), vibrato, tempo-synced filter wobble, optional drive; chords = several pitch groups in one voice |
 | `BellVoice` | Spark | 2-operator **FM**: modulator at an (often inharmonic) ratio, decaying modulation index, optional shimmer partial, optional resonant blip filter |
 | `DrumVoice` | Boom | fully synthesised kit: sine-sweep kick + click, noise+body snare, 808-style metallic square bank hats/crash, triple-burst clap, bongos, cowbell, spring "boing" (value curve); kit-wide tune, decay, brightness, drive, "tin can" resonances |
 | `SamplerVoice` | Mimic | recorded buffer at `playbackRate = 2^(semitones/12)` (voice pitch *and* speed change — deliberately funny), tone filter, optional ring modulation (robot) |

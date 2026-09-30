@@ -10,8 +10,22 @@ import type { Env } from './dsp';
 
 export type Wave = 'sine' | 'square' | 'sawtooth' | 'triangle';
 
+/**
+ * Wavetables: harmonic recipes (amplitude of harmonic 1, 2, 3, …) turned into
+ * PeriodicWave oscillators — a cheap way to get timbres the four basic waves lack.
+ */
+export const WAVETABLES = {
+  glass: [1, 0, 0.42, 0, 0.18, 0.09, 0, 0.06, 0, 0.03],
+  organ: [1, 0.85, 0.5, 0.35, 0, 0.22, 0, 0.16],
+  hollow: [1, 0, 0.33, 0, 0.2, 0, 0.14, 0, 0.11],
+} as const;
+
+export type WavetableId = keyof typeof WAVETABLES;
+
 export interface OscSpec {
-  wave: Wave;
+  wave: Wave | 'table';
+  /** Harmonic recipe when `wave` is 'table'. */
+  table?: WavetableId;
   semi?: number;
   cents?: number;
   gain: number;
@@ -121,8 +135,7 @@ export const PATCHES: Record<string, Patch> = {
   'moon-drops': {
     kind: 'synth',
     oscs: [
-      { wave: 'sine', gain: 0.7 },
-      { wave: 'triangle', semi: 12, gain: 0.15 },
+      { wave: 'table', table: 'glass', gain: 0.62 },
       { wave: 'sine', semi: 19, gain: 0.05 },
     ],
     filter: { type: 'lowpass', cutoff: 4200, q: 0.7, env: 0, keyTrack: 0 },
@@ -270,9 +283,9 @@ export const PATCHES: Record<string, Patch> = {
   'dream-glow': {
     kind: 'synth',
     oscs: [
-      { wave: 'triangle', gain: 0.5 },
+      { wave: 'table', table: 'organ', gain: 0.42 },
       { wave: 'sine', semi: 12, gain: 0.2 },
-      { wave: 'sawtooth', cents: 5, gain: 0.12 },
+      { wave: 'table', table: 'hollow', cents: 6, gain: 0.14 },
     ],
     filter: { type: 'lowpass', cutoff: 2200, q: 2, env: 0.4, keyTrack: 0.2 },
     fenv: env(0.3, 1, 0.8, 1.5),

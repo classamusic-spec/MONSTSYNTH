@@ -76,6 +76,14 @@ function Eye({ uid, n, cx, cy, r, lidColor, iris = '#1a3d8f' }: EyeProps) {
         />
       </g>
       <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(10,12,41,.18)" strokeWidth={1.4} />
+      <path
+        className="m-lid-line"
+        d={`M${cx - r * 0.62},${cy + r * 0.02} Q${cx},${cy + r * 0.5} ${cx + r * 0.62},${cy + r * 0.02}`}
+        fill="none"
+        stroke="#1a1440"
+        strokeWidth={Math.max(2.4, r * 0.15)}
+        strokeLinecap="round"
+      />
     </g>
   );
 }

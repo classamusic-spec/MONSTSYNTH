@@ -185,3 +185,25 @@ export function vowelAt(tone: number): { f: number[]; g: number[] } {
     g: a.g.map((v, k) => v + (b.g[k] - v) * t),
   };
 }
+
+// ── Wavetables ───────────────────────────────────────────────────────────────
+
+const waveCache = new WeakMap<BaseAudioContext, Map<string, PeriodicWave>>();
+
+/** A PeriodicWave from a harmonic recipe (sine partials), cached per context. */
+export function periodicWave(ctx: BaseAudioContext, id: string, harmonics: readonly number[]): PeriodicWave {
+  let byId = waveCache.get(ctx);
+  if (!byId) {
+    byId = new Map();
+    waveCache.set(ctx, byId);
+  }
+  let wave = byId.get(id);
+  if (!wave) {
+    const imag = new Float32Array(harmonics.length + 1);
+    const real = new Float32Array(harmonics.length + 1);
+    harmonics.forEach((a, i) => (imag[i + 1] = a));
+    wave = ctx.createPeriodicWave(real, imag);
+    byId.set(id, wave);
+  }
+  return wave;
+}

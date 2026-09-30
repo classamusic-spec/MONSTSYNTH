@@ -1,5 +1,5 @@
-import { clamp, envelopeOff, envelopeOn, fadeOut, holdAt, mtof, noiseSource, saturationCurve, vowelAt } from '../dsp';
-import type { SynthPatch } from '../presets';
+import { clamp, envelopeOff, envelopeOn, fadeOut, holdAt, mtof, noiseSource, periodicWave, saturationCurve, vowelAt } from '../dsp';
+import { WAVETABLES, type SynthPatch } from '../presets';
 import { NodeBag, velocityGain, type Voice, type VoiceHost, type VoiceParams } from './base';
 
 // Subtractive synth voice (with an optional formant bank for voice-like pads).
@@ -60,7 +60,12 @@ export class SynthVoice implements Voice {
     pitches.forEach((midi, group) => {
       for (const spec of patch.oscs) {
         const osc = this.bag.source(ctx.createOscillator());
-        osc.type = spec.wave;
+        if (spec.wave === 'table') {
+          const id = spec.table ?? 'glass';
+          osc.setPeriodicWave(periodicWave(ctx, id, WAVETABLES[id]));
+        } else {
+          osc.type = spec.wave;
+        }
         const semi = spec.semi ?? 0;
         osc.frequency.value = mtof(midi + semi);
         const cents = spec.cents ?? 0;

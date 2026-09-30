@@ -3,6 +3,7 @@ import { micSupported } from '../../audio/mic';
 import type { MotionPreference, ProjectMeta } from '../../model/types';
 import { deleteEverything, deleteSong, duplicateSong, openSong, renameSong, setOverlay, updateSettings } from '../../store/actions';
 import { loadProject } from '../../store/persistence';
+import { SESSION_CHOICES } from '../../model/schema';
 import { getState, useApp } from '../../store/store';
 import { exportSongWav, safeFileName, saveFile } from '../../studio/export';
 import { studio } from '../../studio/studio';
@@ -242,6 +243,24 @@ export function ParentSpace() {
           </label>
           <p className="ps-note">
             Keyboard: A–K play the keys, 1–6 choose a monster, Space plays or stops, R records, Ctrl/⌘+Z undoes. Nothing flashes rapidly.
+          </p>
+        </section>
+
+        <section className="ps-section" aria-labelledby="ps-time">
+          <h2 id="ps-time">Play time</h2>
+          <div className="ps-field">
+            <label htmlFor="ps-session">Gentle bedtime for the monsters after</label>
+            <select id="ps-session" value={settings.sessionMinutes} onChange={(e) => updateSettings({ sessionMinutes: Number(e.target.value) })}>
+              {SESSION_CHOICES.map((m) => (
+                <option key={m} value={m}>
+                  {m === 0 ? 'No limit' : `${m} minutes`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="ps-note">
+            When the time is up the music stops, the monsters yawn and fall asleep, and everything is already saved. Only a grown-up can
+            continue (hold the two corners again). The timer restarts when you close Parent Space.
           </p>
         </section>
 

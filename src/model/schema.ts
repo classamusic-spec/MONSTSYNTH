@@ -240,8 +240,11 @@ export const DEFAULT_SETTINGS: Settings = {
   motion: 'system',
   highContrast: false,
   hints: true,
+  sessionMinutes: 0,
   lastProjectId: null,
 };
+
+export const SESSION_CHOICES = [0, 15, 30, 45, 60] as const;
 
 export function migrateSettings(raw: unknown): Settings {
   if (!isObject(raw)) return { ...DEFAULT_SETTINGS };
@@ -254,6 +257,7 @@ export function migrateSettings(raw: unknown): Settings {
     motion: raw.motion === 'reduce' || raw.motion === 'full' ? raw.motion : 'system',
     highContrast: bool(raw.highContrast, false),
     hints: bool(raw.hints, true),
+    sessionMinutes: (SESSION_CHOICES as readonly number[]).includes(raw.sessionMinutes as number) ? (raw.sessionMinutes as number) : 0,
     lastProjectId: typeof raw.lastProjectId === 'string' ? raw.lastProjectId : null,
   };
 }

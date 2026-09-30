@@ -33,6 +33,7 @@ npm run dev          # http://localhost:5173 (use --host to try it on a tablet o
 npm run build        # type-check + production build with offline service worker → dist/
 npm run preview      # serve the production build
 npm test             # unit tests (Vitest) for the music logic and data model
+npm run build:demo   # single-file demo (all assets inlined, no service worker) → dist-demo/
 ```
 
 Browser checks use Playwright with Chromium:
@@ -41,6 +42,7 @@ Browser checks use Playwright with Chromium:
 npx vite --port 5173 &              # dev server (the extended checks import modules from it)
 node scripts/e2e.mjs                # touch→sound, record, layer, play, undo, autosave
 node scripts/e2e-more.mjs           # Blocks, Paint, Add Monster, Mimic (fake mic), grown-up gate, WAV export
+node scripts/touch-check.mjs        # real touch events, first-tap audio unlock, no stuck notes, 4× CPU throttle
 node scripts/audio-levels.mjs       # offline-render every preset, report peak/RMS, worst-case mix
 node scripts/tour.mjs               # screenshots of every screen at phone / tablet / portrait sizes
 ```

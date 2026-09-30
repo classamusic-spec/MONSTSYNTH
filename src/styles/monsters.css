@@ -216,3 +216,22 @@
 .app[data-motion='reduce'] .pod[data-wiggle] .monster-svg .m-body {
   animation: none !important;
 }
+
+/* Closed eyes: a soft curve drawn over the lid whenever a monster sleeps. */
+.monster-svg .m-lid-line {
+  opacity: 0;
+  transition: opacity 200ms;
+}
+
+.app[data-awake='false'] .monster-svg .m-lid-line,
+.pod[data-sleeping='true'] .monster-svg .m-lid-line,
+.monster-svg.is-asleep .m-lid-line,
+.monster-svg[data-sleep='true'] .m-lid-line,
+.block-row[data-sleeping='true'] .monster-svg .m-lid-line,
+.portrait-monster[data-awake='false'] .monster-svg .m-lid-line {
+  opacity: 0.8;
+}
+
+.app .rotate-hint .monster-svg .m-lid-line {
+  opacity: 0;
+}

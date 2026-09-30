@@ -124,11 +124,14 @@
 }
 
 .row-solo {
-  flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  z-index: 1;
+  width: clamp(20px, 5.4vmin, 28px);
+  height: clamp(20px, 5.4vmin, 28px);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: clamp(10px, 2.8vmin, 13px);
   font-weight: 700;
   background: rgba(255, 255, 255, 0.08);
   color: var(--ink-3);
