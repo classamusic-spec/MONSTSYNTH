@@ -44,6 +44,7 @@ node scripts/e2e.mjs                # touch→sound, record, layer, play, undo, 
 node scripts/e2e-more.mjs           # Blocks, Paint, Add Monster, Mimic (fake mic), grown-up gate, WAV export
 node scripts/touch-check.mjs        # real touch events, first-tap audio unlock, no stuck notes, 4× CPU throttle
 node scripts/audio-levels.mjs       # offline-render every preset, report peak/RMS, worst-case mix
+node scripts/soak.mjs               # a minute of looping + tapping: bounded voices, flat memory
 node scripts/tour.mjs               # screenshots of every screen at phone / tablet / portrait sizes
 ```
 
