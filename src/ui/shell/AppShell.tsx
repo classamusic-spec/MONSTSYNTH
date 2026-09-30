@@ -9,6 +9,7 @@ import { MagicPanel } from '../lab/MagicPanel';
 import { MonsterTray } from '../lab/MonsterTray';
 import { PaintScreen } from '../paint/PaintScreen';
 import { ParentSpace } from '../parent/ParentSpace';
+import { LearnScreen } from '../learn/LearnScreen';
 import { SongsScreen } from '../songs/SongsScreen';
 import { BubbleLayer } from './BubbleLayer';
 import { Coach } from './Coach';
@@ -40,7 +41,8 @@ export function AppShell() {
         setOverlay(null);
         return;
       }
-      if (s.overlay || !s.awake || s.resting || e.altKey || e.repeat) return;
+      // Lessons have their own buttons and keys.
+      if (s.overlay || !s.awake || s.resting || s.screen === 'learn' || e.altKey || e.repeat) return;
       const key = e.key.toLowerCase();
       if (key === ' ' && target?.tagName !== 'BUTTON') {
         e.preventDefault();
@@ -77,8 +79,9 @@ export function AppShell() {
         {screen === 'blocks' && <BlocksScreen />}
         {screen === 'paint' && <PaintScreen />}
         {screen === 'songs' && <SongsScreen />}
+        {screen === 'learn' && <LearnScreen />}
       </main>
-      {screen !== 'songs' && <TransportRail />}
+      {screen !== 'songs' && screen !== 'learn' && <TransportRail />}
       <BubbleLayer />
       <Coach />
       <Finale />

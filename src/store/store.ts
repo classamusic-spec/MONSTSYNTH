@@ -10,7 +10,7 @@ import { scheduleSave } from './persistence';
 // `commit`, which records undo history and schedules an autosave.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type Screen = 'lab' | 'blocks' | 'paint' | 'songs';
+export type Screen = 'lab' | 'blocks' | 'paint' | 'songs' | 'learn';
 export type Overlay = null | 'parent' | 'tray' | 'magic';
 export type PaintTool = 'brush' | 'stars' | 'eraser';
 

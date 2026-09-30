@@ -10,6 +10,7 @@ import './styles/blocks.css';
 import './styles/paint.css';
 import './styles/songs.css';
 import './styles/parent.css';
+import './styles/learn.css';
 import { App } from './ui/App';
 import { flushSave } from './store/persistence';
 import * as actions from './store/actions';

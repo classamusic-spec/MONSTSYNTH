@@ -1,3 +1,4 @@
+import { lessonProject, type TeachSong } from '../magic/lessons';
 import { monsterBandProject } from '../magic/templates';
 import { newId } from '../model/ids';
 import { createProject, projectMeta } from '../model/project';
@@ -117,6 +118,21 @@ export async function newSong(kind: 'blank' | 'band' = 'blank') {
   const p = kind === 'band' ? monsterBandProject() : createProject();
   await saveProjectNow(p);
   await switchTo(p);
+}
+
+/** A learned song becomes a real song: saved, opened, shown in Monster Blocks. */
+export async function saveLessonAsSong(song: TeachSong) {
+  const p = lessonProject(song);
+  await saveProjectNow(p);
+  await switchTo(p);
+  setState({ screen: 'blocks' });
+}
+
+/** Keep the best stars a child earned for a song. */
+export function recordLessonStars(songId: string, stars: number) {
+  const current = getState().settings.lessonStars;
+  if ((current[songId] ?? 0) >= stars) return;
+  updateSettings({ lessonStars: { ...current, [songId]: stars } });
 }
 
 export async function duplicateSong(id: string) {

@@ -55,6 +55,26 @@ interface ClickEvent {
 
 type Scheduled = SeqEvent | ClickEvent;
 
+/** A note in a song lesson (a phrase the teacher sings, or the whole song with its band). */
+export interface LessonEvent {
+  absBeat: number;
+  monster: MonsterKind;
+  /** Scale step (a drum pad for Boom). */
+  step: number;
+  /** Beats. */
+  dur: number;
+  vel: number;
+  /** Melody notes carry "phrase:index" so the words can follow along. */
+  tag?: string;
+}
+
+export interface LessonPlayback {
+  tempo: number;
+  key: number;
+  lengthBeats: number;
+  onEnd?: () => void;
+}
+
 const CLICK_CHANNEL = 'metronome';
 
 function isClick(e: Scheduled): e is ClickEvent {
@@ -73,6 +93,9 @@ class Studio {
   private ctx: AudioContext | null = null;
   private engine: AudioEngine | null = null;
   private transport: Transport<Scheduled> | null = null;
+  private lessonTransport: Transport<LessonEvent> | null = null;
+  private lessonEvents: LessonEvent[] = [];
+  private lessonOpts: LessonPlayback | null = null;
   private live = new Map<number, LiveNote>();
   private liveSeq = 0;
   private visuals: { time: number; v: NoteVisual }[] = [];
@@ -138,6 +161,7 @@ class Studio {
     window.addEventListener('blur', () => this.releaseAll());
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
+        this.lessonStop();
         this.stop();
         this.releaseAll();
         void flushSave();
@@ -231,9 +255,10 @@ class Studio {
     const t = getState().transport;
     // Recording belongs to the Lab: leaving it finishes the take.
     if ((t.recording || t.armed) && screen !== 'lab') this.stopRecording();
+    if (screen !== 'learn') this.lessonStop();
     if (!t.playing) return;
     const wantMode = screen === 'blocks' ? 'song' : 'loop';
-    if (this.mode !== wantMode || screen === 'songs') this.stop();
+    if (this.mode !== wantMode || screen === 'songs' || screen === 'learn') this.stop();
   }
 
   // ── Live performance ──────────────────────────────────────────────────────
@@ -651,6 +676,79 @@ class Studio {
       songBeats: songBeats(p),
       level: this.engine?.meter() ?? 0,
     });
+  }
+
+  // ── Song lessons ──────────────────────────────────────────────────────────
+  // Lessons play on their own channels ("lesson:<monster>") and their own
+  // transport, so they never touch the open song.
+
+  private lessonChannel(monster: MonsterKind): string | null {
+    const engine = this.engine;
+    if (!engine) return null;
+    const id = `lesson:${monster}`;
+    if (!engine.hasChannel(id)) {
+      const info = MONSTERS[monster];
+      engine.ensureChannel({ id, monster, preset: info.presets[0].id, fx: info.defaultFx, volume: 0.8, maxVoices: info.maxVoices });
+    }
+    return id;
+  }
+
+  /** A key on the lesson keyboard: plays at once, in the song's key. */
+  lessonHit(monster: MonsterKind, step: number, key: number, opts: { durSec?: number; vel?: number } = {}) {
+    const engine = this.engine;
+    const ctx = this.ctx;
+    if (!engine || !ctx || getState().resting) return;
+    const channel = this.lessonChannel(monster);
+    if (!channel) return;
+    const vel = opts.vel ?? 0.85;
+    const dur = Math.max(0.2, opts.durSec ?? 0.4);
+    engine.trigger(noteRequest({ scale: 'major', key }, monster, channel, step, { vel }), ctx.currentTime, dur);
+    emitNote({ trackId: null, monster, step, vel, dur, source: 'live' });
+  }
+
+  /** Play a lesson timeline; `onEnd` fires when the last beat has been heard. */
+  lessonPlay(events: LessonEvent[], opts: LessonPlayback): boolean {
+    const ctx = this.ctx;
+    if (!ctx || !this.engine || getState().resting) return false;
+    this.stop();
+    this.lessonStop();
+    this.lessonEvents = [...events].sort((a, b) => a.absBeat - b.absBeat);
+    this.lessonOpts = opts;
+    this.lessonTransport ??= new Transport<LessonEvent>(ctx, {
+      provide: (from, to) => this.lessonEvents.filter((e) => e.absBeat >= from - 1e-9 && e.absBeat < to - 1e-9),
+      schedule: (e, when) => this.scheduleLesson(e, when),
+      ended: () => {
+        const done = this.lessonOpts?.onEnd;
+        this.lessonOpts = null;
+        done?.();
+      },
+    });
+    this.lessonTransport.setTempo(opts.tempo);
+    this.lessonTransport.start({ atTime: ctx.currentTime + 0.08, fromBeat: 0, endBeat: opts.lengthBeats });
+    return true;
+  }
+
+  lessonStop() {
+    if (!this.lessonTransport?.playing && !this.lessonOpts) return;
+    this.lessonTransport?.stop();
+    this.lessonOpts = null;
+    this.engine?.stopSequenced();
+    this.visuals = [];
+  }
+
+  get lessonPlaying(): boolean {
+    return !!this.lessonTransport?.playing;
+  }
+
+  private scheduleLesson(e: LessonEvent, when: number) {
+    const engine = this.engine;
+    const opts = this.lessonOpts;
+    if (!engine || !opts) return;
+    const channel = this.lessonChannel(e.monster);
+    if (!channel) return;
+    const durSec = Math.max(0.08, e.dur * (60 / opts.tempo));
+    engine.trigger(noteRequest({ scale: 'major', key: opts.key }, e.monster, channel, e.step, { vel: e.vel }), when, durSec);
+    this.queueVisual(when, { trackId: null, monster: e.monster, step: e.step, vel: e.vel, dur: durSec, source: 'loop', noteId: e.tag ? `lesson:${e.tag}` : undefined });
   }
 
   // ── Mimic's microphone ────────────────────────────────────────────────────

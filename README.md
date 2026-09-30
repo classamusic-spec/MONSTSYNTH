@@ -19,6 +19,7 @@ A tablet-first creative music toy for children aged about 3–10. It is built fr
 * **Loops**: record, play, stop and undo. Every monster shares one clock, so loops always line up.
 * **Monster Blocks**: the song as rows of blocks. Tap, swipe or drag to change it, then play it through to a finale ("You made a song!").
 * **Sound Painting**: draw music. Colour picks the monster, height is pitch, and left-to-right is time.
+* **Learn**: a monster teaches eight classic songs (Hot Cross Buns, Mary Had a Little Lamb, Twinkle Twinkle, Row Row Row Your Boat, Old MacDonald, London Bridge, Ode to Joy, Jingle Bells). It sings a phrase, then the next key glows and a hand points at it; children play back at their own pace. Wrong keys still make music. *Magic help* (any key plays the right note) is on for Little Monsters. Finish for stars, hear it with the band, or keep it as a song in Monster Blocks.
 * **Effect buddies**: Echo (delay), Gloop (reverb), Chomper (crunch) and Wiggle (wobble). Each one is animated on the monster.
 * **Two modes**: *Little Monster* (3–5) and *Monster Maker* (6–10, adds speed, mood, more pads and effects, redo, solo and names).
 * **My Songs**: a shelf of song pictures. It autosaves; there is never a save dialog.
@@ -42,6 +43,7 @@ Browser checks use Playwright with Chromium:
 npx vite --port 5173 &              # dev server (the extended checks import modules from it)
 node scripts/e2e.mjs                # touch→sound, record, layer, play, undo, autosave
 node scripts/e2e-more.mjs           # Blocks, Paint, Add Monster, Mimic (fake mic), grown-up gate, WAV export
+node scripts/e2e-learn.mjs          # song lessons: listen, play back, stars, band, keep as a song
 node scripts/e2e-edge.mjs           # review regressions: no recorded feedback sounds, focus loss, rest time, shared recordings
 node scripts/touch-check.mjs        # real touch events, first-tap audio unlock, no stuck notes, 4× CPU throttle
 node scripts/audio-levels.mjs       # offline-render every preset, report peak/RMS, worst-case mix

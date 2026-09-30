@@ -18,7 +18,7 @@ MONSTER SYNTH
 ├── 🟣 Wake screen  (first tap unlocks sound; monsters wake up and say hello)
 │
 ├── Child space  ─────────────────────────────────────────────────────────────
-│   ├── 🏠 My Songs          shelf of song pictures · New song · Start a band
+│   ├── 🏠 My Songs          shelf of song pictures · New song · Start a band · Learn a song
 │   ├── 👾 Monster Lab       ← app opens here
 │   │     ├── Stage          every monster on the song, touch = sound + select
 │   │     │     └── + Add Monster → Monster friends tray (invite / send home)
@@ -28,6 +28,9 @@ MONSTER SYNTH
 │   ├── 🧱 Monster Blocks    the song: one row per monster, one column per loop
 │   │     └── ✨ Magic       "make it a song" auto-arrangement
 │   ├── 🖌 Sound Painting     draw music: colour = monster, height = pitch, left→right = time
+│   ├── 🎵 Learn              a monster teaches 8 classic songs, one phrase at a time:
+│   │                         listen → your turn (the next key glows) → stars → with the band
+│   │                         → "Keep my song" turns it into a Monster Blocks song
 │   └── Transport rail       ▶ Play/Stop · ● Record (Lab) / ✨ Magic (Blocks) · ↶ Undo
 │                            (Maker: ↷ Redo · ✨ Monster Magic panel: speed & mood)
 │

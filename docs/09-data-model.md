@@ -62,13 +62,22 @@ Pitches are resolved at play time from `(step, monster register, key, scale)`. A
 | arrangement | `arrangement` |
 | settings | separate `Settings` document (below) |
 
-## Settings (schema v1, one per device)
+## Settings (schema v2, one per device)
 
 ```ts
-Settings { schemaVersion: 1; ageMode: 'little' | 'maker'; volume: 0..1; volumeCeiling: 0.1..1;
+Settings { schemaVersion: 2; ageMode: 'little' | 'maker'; volume: 0..1; volumeCeiling: 0.1..1;
            micAllowed: boolean; motion: 'system' | 'reduce' | 'full'; highContrast: boolean;
-           hints: boolean; lastProjectId: string | null }
+           hints: boolean; sessionMinutes: 0 | 15 | 30 | 45 | 60; lastProjectId: string | null;
+           lessonStars: Record<songId, 1..3> }   // v2: best stars per learned song
 ```
+
+v1 → v2 adds `lessonStars` (older settings start with none).
+
+Song lessons themselves are data in `src/magic/lessons.ts`, not stored: each song is
+phrases of exactly one block (8 beats) of major-scale steps 0–7 plus one chord root
+per half bar. "Keep my song" builds an ordinary project from it (`lessonProject`):
+the teacher monster gets one clip per distinct phrase, Boom/Grumble/Spark get a
+beat, a bass line and sparkles from the chords, and the tune repeats to fill 8 blocks.
 
 ## Storage
 

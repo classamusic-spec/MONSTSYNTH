@@ -14,7 +14,8 @@
   isolation: isolate;
 }
 
-.app[data-screen='songs'] {
+.app[data-screen='songs'],
+.app[data-screen='learn'] {
   grid-template-columns: var(--dock-w) minmax(0, 1fr);
   grid-template-areas: 'dock screen';
 }
@@ -33,7 +34,8 @@
     grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas: 'dock' 'screen' 'transport';
   }
-  .app[data-screen='songs'] {
+  .app[data-screen='songs'],
+  .app[data-screen='learn'] {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas: 'dock' 'screen';

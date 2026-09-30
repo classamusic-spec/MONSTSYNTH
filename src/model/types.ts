@@ -150,4 +150,6 @@ export interface Settings {
   /** Optional play-time limit in minutes (0 = off). When reached, the monsters go to sleep. */
   sessionMinutes: number;
   lastProjectId: string | null;
+  /** Best stars (1..3) earned per learned song, by song id (schema v2). */
+  lessonStars: Record<string, number>;
 }

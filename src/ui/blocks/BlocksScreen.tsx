@@ -181,6 +181,8 @@ export function BlocksScreen() {
           const cells = project.arrangement.rows[row.id] ?? [];
           const track = project.tracks.find((t) => t.id === row.id);
           const clip = track ? activeClip(track) : null;
+          // A block shows the loop it actually plays (learned songs have one per phrase).
+          const cellClip = (c: number) => track?.clips.find((x) => x.id === cells[c]) ?? null;
           return (
             <div key={row.id} className="block-row" data-monster={row.monster} data-sleeping={row.sleeping} data-empty={!row.clipId}>
               <div className="row-head">
@@ -231,7 +233,7 @@ export function BlocksScreen() {
                     role="button"
                     aria-label={`${row.label}, block ${c + 1}: ${on ? 'playing' : 'empty'}`}
                   >
-                    {on && row.kind === 'track' && clip && <ClipThumb clip={clip} monster={track!.monster} />}
+                    {on && row.kind === 'track' && (cellClip(c) ?? clip) && <ClipThumb clip={(cellClip(c) ?? clip)!} monster={track!.monster} />}
                     {on && row.kind === 'paint' && <PaintThumb painting={project.painting} />}
                     {!on && <span className="block-plus">+</span>}
                   </div>

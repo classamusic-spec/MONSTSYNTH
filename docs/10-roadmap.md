@@ -21,8 +21,9 @@ Everything in 0.1 exists to test that. Anything that doesn't serve it waits.
 | Basic delay and reverb | ✅ Echo & Gloop buddies |
 | Monster Blocks arrangement | ✅ tap, swipe, drag, sleep, Magic arrange, song playback + finale |
 | Responsive tablet interface | ✅ phones & tablets sideways, tablets upright, rotate hint |
+| **Learn (added after 0.1 review)** | 8 public-domain songs (Hot Cross Buns → Jingle Bells) taught phrase by phrase: listen, play it back at your own pace with the next key glowing, Magic help (any key plays the right note) on by default for Little Monsters, stars, play-along with the band, and "Keep my song" into Monster Blocks |
 | **Beyond the MVP brief, built because they were cheap on this architecture** | Sound Painting · Puff pads · Mimic voice sampler · Add Monster tray with bench · Monster Maker mode (speed, mood, Chomper, Wiggle, redo, solo) · Parent Space with gate (incl. optional play-time limit) · WAV export · PWA offline install · wordless coach · wavetable oscillators · crash-recovery screen |
-| **Quality gates run for 0.1** | 62 unit tests · 60 browser checks (core loop, Blocks/Paint/Mimic/gate/export, real touch + CPU throttle, review regressions) · axe-core: 0 violations · offline level check (worst case −2.1 dBFS) · 60 s soak (bounded voices, flat memory) |
+| **Quality gates run for 0.1** | 72 unit tests · 77 browser checks (core loop, Blocks/Paint/Mimic/gate/export, lessons, real touch + CPU throttle, review regressions) · axe-core: 0 violations · offline level check (worst case −2.1 dBFS) · 60 s soak (bounded voices, flat memory) |
 
 ## 0.2 — learn from children (next 4–6 weeks)
 

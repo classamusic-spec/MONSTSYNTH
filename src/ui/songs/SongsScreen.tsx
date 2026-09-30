@@ -1,5 +1,5 @@
 import { useApp } from '../../store/store';
-import { newSong, openSong } from '../../store/actions';
+import { newSong, openSong, setScreen } from '../../store/actions';
 import { Icon } from '../icons/Icon';
 import { Logo } from '../shell/Logo';
 import { MonsterArt } from '../monsters/MonsterArt';
@@ -41,6 +41,24 @@ export function SongsScreen() {
             <span className="starter-ribbon">Starter</span>
           </div>
           <span className="song-name">Start a band</span>
+        </button>
+        <button className="song-card song-learn" aria-label="Learn a song with the monsters" onClick={() => setScreen('learn')}>
+          <div className="portrait learn-portrait">
+            <div className="portrait-sky" />
+            <div className="portrait-cluster" data-count={2}>
+              {(['spark', 'bloop'] as const).map((m) => (
+                <div key={m} className="portrait-monster" data-awake="true">
+                  <MonsterArt kind={m} />
+                </div>
+              ))}
+            </div>
+            <span className="band-notes" aria-hidden>
+              <Icon name="star" />
+              <Icon name="note" />
+            </span>
+            <span className="starter-ribbon">8 songs</span>
+          </div>
+          <span className="song-name">Learn a song</span>
         </button>
         {songs.map((meta) => (
           <button

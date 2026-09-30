@@ -219,6 +219,10 @@
   --hue: 280;
 }
 
+.learn-portrait {
+  --hue: 190;
+}
+
 .band-notes {
   position: absolute;
   right: 8px;

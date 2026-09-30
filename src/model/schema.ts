@@ -31,7 +31,7 @@ import { PAINT_ROW } from './types';
 // because a child should never be told their song is "corrupt".
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const SETTINGS_SCHEMA_VERSION = 1;
+export const SETTINGS_SCHEMA_VERSION = 2;
 
 type Json = Record<string, unknown>;
 type Migration = (doc: Json) => Json;
@@ -71,7 +71,8 @@ function sanitizeNote(raw: unknown, lengthBeats: number): NoteEvent | null {
   if (!Number.isFinite(beat)) return null;
   return {
     id: str(raw.id, newId('n')),
-    beat: ((beat % lengthBeats) + lengthBeats) % lengthBeats,
+    // Only wrap out-of-range beats: re-wrapping in-range ones drifts triplets on every load.
+    beat: beat >= 0 && beat < lengthBeats ? beat : ((beat % lengthBeats) + lengthBeats) % lengthBeats,
     dur: num(raw.dur, 0.5, 0.0625, lengthBeats),
     step: Math.round(num(raw.step, 0, 0, 15)),
     vel: num(raw.vel, 0.8, 0.05, 1),
@@ -242,6 +243,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hints: true,
   sessionMinutes: 0,
   lastProjectId: null,
+  lessonStars: {},
 };
 
 export const SESSION_CHOICES = [0, 15, 30, 45, 60] as const;
@@ -259,5 +261,16 @@ export function migrateSettings(raw: unknown): Settings {
     hints: bool(raw.hints, true),
     sessionMinutes: (SESSION_CHOICES as readonly number[]).includes(raw.sessionMinutes as number) ? (raw.sessionMinutes as number) : 0,
     lastProjectId: typeof raw.lastProjectId === 'string' ? raw.lastProjectId : null,
+    // v1 → v2: song lessons. Older settings simply start with no stars.
+    lessonStars: sanitizeStars(raw.lessonStars),
   };
+}
+
+function sanitizeStars(raw: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!isObject(raw)) return out;
+  for (const [id, v] of Object.entries(raw)) {
+    if (id.length > 0 && id.length <= 40 && typeof v === 'number' && Number.isFinite(v)) out[id] = Math.round(Math.min(3, Math.max(1, v)));
+  }
+  return out;
 }
