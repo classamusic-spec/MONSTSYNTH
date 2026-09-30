@@ -12,7 +12,8 @@ import './styles/songs.css';
 import './styles/parent.css';
 import { App } from './ui/App';
 import { flushSave } from './store/persistence';
-import { getState } from './store/store';
+import * as actions from './store/actions';
+import { getState, setState } from './store/store';
 import { studio } from './studio/studio';
 
 createRoot(document.getElementById('root')!).render(
@@ -36,4 +37,4 @@ if ('serviceWorker' in navigator && import.meta.env.PROD && window.top === windo
 }
 
 // Test hook for automated browser checks (no production behaviour depends on it).
-(window as unknown as { __monster: unknown }).__monster = { studio, getState };
+(window as unknown as { __monster: unknown }).__monster = { studio, getState, setState, actions };

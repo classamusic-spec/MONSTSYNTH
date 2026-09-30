@@ -57,6 +57,7 @@ export function createProject(opts: CreateProjectOptions = {}): Project {
     beatsPerBar: 4,
     loopBeats: DEFAULT_LOOP_BEATS,
     tracks,
+    bench: [],
     arrangement: { length: DEFAULT_BLOCKS, rows },
     painting: { strokes: [], sleeping: false },
     art: { hue: Math.floor((seed % 360 + 360) % 360), seed },

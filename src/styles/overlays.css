@@ -454,6 +454,8 @@
 
 .coach-hand {
   position: fixed;
+  left: -200px;
+  top: -200px;
   z-index: 42;
   width: clamp(40px, 9vmin, 70px);
   color: #fff;
@@ -479,6 +481,8 @@
 
 .coach-glow {
   position: fixed;
+  left: -200px;
+  top: -200px;
   z-index: 41;
   border-radius: 50%;
   pointer-events: none;
@@ -495,4 +499,219 @@
     transform: scale(1.4);
     opacity: 0;
   }
+}
+
+/* ── Add Monster tray ─────────────────────────────────────────────────────── */
+
+.seats {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.seats span {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+}
+
+.seats span[data-on='true'] {
+  background: #fff;
+}
+
+.tray-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(96px, 20vmin, 150px), 1fr));
+  gap: var(--gap);
+}
+
+.tray-card {
+  --c: var(--bloop);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 8px 12px;
+  border-radius: var(--radius-m);
+  background: rgba(255, 255, 255, 0.05);
+  border: 3px solid var(--edge);
+  transition:
+    transform var(--t) var(--ease-pop),
+    border-color var(--t),
+    background var(--t);
+}
+
+.tray-card[data-monster='boom'] {
+  --c: var(--boom);
+}
+.tray-card[data-monster='grumble'] {
+  --c: var(--grumble);
+}
+.tray-card[data-monster='spark'] {
+  --c: var(--spark);
+}
+.tray-card[data-monster='puff'] {
+  --c: var(--puff);
+}
+.tray-card[data-monster='mimic'] {
+  --c: var(--mimic);
+}
+
+.tray-card[data-on='true'] {
+  border-color: var(--c);
+  background: color-mix(in srgb, var(--c) 18%, transparent);
+}
+
+.tray-card:active {
+  transform: scale(0.95);
+}
+
+.tray-card[data-full='true'] {
+  animation: shake 0.3s linear 2;
+}
+
+.tray-art {
+  width: 78%;
+  aspect-ratio: 1;
+}
+
+.tray-art .monster-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.tray-art .monster-svg.is-asleep .m-lid {
+  animation: none;
+  transform: scaleY(1);
+}
+
+.tray-name {
+  font-weight: 700;
+  font-size: var(--fs-m);
+}
+
+.tray-role {
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+}
+
+.tray-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 16px;
+}
+
+.tray-card[data-on='true'] .tray-badge {
+  background: var(--c);
+  color: #141646;
+}
+
+.tray-loop {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  color: #141646;
+  font-size: 15px;
+}
+
+/* ── Monster Magic panel ──────────────────────────────────────────────────── */
+
+.sheet-head h2 svg {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.12em;
+  color: var(--spark);
+}
+
+.magic-row {
+  display: grid;
+  grid-template-columns: clamp(60px, 12vmin, 90px) 1fr;
+  align-items: center;
+  gap: var(--gap);
+  margin-bottom: var(--gap);
+}
+
+.magic-label {
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.speed {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.speed input {
+  flex: 1;
+  accent-color: #9a5cff;
+  height: 36px;
+  touch-action: pan-x;
+}
+
+.speed-btn {
+  width: var(--tool);
+  height: var(--tool);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: calc(var(--tool) * 0.55);
+}
+
+.bpm {
+  min-width: 4.5em;
+  font-size: var(--fs-s);
+  color: var(--ink-2);
+  text-align: right;
+}
+
+.moods {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.mood {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid var(--edge);
+  text-align: left;
+}
+
+.mood span {
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+}
+
+.mood[data-on='true'] {
+  border-color: #fff;
+  background: rgba(154, 92, 255, 0.35);
+}
+
+.magic-note {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
 }

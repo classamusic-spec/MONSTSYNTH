@@ -225,7 +225,7 @@ export class DrumVoice implements Voice {
     };
 
     this.out = this.bag.add(ctx.createGain());
-    this.out.gain.value = patch.gain * velocityGain(params.vel) * 0.62;
+    this.out.gain.value = patch.gain * velocityGain(params.vel) * 0.46;
     let head: AudioNode = this.out;
 
     const brightness = clamp(patch.tone + params.tone, -1, 1);

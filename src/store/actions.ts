@@ -12,7 +12,7 @@ import {
   saveProjectNow,
   saveSettings,
 } from './persistence';
-import { requestPersistentStorage } from './idb';
+import { idbDelete, idbKeys, requestPersistentStorage } from './idb';
 import { commit, getState, setProject, setState, type Overlay, type PaintTool, type Screen } from './store';
 import type { PaintBrush } from '../model/types';
 
@@ -127,4 +127,16 @@ export async function deleteSong(id: string) {
 
 export async function refreshSongs() {
   setState({ songs: await listProjects() });
+}
+
+/** Grown-ups only: remove every song and recording from this device. */
+export async function deleteEverything() {
+  await flushSave();
+  for (const id of await idbKeys('projects')) await idbDelete('projects', id);
+  for (const id of await idbKeys('samples')) await idbDelete('samples', id);
+  const project = createProject();
+  await saveProjectNow(project);
+  setState({ songs: [projectMeta(project)] });
+  setProject(project);
+  updateSettings({ lastProjectId: project.id });
 }

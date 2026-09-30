@@ -101,7 +101,7 @@ export const PATCHES: Record<string, Patch> = {
     aenv: env(0.004, 0.4, 0.6, 0.2),
     pitchEnv: { semis: 12, time: 0.07 },
     glide: 0.05,
-    gain: 0.2,
+    gain: 0.3,
   },
   'rainbow-whistle': {
     kind: 'synth',
@@ -116,7 +116,7 @@ export const PATCHES: Record<string, Patch> = {
     pitchEnv: { semis: -2, time: 0.08 },
     vibrato: { rate: 5.8, cents: 22, delay: 0.18 },
     glide: 0.1,
-    gain: 0.36,
+    gain: 0.3,
   },
   'moon-drops': {
     kind: 'synth',
@@ -144,7 +144,7 @@ export const PATCHES: Record<string, Patch> = {
     pitchEnv: { semis: 5, time: 0.12 },
     vibrato: { rate: 11, cents: 70, delay: 0 },
     glide: 0.04,
-    gain: 0.24,
+    gain: 0.38,
   },
 
   // ── Grumble · bass ────────────────────────────────────────────────────────
@@ -176,7 +176,7 @@ export const PATCHES: Record<string, Patch> = {
     pitchEnv: { semis: -1, time: 0.15 },
     vibrato: { rate: 3, cents: 8, delay: 0.4 },
     glide: 0.12,
-    gain: 0.46,
+    gain: 0.38,
   },
   'wobble-cave': {
     kind: 'synth',
@@ -204,7 +204,7 @@ export const PATCHES: Record<string, Patch> = {
     aenv: env(0.005, 0.35, 0.7, 0.2),
     drive: 0.7,
     glide: 0.05,
-    gain: 0.26,
+    gain: 0.42,
   },
 
   // ── Spark · bells & plucks ────────────────────────────────────────────────
@@ -216,7 +216,7 @@ export const PATCHES: Record<string, Patch> = {
     indexDecay: 0.9,
     aenv: env(0.002, 1.6, 0, 1.2),
     shimmer: { ratio: 2.76, gain: 0.12, decay: 0.4 },
-    gain: 0.3,
+    gain: 0.22,
   },
   'magic-dust': {
     kind: 'bell',
@@ -238,7 +238,7 @@ export const PATCHES: Record<string, Patch> = {
     aenv: env(0.001, 0.25, 0, 0.15),
     pitchEnv: { semis: 12, time: 0.04 },
     filter: { cutoff: 1200, q: 12, env: 3, decay: 0.08 },
-    gain: 0.3,
+    gain: 0.34,
   },
   'ice-crystals': {
     kind: 'bell',
@@ -248,7 +248,7 @@ export const PATCHES: Record<string, Patch> = {
     indexDecay: 1.5,
     aenv: env(0.003, 2.2, 0, 1.5),
     shimmer: { ratio: 11.3, gain: 0.06, decay: 0.5 },
-    gain: 0.26,
+    gain: 0.19,
   },
 
   // ── Puff · pads (always chords) ───────────────────────────────────────────
@@ -264,7 +264,7 @@ export const PATCHES: Record<string, Patch> = {
     aenv: env(0.45, 1, 0.85, 1.6),
     vibrato: { rate: 4.5, cents: 5, delay: 0.5 },
     glide: 0.2,
-    gain: 0.15,
+    gain: 0.3,
     chord: true,
   },
   'dream-glow': {
@@ -279,7 +279,7 @@ export const PATCHES: Record<string, Patch> = {
     aenv: env(0.3, 1.2, 0.8, 2),
     filterLfo: { rate: 0.3, octaves: 0.8 },
     glide: 0.2,
-    gain: 0.18,
+    gain: 0.27,
     chord: true,
   },
   'pillow-choir': {
@@ -293,7 +293,7 @@ export const PATCHES: Record<string, Patch> = {
     aenv: env(0.35, 0.8, 0.85, 1.4),
     vibrato: { rate: 5, cents: 12, delay: 0.3 },
     glide: 0.15,
-    gain: 0.34,
+    gain: 0.55,
     chord: true,
     formant: true,
   },
@@ -308,13 +308,13 @@ export const PATCHES: Record<string, Patch> = {
     fenv: env(2.5, 2, 0.7, 2),
     aenv: env(1.2, 1, 0.9, 2.2),
     glide: 0.25,
-    gain: 0.14,
+    gain: 0.26,
     chord: true,
   },
 
   // ── Boom · drum kits ──────────────────────────────────────────────────────
   'stompy-kit': { kind: 'drums', tune: 0, decay: 1, tone: 0.1, drive: 0.25, metal: 0, gain: 1 },
-  'pillow-drums': { kind: 'drums', tune: -3, decay: 0.85, tone: -0.7, drive: 0, metal: 0, gain: 0.95 },
+  'pillow-drums': { kind: 'drums', tune: -3, decay: 0.85, tone: -0.7, drive: 0, metal: 0, gain: 1.15 },
   'robot-beats': { kind: 'drums', tune: 2, decay: 0.65, tone: 0.4, drive: 0.6, metal: 0.2, gain: 0.85 },
   'tin-can-band': { kind: 'drums', tune: 6, decay: 0.6, tone: 0.7, drive: 0.3, metal: 1, gain: 0.8 },
 

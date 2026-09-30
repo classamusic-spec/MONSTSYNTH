@@ -89,6 +89,12 @@ export interface Arrangement {
   rows: Record<string, (string | null)[]>;
 }
 
+/** A monster sent home from the stage. It keeps its loops and its blocks for when it comes back. */
+export interface BenchedTrack {
+  track: Track;
+  row: (string | null)[];
+}
+
 export interface Project {
   schemaVersion: number;
   id: string;
@@ -105,6 +111,8 @@ export interface Project {
   loopBeats: number;
   /** Stage order = row order in Monster Blocks. */
   tracks: Track[];
+  /** Monsters resting off stage (not playing), remembered with their loops. */
+  bench: BenchedTrack[];
   arrangement: Arrangement;
   painting: Painting;
   /** Drives the song's artwork on the shelf (no filenames for kids). */

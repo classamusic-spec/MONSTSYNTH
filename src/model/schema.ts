@@ -10,6 +10,7 @@ import {
   createTrack,
 } from './project';
 import type {
+  BenchedTrack,
   Clip,
   FxLevels,
   MonsterKind,
@@ -173,6 +174,22 @@ export function sanitizeProject(raw: Json): Project {
   for (const t of tracks) rows[t.id] = rowFor(t.id, (v) => t.clips.some((c) => c.id === v));
   rows[PAINT_ROW] = rowFor(PAINT_ROW, (v) => v === PAINT_ROW);
 
+  const bench: BenchedTrack[] = [];
+  if (Array.isArray(raw.bench)) {
+    for (const b of raw.bench) {
+      if (!isObject(b)) continue;
+      const track = sanitizeTrack(b.track, loopBeats);
+      if (!track || seen.has(track.monster)) continue;
+      seen.add(track.monster);
+      const src = Array.isArray(b.row) ? b.row : [];
+      const row = Array.from({ length }, (_, i) => {
+        const v = src[i];
+        return typeof v === 'string' && track.clips.some((c) => c.id === v) ? v : null;
+      });
+      bench.push({ track, row });
+    }
+  }
+
   const paintRaw = isObject(raw.painting) ? raw.painting : {};
   const strokes = Array.isArray(paintRaw.strokes)
     ? paintRaw.strokes.map(sanitizeStroke).filter((s): s is Stroke => s !== null)
@@ -192,6 +209,7 @@ export function sanitizeProject(raw: Json): Project {
     beatsPerBar: Math.round(num(raw.beatsPerBar, 4, 2, 7)),
     loopBeats,
     tracks,
+    bench,
     arrangement: { length, rows },
     painting: { strokes, sleeping: bool(paintRaw.sleeping, false) },
     art: { hue: num(artRaw.hue, 220, 0, 360), seed: num(artRaw.seed, 1, 0) },

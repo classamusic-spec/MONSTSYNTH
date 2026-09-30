@@ -1,1 +1,322 @@
-/* blocks */
+/* ── Monster Blocks ───────────────────────────────────────────────────────── */
+
+.blocks {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-l);
+  background: var(--panel);
+  border: 2px solid var(--edge);
+  box-shadow: var(--shadow);
+  padding: var(--gap);
+  overflow: hidden;
+}
+
+.blocks-grid {
+  --head-w: clamp(52px, 12vmin, 110px);
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto repeat(var(--rows), minmax(0, 1fr));
+  gap: var(--gap-s);
+  touch-action: none;
+}
+
+.blocks-head,
+.block-row {
+  display: grid;
+  grid-template-columns: var(--head-w) repeat(var(--cols), minmax(0, 1fr));
+  gap: var(--gap-s);
+  min-height: 0;
+}
+
+.blocks-head .col-num {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--ink-3);
+  transition: color var(--t);
+}
+
+.blocks-head .col-num::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: var(--ink-dim);
+}
+
+.blocks-head .col-num[data-now='true'] {
+  color: #fff;
+}
+
+.blocks-head .col-num[data-now='true']::after {
+  background: #fff;
+  box-shadow: 0 0 10px #fff;
+}
+
+.row-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 0;
+  border-radius: var(--radius-m);
+  background: var(--panel-2);
+  border: 2px solid var(--edge);
+  padding: 2px 4px;
+}
+
+.row-avatar {
+  position: relative;
+  flex: 1 1 auto;
+  height: 100%;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+}
+
+.row-avatar .monster-svg {
+  width: 100%;
+  height: 100%;
+  max-height: 72px;
+}
+
+.block-row[data-sleeping='true'] .row-avatar .monster-svg {
+  filter: saturate(0.4) brightness(0.75);
+}
+
+.row-avatar .monster-svg.is-asleep .m-lid {
+  animation: none;
+  transform: scaleY(1);
+}
+
+.row-zzz {
+  position: absolute;
+  right: 0;
+  top: 0;
+  font-weight: 700;
+  color: #cfd2ff;
+  font-size: var(--fs-s);
+}
+
+.paint-avatar {
+  width: 70%;
+  max-width: 48px;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(#ff4f7e, #ffcf2e, #4cd964, #2fd0e8, #9a5cff, #ff4f7e);
+  color: #fff;
+  font-size: 1.2em;
+}
+
+.paint-avatar svg {
+  width: 60%;
+  height: 60%;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+}
+
+.row-solo {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink-3);
+  border: 2px solid var(--edge);
+}
+
+.row-solo[data-on='true'] {
+  background: var(--focus);
+  color: #1a1d5c;
+  border-color: #fff;
+}
+
+.block {
+  --c: var(--bloop);
+  --c-dark: var(--bloop-dark);
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-s);
+  border: 2.5px dashed rgba(170, 180, 255, 0.28);
+  transition:
+    transform 160ms var(--ease-pop),
+    background var(--t),
+    border-color var(--t);
+}
+
+.block-row[data-monster='boom'] .block {
+  --c: var(--boom);
+  --c-dark: var(--boom-dark);
+}
+.block-row[data-monster='grumble'] .block {
+  --c: var(--grumble);
+  --c-dark: var(--grumble-dark);
+}
+.block-row[data-monster='spark'] .block {
+  --c: var(--spark);
+  --c-dark: var(--spark-dark);
+}
+.block-row[data-monster='puff'] .block {
+  --c: var(--puff);
+  --c-dark: var(--puff-dark);
+}
+.block-row[data-monster='mimic'] .block {
+  --c: var(--mimic);
+  --c-dark: var(--mimic-dark);
+}
+.block-row[data-monster='paint'] .block {
+  --c: #9a5cff;
+  --c-dark: #5b2fc0;
+}
+
+.block[data-on='true'] {
+  border: 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 85%, white) 0%, var(--c) 45%, var(--c-dark) 100%);
+  box-shadow:
+    0 4px 0 color-mix(in srgb, var(--c-dark) 70%, black),
+    inset 0 2px 0 rgba(255, 255, 255, 0.4);
+  animation: block-in 260ms var(--ease-pop);
+}
+
+.block-row[data-monster='paint'] .block[data-on='true'] {
+  background: linear-gradient(135deg, #ff5fa2 0%, #ffb02e 30%, #4fd65c 60%, #2eb8ff 80%, #9a5cff 100%);
+}
+
+@keyframes block-in {
+  from {
+    transform: scale(0.6);
+  }
+}
+
+.block .thumb {
+  position: absolute;
+  inset: 12% 8%;
+  width: 84%;
+  height: 76%;
+}
+
+.block-plus {
+  font-size: var(--fs-l);
+  font-weight: 600;
+  color: rgba(190, 198, 255, 0.35);
+}
+
+.block-row[data-empty='true'] .block {
+  border-style: dotted;
+  opacity: 0.5;
+}
+
+.block-row[data-sleeping='true'] .block[data-on='true'] {
+  filter: saturate(0.35) brightness(0.7);
+}
+
+.block[data-now='true'][data-on='true'] {
+  transform: scale(1.06);
+  box-shadow:
+    0 0 0 3px #fff,
+    0 0 18px color-mix(in srgb, var(--c) 80%, transparent);
+}
+
+.block[data-dragged='true'] {
+  opacity: 0.35;
+}
+
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--head-w) + var(--gap-s) + (100% - var(--head-w) - var(--gap-s)) * var(--playhead, 0));
+  width: 3px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t);
+}
+
+.blocks-grid:not([data-col='-1']) .playhead {
+  opacity: 0.9;
+}
+
+.block-ghost {
+  --c: var(--bloop);
+  position: fixed;
+  z-index: 60;
+  left: 0;
+  top: 0;
+  width: 64px;
+  height: 46px;
+  margin: -23px 0 0 -32px;
+  pointer-events: none;
+}
+
+.block-ghost span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  background: var(--c);
+  border: 3px solid #fff;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+  transform: rotate(-4deg) scale(1.08);
+}
+
+.block-ghost[data-monster='boom'] {
+  --c: var(--boom);
+}
+.block-ghost[data-monster='grumble'] {
+  --c: var(--grumble);
+}
+.block-ghost[data-monster='spark'] {
+  --c: var(--spark);
+}
+.block-ghost[data-monster='puff'] {
+  --c: var(--puff);
+}
+.block-ghost[data-monster='mimic'] {
+  --c: var(--mimic);
+}
+.block-ghost[data-monster='paint'] {
+  --c: #9a5cff;
+}
+
+.blocks-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(14, 16, 56, 0.82);
+  border-radius: var(--radius-l);
+  text-align: center;
+  padding: 16px;
+}
+
+.blocks-empty .monster-svg {
+  width: clamp(70px, 22vmin, 160px);
+  height: auto;
+}
+
+.blocks-empty p {
+  margin: 0;
+  max-width: 420px;
+  font-size: var(--fs-m);
+  color: var(--ink-2);
+}

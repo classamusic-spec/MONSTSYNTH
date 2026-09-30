@@ -1,1 +1,183 @@
-/* paint */
+/* ── Sound Painting ───────────────────────────────────────────────────────── */
+
+.paint {
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--gap);
+}
+
+.paint-canvas {
+  position: relative;
+  min-height: 0;
+  border-radius: var(--radius-l);
+  background:
+    radial-gradient(70% 90% at 50% 0%, rgba(80, 90, 220, 0.25), transparent 70%),
+    linear-gradient(180deg, #1c2070 0%, #141650 100%);
+  border: 2px solid var(--edge);
+  box-shadow: var(--shadow), inset 0 0 40px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.paint-canvas[data-tool='eraser'] {
+  cursor: cell;
+}
+
+.paint-canvas canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.paint-fx {
+  pointer-events: none;
+}
+
+/* Faint guides: 8 pitch lanes and 8 beats. */
+.paint-lanes,
+.paint-beats {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  pointer-events: none;
+}
+
+.paint-lanes {
+  flex-direction: column;
+}
+
+.paint-lanes span {
+  flex: 1;
+  border-bottom: 1px dashed rgba(170, 180, 255, 0.07);
+}
+
+.paint-beats span {
+  flex: 1;
+  border-right: 1px solid rgba(170, 180, 255, 0.06);
+}
+
+.paint-beats span:nth-child(4n) {
+  border-right-color: rgba(170, 180, 255, 0.14);
+}
+
+.paint-hello {
+  position: absolute;
+  left: 4%;
+  bottom: 0;
+  width: clamp(80px, 24vmin, 200px);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.paint-hello .monster-svg {
+  width: 100%;
+  height: auto;
+}
+
+.paint-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: var(--gap-s) var(--gap);
+  border-radius: var(--radius-l);
+  background: var(--panel);
+  border: 2px solid var(--edge);
+  box-shadow: var(--shadow);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.paint-tools {
+  display: flex;
+  gap: var(--gap-s);
+  padding-right: var(--gap);
+  border-right: 2px solid var(--edge);
+}
+
+.paint-tool {
+  width: calc(var(--tool) * 1.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 0;
+  border-radius: var(--radius-m);
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.paint-tool svg {
+  width: calc(var(--tool) * 0.62);
+  height: calc(var(--tool) * 0.62);
+}
+
+.paint-tool[data-on='true'] {
+  color: #fff;
+  background: linear-gradient(145deg, #4f7dff 0%, #9b5cff 55%, #ff5fcf 100%);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+.palette {
+  display: flex;
+  gap: var(--gap-s);
+  align-items: center;
+}
+
+.swatch {
+  --c: var(--bloop);
+  position: relative;
+  width: var(--tool);
+  height: var(--tool);
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c) 60%, white), var(--c) 60%, color-mix(in srgb, var(--c) 70%, black));
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  overflow: hidden;
+  transition: transform var(--t) var(--ease-pop);
+}
+
+.swatch .monster-svg {
+  position: absolute;
+  inset: 12% 8% -6%;
+  width: 84%;
+  height: 94%;
+}
+
+.swatch[data-brush='boom'] {
+  --c: var(--boom);
+}
+.swatch[data-brush='grumble'] {
+  --c: var(--grumble);
+}
+.swatch[data-brush='spark'] {
+  --c: var(--spark);
+}
+.swatch[data-brush='puff'] {
+  --c: var(--puff);
+}
+.swatch[data-brush='mimic'] {
+  --c: var(--mimic);
+}
+.swatch[data-brush='rainbow'] {
+  background: conic-gradient(from 20deg, #ff4f7e, #ffcf2e, #4cd964, #2fd0e8, #3f8cff, #9a5cff, #ff4f7e);
+}
+
+.swatch[data-on='true'] {
+  transform: scale(1.14);
+  border-color: #fff;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--c) 60%, transparent),
+    0 0 16px color-mix(in srgb, var(--c) 70%, transparent);
+}
+
+.swatch[data-brush='rainbow'][data-on='true'] {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.4);
+}
+
+@media (max-height: 420px) and (orientation: landscape) {
+  .paint-tool span {
+    display: none;
+  }
+}

@@ -296,6 +296,20 @@ class Studio {
     if (id >= 0) setTimeout(() => this.release(id), 140);
   }
 
+  /** A short note from a monster that may not be on stage (painting with Puff, say). */
+  hitMonster(monster: MonsterKind, step: number, vel = 0.8) {
+    const engine = this.engine;
+    const ctx = this.ctx;
+    if (!engine || !ctx) return;
+    const id = `paint:${monster}`;
+    const info = MONSTERS[monster];
+    if (!engine.hasChannel(id)) {
+      engine.ensureChannel({ id, monster, preset: info.presets[0].id, fx: info.defaultFx, volume: 0.75, maxVoices: info.maxVoices });
+    }
+    engine.trigger(noteRequest(getState().project, monster, id, step, { vel }), ctx.currentTime, 0.25);
+    emitNote({ trackId: null, monster, step, vel, dur: 0.25, source: 'live' });
+  }
+
   /** Holding Boom or Spark: a roll of repeated hits, eighth notes at the song tempo. */
   startRoll(trackId: string, step: number, expr: Partial<Expression> = {}): number {
     const tempo = getState().project.tempo;

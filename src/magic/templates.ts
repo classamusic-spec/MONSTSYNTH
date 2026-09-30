@@ -35,7 +35,6 @@ const BAND: Partial<Record<MonsterKind, N[]>> = {
 
 export function monsterBandProject(seed = Math.floor(Math.random() * 1e9)): Project {
   const project = createProject({ seed });
-  project.name = 'Monster Band';
   project.tracks = project.tracks.map((t) => {
     const pattern = BAND[t.monster];
     if (!pattern) return t;

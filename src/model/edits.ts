@@ -45,16 +45,23 @@ export function clearLoop(p: Project, trackId: string): Project {
   });
 }
 
+/** Invite a monster onto the stage. A monster coming back from the bench brings its loop and blocks. */
 export function addMonster(p: Project, monster: MonsterKind): Project {
   if (p.tracks.some((t) => t.monster === monster)) return p;
-  const track = createTrack(monster);
-  const next = { ...p, tracks: [...p.tracks, track] };
-  return { ...next, arrangement: ensureRows(next) };
+  const benched = p.bench.find((b) => b.track.monster === monster);
+  const track = benched ? benched.track : createTrack(monster);
+  const next: Project = { ...p, tracks: [...p.tracks, track], bench: p.bench.filter((b) => b !== benched) };
+  const arrangement = ensureRows(next);
+  if (benched) arrangement.rows[track.id] = Array.from({ length: arrangement.length }, (_, i) => benched.row[i] ?? null);
+  return { ...next, arrangement };
 }
 
+/** Send a monster home. Nothing is lost: it rests on the bench with its loops. */
 export function removeMonster(p: Project, trackId: string): Project {
-  if (p.tracks.length <= 1 || !p.tracks.some((t) => t.id === trackId)) return p;
-  const next = { ...p, tracks: p.tracks.filter((t) => t.id !== trackId) };
+  const track = p.tracks.find((t) => t.id === trackId);
+  if (p.tracks.length <= 1 || !track) return p;
+  const row = [...(p.arrangement.rows[trackId] ?? [])];
+  const next: Project = { ...p, tracks: p.tracks.filter((t) => t.id !== trackId), bench: [...p.bench.filter((b) => b.track.monster !== track.monster), { track, row }] };
   return { ...next, arrangement: ensureRows(next) };
 }
 
