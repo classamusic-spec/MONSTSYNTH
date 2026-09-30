@@ -1,6 +1,6 @@
-import { boingCurve, clamp, fadeOut, noiseSource, saturationCurve } from '../dsp';
+import { boingCurve, clamp, noiseSource, saturationCurve } from '../dsp';
 import type { DrumPatch } from '../presets';
-import { NodeBag, velocityGain, type Voice, type VoiceHost, type VoiceParams } from './base';
+import { Fader, NodeBag, velocityGain, type Voice, type VoiceHost, type VoiceParams } from './base';
 
 // Boom's drum kit — every drum is synthesised, so kits can be re-tuned, squished
 // (shorter/longer) and brightened live without sample libraries.
@@ -205,6 +205,7 @@ export class DrumVoice implements Voice {
   onEnded: (() => void) | null = null;
   private bag = new NodeBag();
   private out: GainNode;
+  private fader: Fader;
 
   constructor(
     readonly channelId: string,
@@ -262,7 +263,8 @@ export class DrumVoice implements Voice {
       pre.connect(shaper).connect(post).connect(head);
       head = pre;
     }
-    this.out.connect(host.dest);
+    this.fader = new Fader(ctx, this.bag);
+    this.out.connect(this.fader.node).connect(host.dest);
     // The chain was built back-to-front: `head` is its input, and the hit writes into it.
     this.endTime = DRUM_HITS[pad](ctx, this.bag, head, when, settings);
     this.bag.start(when);
@@ -276,7 +278,7 @@ export class DrumVoice implements Voice {
   release(): void {}
 
   kill(when: number, fade = 0.02): void {
-    const end = fadeOut(this.out.gain, when, fade);
+    const end = this.fader.fadeOut(when, fade);
     this.endTime = Math.min(this.endTime, end);
     this.bag.restop(this.endTime);
   }

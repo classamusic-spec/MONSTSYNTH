@@ -1,6 +1,6 @@
-import { clamp, fadeOut } from '../dsp';
+import { clamp } from '../dsp';
 import type { VoicePatch } from '../presets';
-import { NodeBag, velocityGain, type Voice, type VoiceHost, type VoiceParams } from './base';
+import { Fader, NodeBag, velocityGain, type Voice, type VoiceHost, type VoiceParams } from './base';
 
 // Mimic's sampler: plays the child's recorded sound faster (higher) or slower
 // (lower). The whole recording always plays, even for the quickest tap, so a
@@ -13,6 +13,7 @@ export class SamplerVoice implements Voice {
   onEnded: (() => void) | null = null;
   private bag = new NodeBag();
   private amp: GainNode;
+  private fader: Fader;
 
   constructor(
     readonly channelId: string,
@@ -59,7 +60,8 @@ export class SamplerVoice implements Voice {
     } else {
       src.connect(tone);
     }
-    tone.connect(this.amp).connect(host.dest);
+    this.fader = new Fader(ctx, this.bag);
+    tone.connect(this.amp).connect(this.fader.node).connect(host.dest);
 
     const length = buffer.duration / rate;
     const releaseAt = when + Math.max(0.02, length - 0.03);
@@ -77,7 +79,7 @@ export class SamplerVoice implements Voice {
   release(): void {}
 
   kill(when: number, fade = 0.02): void {
-    const end = fadeOut(this.amp.gain, when, fade);
+    const end = this.fader.fadeOut(when, fade);
     this.endTime = Math.min(this.endTime, end);
     this.bag.restop(this.endTime);
   }

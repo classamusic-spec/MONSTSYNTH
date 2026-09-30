@@ -1,6 +1,6 @@
-import { clamp, fadeOut, holdAt, mtof } from '../dsp';
+import { clamp, holdAt, mtof } from '../dsp';
 import type { BellPatch } from '../presets';
-import { NodeBag, velocityGain, type Voice, type VoiceHost, type VoiceParams } from './base';
+import { Fader, NodeBag, velocityGain, type Voice, type VoiceHost, type VoiceParams } from './base';
 
 // Two-operator FM voice for Spark. A modulator at a (often inharmonic) ratio
 // shakes the carrier's frequency; the modulation index decays quickly, which is
@@ -15,6 +15,7 @@ export class BellVoice implements Voice {
   private bag = new NodeBag();
   private carriers: { osc: OscillatorNode; mod: OscillatorNode; ratio: number }[] = [];
   private amp: GainNode;
+  private fader: Fader;
 
   constructor(
     readonly channelId: string,
@@ -46,7 +47,8 @@ export class BellVoice implements Voice {
       this.amp.connect(f);
       out = f;
     }
-    out.connect(host.dest);
+    this.fader = new Fader(ctx, this.bag);
+    out.connect(this.fader.node).connect(host.dest);
 
     for (const midi of pitches) {
       const freq = mtof(midi);
@@ -102,7 +104,7 @@ export class BellVoice implements Voice {
   release(): void {}
 
   kill(when: number, fade = 0.02): void {
-    const end = fadeOut(this.amp.gain, when, fade);
+    const end = this.fader.fadeOut(when, fade);
     this.endTime = Math.min(this.endTime, end);
     this.bag.restop(this.endTime);
   }

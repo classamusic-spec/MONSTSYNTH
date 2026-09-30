@@ -232,9 +232,9 @@ export class AudioEngine {
 
   private mimicVoice(req: NoteRequest, host: VoiceHost, patch: VoicePatch, when: number, sequenced: boolean, durSec?: number): Voice {
     if (host.sample) return new SamplerVoice(req.channelId, host, host.sample, patch, req, when, sequenced);
-    // No recording yet: Mimic sings "la" with its formant voice.
-    const midi = req.midi.map((m) => m + patch.semis);
-    return new SynthVoice(req.channelId, host, MIMIC_SINGER, { ...req, midi }, when, sequenced, durSec);
+    // No recording yet: Mimic sings "la" with its formant voice, in the costume's key
+    // (glides keep the transposition too).
+    return new SynthVoice(req.channelId, host, MIMIC_SINGER, req, when, sequenced, durSec, patch.semis);
   }
 
   /** A live note from a finger. Returns a handle for noteOff / glides. */

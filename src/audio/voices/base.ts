@@ -120,6 +120,37 @@ export class NodeBag {
   }
 }
 
+/**
+ * The last gain stage of every voice. It only ever fades out, so stopping or
+ * stealing a voice never has to fight its envelope, and never needs
+ * cancelAndHoldAtTime (missing in some browsers): its own curve is always known.
+ */
+export class Fader {
+  readonly node: GainNode;
+  private from = Infinity;
+  private to = Infinity;
+
+  constructor(ctx: BaseAudioContext, bag: NodeBag) {
+    this.node = bag.add(ctx.createGain());
+  }
+
+  /** Fade to silence from `when` (never in the past). Returns when it is silent. */
+  fadeOut(when: number, fade: number): number {
+    const end = when + Math.max(0.005, fade);
+    // Already fading: only a fade that starts no later and ends sooner replaces it,
+    // so the level never jumps back up.
+    if (when <= this.from && end < this.to) {
+      const g = this.node.gain;
+      g.cancelScheduledValues(when);
+      g.setValueAtTime(1, when);
+      g.linearRampToValueAtTime(0, end);
+      this.from = when;
+      this.to = end;
+    }
+    return this.to + 0.01;
+  }
+}
+
 export function velocityGain(vel: number): number {
   const v = Math.min(1, Math.max(0, vel));
   return 0.35 + 0.65 * v * v;

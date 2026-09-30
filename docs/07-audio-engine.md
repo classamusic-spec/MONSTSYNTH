@@ -60,7 +60,7 @@ Plain **Web Audio API** — no audio libraries, no sample packs. Every sound is 
 ## Protecting ears and the mix
 
 1. **Gain staging:** every preset calibrated by offline measurement (`scripts/audio-levels.mjs`): single notes peak around −6 to −13 dBFS; the full starter band peaks at −2.6 dBFS; the worst case (every effect at maximum, every channel at full volume) peaks at −2.1 dBFS.
-2. **Voice limiting:** per-monster limits (Grumble 3, Puff 3 chords, Bloop 6, Spark 8, Boom 10) and a global limit of 30; the oldest voice is stolen with a 15 ms fade (no clicks).
+2. **Voice limiting:** per-monster limits (Grumble 3, Puff 3 chords, Bloop 6, Spark 8, Boom 10) and a global limit of 30; the oldest voice is stolen with a 15 ms fade (no clicks). Stealing and stopping fade a dedicated last gain stage in each voice (`Fader`), never the envelope, so the fade starts from the true level even for a note scheduled ahead and even in browsers without `cancelAndHoldAtTime`.
 3. **Dynamics:** gentle glue compressor → brick-wall-style limiter → tanh soft clipper (transparent below about −6 dBFS).
 4. **Volume ceiling:** output gain = child volume × parent ceiling (default 85 %).
 5. **Click-free envelopes:** every attack starts from 0 with ≥ 2 ms ramps; releases use exponential targets; sources stop only after the tail.

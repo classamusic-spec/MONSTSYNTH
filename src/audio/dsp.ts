@@ -18,7 +18,12 @@ export const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.ma
 
 type HoldableParam = AudioParam & { cancelAndHoldAtTime?: (t: number) => AudioParam };
 
-/** Freeze a parameter at time `t` so a new ramp can start from wherever it is. */
+/**
+ * Freeze a parameter at time `t` so a new ramp can start from wherever it is.
+ * Only used for "now" (a finger lifting, a pitch glide): without
+ * cancelAndHoldAtTime the fallback reads the current value, which is only right
+ * for the present. Stopping or stealing a voice uses its Fader instead.
+ */
 export function holdAt(param: AudioParam, t: number): void {
   const p = param as HoldableParam;
   if (typeof p.cancelAndHoldAtTime === 'function') {
@@ -47,12 +52,6 @@ export function envelopeOff(param: AudioParam, t: number, release: number, hold 
   return t + r * 1.25 + 0.03;
 }
 
-/** Fast fade used when a voice is stolen or the transport stops (no clicks). */
-export function fadeOut(param: AudioParam, t: number, fade: number): number {
-  holdAt(param, t);
-  param.linearRampToValueAtTime(0, t + Math.max(0.005, fade));
-  return t + fade + 0.01;
-}
 
 // ── Shared buffers & curves (cached per context) ─────────────────────────────
 

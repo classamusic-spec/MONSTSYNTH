@@ -1,6 +1,6 @@
-import { clamp, envelopeOff, envelopeOn, fadeOut, holdAt, mtof, noiseSource, periodicWave, saturationCurve, vowelAt } from '../dsp';
+import { clamp, envelopeOff, envelopeOn, holdAt, mtof, noiseSource, periodicWave, saturationCurve, vowelAt } from '../dsp';
 import { WAVETABLES, type SynthPatch } from '../presets';
-import { NodeBag, velocityGain, type Voice, type VoiceHost, type VoiceParams } from './base';
+import { Fader, NodeBag, velocityGain, type Voice, type VoiceHost, type VoiceParams } from './base';
 
 // Subtractive synth voice (with an optional formant bank for voice-like pads).
 //   oscillators (+noise) → filter or formant bank → [drive] → amp envelope → channel
@@ -18,6 +18,7 @@ export class SynthVoice implements Voice {
   private bag = new NodeBag();
   private oscs: { node: OscillatorNode; semi: number; group: number }[] = [];
   private amp: GainNode;
+  private fader: Fader;
   private filter: BiquadFilterNode | null = null;
   private formants: { filter: BiquadFilterNode; gain: GainNode }[] = [];
   private released = false;
@@ -32,6 +33,8 @@ export class SynthVoice implements Voice {
     when: number,
     sequenced: boolean,
     durSec?: number,
+    /** Semitones added to every pitch, including glides (Mimic's singing costumes). */
+    private readonly transpose = 0,
   ) {
     const { ctx } = host;
     this.startTime = when;
@@ -41,7 +44,7 @@ export class SynthVoice implements Voice {
     if (patch.chord) aenv.a = patch.aenv.a * Math.pow(2, params.size * 0.8);
     this.rel = aenv.r;
 
-    const pitches = params.midi.length ? params.midi : [60];
+    const pitches = (params.midi.length ? params.midi : [60]).map((m) => m + transpose);
     const groupGain = 1 / Math.sqrt(pitches.length);
     const mix = this.bag.add(ctx.createGain());
 
@@ -148,7 +151,8 @@ export class SynthVoice implements Voice {
 
     this.amp = this.bag.add(ctx.createGain());
     this.amp.gain.value = 0;
-    chain.connect(this.amp).connect(host.dest);
+    this.fader = new Fader(ctx, this.bag);
+    chain.connect(this.amp).connect(this.fader.node).connect(host.dest);
 
     envelopeOn(this.amp.gain, when, aenv, patch.gain * velocityGain(params.vel));
     this.bag.start(when);
@@ -185,7 +189,7 @@ export class SynthVoice implements Voice {
 
   kill(when: number, fade = 0.02): void {
     this.released = true;
-    const end = fadeOut(this.amp.gain, when, fade);
+    const end = this.fader.fadeOut(when, fade);
     this.endTime = Math.min(this.endTime, end);
     this.bag.restop(this.endTime);
   }
@@ -196,7 +200,7 @@ export class SynthVoice implements Voice {
       const target = midi[o.group] ?? midi[midi.length - 1];
       if (target === undefined) continue;
       holdAt(o.node.frequency, when);
-      o.node.frequency.setTargetAtTime(mtof(target + o.semi), when, glide / 3);
+      o.node.frequency.setTargetAtTime(mtof(target + this.transpose + o.semi), when, glide / 3);
     }
   }
 
