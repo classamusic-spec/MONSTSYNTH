@@ -25,7 +25,7 @@ export function LabScreen() {
     const held = new Map<string, number>();
     const down = (e: KeyboardEvent) => {
       const s = getState();
-      if (e.metaKey || e.ctrlKey || e.altKey || s.overlay || !s.awake) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || s.overlay || !s.awake || s.resting) return;
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
       const key = e.key.toLowerCase();
@@ -34,7 +34,8 @@ export function LabScreen() {
       if (idx >= 0) {
         e.preventDefault();
         if (e.repeat || held.has(key)) return;
-        held.set(key, studio.press(track.id, idx, { vel: 0.85 }));
+        const id = studio.press(track.id, idx, { vel: 0.85 });
+        if (id >= 0) held.set(key, id);
         return;
       }
       const n = Number(key);
@@ -56,12 +57,19 @@ export function LabScreen() {
         held.delete(key);
       }
     };
+    // Keys still down when the window loses focus never send keyup: let them go.
+    const releaseHeld = () => {
+      held.forEach((id) => studio.release(id));
+      held.clear();
+    };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
+    window.addEventListener('blur', releaseHeld);
     return () => {
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
-      held.forEach((id) => studio.release(id));
+      window.removeEventListener('blur', releaseHeld);
+      releaseHeld();
     };
   }, []);
 

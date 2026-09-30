@@ -5,7 +5,7 @@ import { Transport } from '../audio/transport';
 import type { Voice } from '../audio/voices/base';
 import { audioBufferToWav, blobToAudioBuffer } from '../audio/wav';
 import { placeNote } from '../magic/recorder';
-import { collectEvents, type SeqEvent } from '../magic/sequence';
+import { collectEvents, type PlayMode, type SeqEvent } from '../magic/sequence';
 import { quantizeDuration } from '../magic/timing';
 import { recordNote, setRecordedDuration, setTrackSample } from '../model/edits';
 import { newId } from '../model/ids';
@@ -35,6 +35,8 @@ interface LiveNote {
   bend: number;
   voice: Voice | null;
   rec: { noteId: string; startAbs: number } | null;
+  /** Feedback sounds (buddy taps, painting, previews) are heard but never recorded. */
+  recordable: boolean;
 }
 
 interface RecordSession {
@@ -76,6 +78,8 @@ class Studio {
   private visuals: { time: number; v: NoteVisual }[] = [];
   private session: RecordSession | null = null;
   private skipBefore = new Map<string, number>();
+  /** Play mode of the running transport (read by the scheduler, set before it starts). */
+  private mode: PlayMode = 'loop';
   private signatures = new Map<string, string>();
   private sampleCache = new Map<string, AudioBuffer>();
   private channelSample = new Map<string, string | null>();
@@ -130,6 +134,8 @@ class Studio {
         setState({ awake: false });
       }
     };
+    // Losing focus (Alt/Cmd-Tab, a system dialog) must never leave a note stuck on.
+    window.addEventListener('blur', () => this.releaseAll());
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         this.stop();
@@ -171,6 +177,9 @@ class Studio {
     const engine = this.engine;
     if (!engine) return;
     const ids = new Set(p.tracks.map((t) => t.id));
+    // A monster leaving the stage loses its channel; forget its sample so it is
+    // re-attached if the same track comes back (bench, undo).
+    for (const id of [...this.channelSample.keys()]) if (!ids.has(id)) this.channelSample.delete(id);
     let changed = force || [...this.signatures.keys()].some((id) => !ids.has(id));
     for (const t of p.tracks) if (this.signatures.get(t.id) !== trackSignature(t)) changed = true;
     if (changed) {
@@ -220,17 +229,20 @@ class Studio {
 
   private screenChanged(screen: string) {
     const t = getState().transport;
-    if (!t.playing && !t.armed) return;
+    // Recording belongs to the Lab: leaving it finishes the take.
+    if ((t.recording || t.armed) && screen !== 'lab') this.stopRecording();
+    if (!t.playing) return;
     const wantMode = screen === 'blocks' ? 'song' : 'loop';
-    if (t.mode !== wantMode || screen === 'songs') this.stop();
+    if (this.mode !== wantMode || screen === 'songs') this.stop();
   }
 
   // ── Live performance ──────────────────────────────────────────────────────
 
-  press(trackId: string, step: number, expr: Partial<Expression> = {}): number {
+  press(trackId: string, step: number, expr: Partial<Expression> = {}, opts: { record?: boolean } = {}): number {
     const engine = this.engine;
     if (!engine) return -1;
     const s = getState();
+    if (s.resting) return -1;
     const track = s.project.tracks.find((t) => t.id === trackId);
     if (!track) return -1;
     const vel = expr.vel ?? 0.85;
@@ -240,10 +252,11 @@ class Studio {
     const req = noteRequest(s.project, track.monster, track.id, step, { vel, tone, size, bend });
     const voice = engine.noteOn(req);
     const id = ++this.liveSeq;
-    const live: LiveNote = { id, trackId, monster: track.monster, step, vel, tone, size, bend, voice, rec: null };
+    const recordable = opts.record !== false;
+    const live: LiveNote = { id, trackId, monster: track.monster, step, vel, tone, size, bend, voice, rec: null, recordable };
     this.live.set(id, live);
     emitNote({ trackId, monster: track.monster, step, vel, dur: 0.35, source: 'live' });
-    if (s.transport.recording || s.transport.armed) this.recordStart(live);
+    if (recordable && (s.transport.recording || s.transport.armed)) this.recordStart(live);
     return id;
   }
 
@@ -271,7 +284,7 @@ class Studio {
     }
     emitNote({ trackId: live.trackId, monster: live.monster, step: patch.step, vel: live.vel, dur: 0.3, source: 'live' });
     const t = getState().transport;
-    if (t.recording) {
+    if (t.recording && live.recordable) {
       this.finishRecNote(live);
       this.recordStart(live);
     }
@@ -290,9 +303,9 @@ class Studio {
     for (const id of [...this.rolls.keys()]) this.stopRoll(id);
   }
 
-  /** A quick tap (keyboard shortcut, demo). */
-  hit(trackId: string, step: number, expr: Partial<Expression> = {}) {
-    const id = this.press(trackId, step, expr);
+  /** A quick tap. Pass `{ record: false }` for feedback sounds that must not land in a loop. */
+  hit(trackId: string, step: number, expr: Partial<Expression> = {}, opts: { record?: boolean } = {}) {
+    const id = this.press(trackId, step, expr, opts);
     if (id >= 0) setTimeout(() => this.release(id), 140);
   }
 
@@ -300,7 +313,7 @@ class Studio {
   hitMonster(monster: MonsterKind, step: number, vel = 0.8) {
     const engine = this.engine;
     const ctx = this.ctx;
-    if (!engine || !ctx) return;
+    if (!engine || !ctx || getState().resting) return;
     const id = `paint:${monster}`;
     const info = MONSTERS[monster];
     if (!engine.hasChannel(id)) {
@@ -335,7 +348,7 @@ class Studio {
   preview(trackId: string) {
     const ctx = this.ctx;
     const engine = this.engine;
-    if (!ctx || !engine) return;
+    if (!ctx || !engine || getState().resting) return;
     const p = getState().project;
     const t = p.tracks.find((x) => x.id === trackId);
     if (!t) return;
@@ -371,8 +384,10 @@ class Studio {
     if (s.transport.armed) {
       // Monster Magic: the first note of a new song *is* the downbeat.
       transport.setTempo(p.tempo);
-      transport.start({ atTime: ctx.currentTime, fromBeat: 0 });
+      this.mode = 'loop';
+      this.skipBefore.clear();
       setTransport({ playing: true, recording: true, armed: false, mode: 'loop' });
+      transport.start({ atTime: ctx.currentTime, fromBeat: 0 });
       abs = 0;
     } else {
       abs = transport.beatAt(ctx.currentTime - inputCompensation(ctx));
@@ -429,7 +444,7 @@ class Studio {
     const transport = this.transport;
     if (!ctx || !transport) return;
     const s = getState();
-    if (s.screen === 'blocks' || s.screen === 'songs') return;
+    if (s.screen !== 'lab' || s.resting) return;
     this.session = { token: beginGroup('record'), recent: new Map(), lastActivityBeat: 0, notes: 0, firstLoopFor: new Set() };
     if (s.transport.playing && s.transport.mode === 'loop') {
       this.session.lastActivityBeat = transport.beatAt(ctx.currentTime);
@@ -479,6 +494,7 @@ class Studio {
   play() {
     if (!this.engine) return;
     const s = getState();
+    if (s.resting) return;
     if (s.transport.armed) {
       // Pressing play while waiting for the first note starts the loop with recording on.
       this.startTransport('loop');
@@ -498,8 +514,11 @@ class Studio {
     engine.setTempo(p.tempo);
     transport.setTempo(p.tempo);
     this.visuals = [];
-    transport.start({ atTime: ctx.currentTime + 0.04, fromBeat: 0, endBeat: mode === 'song' ? songBeats(p) : null });
+    // Mode and guards are set *before* start(): the transport schedules its first window immediately.
+    this.mode = mode;
+    this.skipBefore.clear();
     setTransport({ playing: true, mode });
+    transport.start({ atTime: ctx.currentTime + 0.04, fromBeat: 0, endBeat: mode === 'song' ? songBeats(p) : null });
   }
 
   stop() {
@@ -507,6 +526,7 @@ class Studio {
     this.transport?.stop();
     this.engine?.stopSequenced();
     this.visuals = [];
+    this.skipBefore.clear();
     const t = getState().transport;
     if (t.playing || t.recording || t.armed) setTransport({ playing: false, recording: false, armed: false });
   }
@@ -536,7 +556,7 @@ class Studio {
     const s = getState();
     const p = s.project;
     const events: Scheduled[] = collectEvents(p, from, to, {
-      mode: s.transport.mode,
+      mode: this.mode,
       skip: (noteId, abs) => {
         const until = this.skipBefore.get(noteId);
         if (until === undefined) return false;
@@ -667,7 +687,7 @@ class Studio {
   }
 
   async startVoiceRecording(): Promise<boolean> {
-    if (!this.micAvailable() || !this.ctx) return false;
+    if (!this.micAvailable() || !this.ctx || getState().resting) return false;
     try {
       if (this.micIdle) clearTimeout(this.micIdle);
       this.mic ??= new MicCapture(this.ctx);
@@ -698,7 +718,7 @@ class Studio {
     this.channelSample.set(trackId, sampleId);
     this.engine.setSample(trackId, buffer);
     commit((p) => setTrackSample(p, trackId, sampleId));
-    this.hit(trackId, 2, { vel: 0.9 });
+    this.hit(trackId, 2, { vel: 0.9 }, { record: false });
     return true;
   }
 

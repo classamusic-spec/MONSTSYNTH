@@ -40,7 +40,7 @@ export function AppShell() {
         setOverlay(null);
         return;
       }
-      if (s.overlay || !s.awake || e.altKey || e.repeat) return;
+      if (s.overlay || !s.awake || s.resting || e.altKey || e.repeat) return;
       const key = e.key.toLowerCase();
       if (key === ' ' && target?.tagName !== 'BUTTON') {
         e.preventDefault();

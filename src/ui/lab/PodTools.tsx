@@ -38,7 +38,8 @@ export function PodTools({ track, className = 'pod-tools' }: { track: Track; cla
             aria-label={`${FX_BUDDIES[fx].name} ${FX_BUDDIES[fx].does}: ${['off', 'a little', 'a lot'][level]}`}
             onClick={() => {
               commit((p) => cycleFx(p, track.id, fx));
-              setTimeout(() => studio.hit(track.id, track.monster === 'boom' ? 1 : 4), 30);
+              // A taste of the new effect: never written into a loop.
+              setTimeout(() => studio.hit(track.id, track.monster === 'boom' ? 1 : 4, {}, { record: false }), 30);
             }}
           >
             <FxBuddy kind={fx} />

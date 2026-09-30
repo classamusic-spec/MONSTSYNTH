@@ -13,6 +13,8 @@ import { gridSlot, softQuantize, wrap } from './timing';
 //    drum layers) are kept. Loops stay clean however long a child keeps playing.
 //  • Drums only replace the same drum in a slot, so kick + snare can layer.
 //  • Hard caps on notes per slot and per clip protect the mix and the CPU.
+//    Notes are kept in the order they were recorded (the sequencer sorts by
+//    time itself), so a cap always lets go of the oldest notes first.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const MAX_NOTES_PER_CLIP = 96;
@@ -68,9 +70,8 @@ export function insertRecordedNote(clip: Clip, note: NoteEvent, opts: InsertOpti
   }
 
   notes.push(note);
-  notes.sort((a, b) => a.beat - b.beat);
   if (notes.length > MAX_NOTES_PER_CLIP) {
-    // Keep the newest material; drop the oldest unprotected notes first.
+    // Keep the newest material; drop the oldest unprotected recordings first.
     const excess = notes.length - MAX_NOTES_PER_CLIP;
     const removable = notes.filter((n) => n.id !== note.id && !opts.protectedIds.has(n.id)).slice(0, excess);
     const drop = new Set(removable.map((n) => n.id));

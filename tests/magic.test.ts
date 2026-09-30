@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { chordSteps, midiToHz, mimicSemitones, stepToMidi, stepToSemitone } from '../src/magic/scales';
 import { gridSlot, quantizeDuration, softQuantize, wrap } from '../src/magic/timing';
-import { insertRecordedNote, placeNote, setNoteDuration } from '../src/magic/recorder';
+import { insertRecordedNote, MAX_NOTES_PER_CLIP, placeNote, setNoteDuration } from '../src/magic/recorder';
 import type { Clip, NoteEvent } from '../src/model/types';
 
 const note = (id: string, beat: number, step: number, extra: Partial<NoteEvent> = {}): NoteEvent => ({
@@ -93,7 +93,7 @@ describe('loop recording', () => {
   it('replaces notes from earlier passes in the same slot', () => {
     const clip = clipOf([note('old', 2, 3), note('other', 4, 1)]);
     const next = insertRecordedNote(clip, note('new', 2, 5), { grid: 0.5, isDrum: false, protectedIds: new Set() });
-    expect(next.notes.map((n) => n.id)).toEqual(['new', 'other']);
+    expect(next.notes.map((n) => n.id)).toEqual(['other', 'new']);
   });
 
   it('keeps chords played on the same pass', () => {
@@ -120,6 +120,24 @@ describe('loop recording', () => {
     const next = insertRecordedNote(clip, note('d', 1, 3), { grid: 0.5, isDrum: false, protectedIds });
     expect(next.notes).toHaveLength(3);
     expect(next.notes.some((n) => n.id === 'd')).toBe(true);
+  });
+
+  it('drops the oldest notes in a full slot', () => {
+    // Recorded on an earlier pass, later in the slot, but first in time: 'x' goes.
+    const clip = clipOf([note('x', 1.2, 0, { vel: 0.5 }), note('y', 1, 1), note('z', 1.1, 2)]);
+    const next = insertRecordedNote(clip, note('w', 1, 3), { grid: 0.5, isDrum: true, protectedIds: new Set(), maxPerSlot: 3 });
+    expect(next.notes.map((n) => n.id)).toEqual(['y', 'z', 'w']);
+  });
+
+  it('lets go of the oldest recording when a clip is full, wherever it sits in the loop', () => {
+    const first = note('first', 63.5, 1);
+    const rest = Array.from({ length: MAX_NOTES_PER_CLIP - 1 }, (_, i) => note(`n${i + 1}`, (i + 1) * 0.5, 1));
+    const clip = clipOf([first, ...rest], 64);
+    const next = insertRecordedNote(clip, note('new', 50, 2), { grid: 0.5, isDrum: false, protectedIds: new Set() });
+    expect(next.notes).toHaveLength(MAX_NOTES_PER_CLIP);
+    expect(next.notes.some((n) => n.id === 'first')).toBe(false);
+    expect(next.notes.some((n) => n.id === 'n1')).toBe(true);
+    expect(next.notes[next.notes.length - 1].id).toBe('new');
   });
 
   it('treats the last slot and slot zero as different slots', () => {

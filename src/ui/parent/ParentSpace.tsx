@@ -201,7 +201,7 @@ export function ParentSpace() {
             Sound always passes through a limiter so it never jumps or clips. The ceiling caps loudness no matter what your child does in the
             app; the device’s own volume still applies. Headphones for young children should be volume-limited too.
           </p>
-          <button className="btn-secondary" onClick={() => getState().project.tracks[0] && studio.hit(getState().project.tracks[0].id, 4)}>
+          <button className="btn-secondary" onClick={() => getState().project.tracks[0] && studio.hit(getState().project.tracks[0].id, 4, {}, { record: false })}>
             <Icon name="speaker" /> Test sound
           </button>
         </section>

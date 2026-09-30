@@ -238,7 +238,7 @@ export function PaintScreen() {
   const singAt = (y: number, n: number, weight: number) => {
     const monster = brushMonster(brush, n);
     const track = tracks.find((t) => t.monster === monster);
-    if (track) studio.hit(track.id, laneForY(y), { vel: 0.55 + weight * 0.4 });
+    if (track) studio.hit(track.id, laneForY(y), { vel: 0.55 + weight * 0.4 }, { record: false });
     else studio.hitMonster(monster, laneForY(y), 0.55 + weight * 0.4);
   };
 

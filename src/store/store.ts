@@ -37,6 +37,8 @@ export interface AppState {
   selectedTrackId: string;
   /** Audio unlocked and monsters awake. */
   awake: boolean;
+  /** Play-time limit reached: the monsters sleep until a grown-up continues. */
+  resting: boolean;
   transport: TransportFlags;
   overlay: Overlay;
   paint: { tool: PaintTool; brush: PaintBrush };
@@ -57,6 +59,7 @@ export const useApp = create<AppState>(() => ({
   screen: 'lab',
   selectedTrackId: initialProject.tracks[0].id,
   awake: false,
+  resting: false,
   transport: { playing: false, recording: false, armed: false, mode: 'loop' },
   overlay: null,
   paint: { tool: 'brush', brush: 'bloop' },
@@ -99,7 +102,8 @@ export function commit(mutate: (p: Project) => Project, opts: CommitOptions = {}
       past = [...past, { project: before, key: opts.coalesce, at: now }].slice(-MAX_HISTORY);
     }
   }
-  setState({ project: next, past, future: undoable ? [] : s.future });
+  // Any real change makes the redo stack meaningless.
+  setState({ project: next, past, future: [] });
   scheduleSave(next);
   touchSongList(next);
   return true;
@@ -108,7 +112,8 @@ export function commit(mutate: (p: Project) => Project, opts: CommitOptions = {}
 /** Start an undo group (a recording pass). Returns a token for `endGroup`. */
 export function beginGroup(key: string): Project {
   const s = getState();
-  setState({ past: [...s.past, { project: s.project, key, at: Date.now() }].slice(-MAX_HISTORY), future: [] });
+  // Redo survives until something is actually recorded (commit clears it then).
+  setState({ past: [...s.past, { project: s.project, key, at: Date.now() }].slice(-MAX_HISTORY) });
   return s.project;
 }
 
