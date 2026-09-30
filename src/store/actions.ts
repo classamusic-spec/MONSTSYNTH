@@ -9,6 +9,8 @@ import {
   listProjects,
   loadProject,
   loadSettings,
+  sampleIds,
+  samplesSavedThisSession,
   saveProjectNow,
   saveSettings,
 } from './persistence';
@@ -44,18 +46,26 @@ async function doBoot(): Promise<void> {
   void collectOrphanSamples();
 }
 
-/** Remove Mimic recordings no song refers to any more (replaced or deleted sounds). */
+/**
+ * Remove Mimic recordings nothing refers to any more (replaced sounds, deleted
+ * songs). Songs share recordings after "Copy", so a sound is only removed once
+ * no saved song, the open song or its undo steps use it.
+ */
 async function collectOrphanSamples() {
   try {
-    const used = new Set<string>();
+    // List first: a recording saved while this runs is never touched.
+    const stored = await sampleIds();
+    const used = new Set<string>(samplesSavedThisSession());
+    const addRefs = (p: Project) => {
+      for (const t of [...p.tracks, ...p.bench.map((b) => b.track)]) if (t.sampleId) used.add(t.sampleId);
+    };
     for (const id of await idbKeys('projects')) {
       const p = await loadProject(id);
-      if (!p) continue;
-      for (const t of [...p.tracks, ...p.bench.map((b) => b.track)]) if (t.sampleId) used.add(t.sampleId);
+      if (p) addRefs(p);
     }
-    const current = getState().project;
-    for (const t of [...current.tracks, ...current.bench.map((b) => b.track)]) if (t.sampleId) used.add(t.sampleId);
-    for (const id of await idbKeys('samples')) if (!used.has(id)) await idbDelete('samples', id);
+    const s = getState();
+    [s.project, ...s.past.map((h) => h.project), ...s.future].forEach(addRefs);
+    for (const id of stored) if (!used.has(id)) await deleteSample(id);
   } catch {
     /* housekeeping only */
   }
@@ -135,11 +145,9 @@ export async function renameSong(id: string, name: string) {
 
 /** Grown-ups only (Parent Space). Deleting also removes Mimic recordings that song owned. */
 export async function deleteSong(id: string) {
-  const target = id === getState().project.id ? getState().project : await loadProject(id);
   // Let any pending autosave land first so it cannot resurrect the deleted song.
   await flushSave();
   await deleteProject(id);
-  if (target) for (const t of [...target.tracks, ...target.bench.map((b) => b.track)]) if (t.sampleId) await deleteSample(t.sampleId);
   const songs = getState().songs.filter((s) => s.id !== id);
   setState({ songs });
   if (getState().project.id === id) {
@@ -149,6 +157,8 @@ export async function deleteSong(id: string) {
     setProject(project);
     updateSettings({ lastProjectId: project.id });
   }
+  // Its Mimic sounds go too, unless another song (a copy) still uses them.
+  await collectOrphanSamples();
 }
 
 export async function refreshSongs() {

@@ -41,8 +41,16 @@ export async function listProjects(): Promise<ProjectMeta[]> {
   return metas.sort((a, b) => b.modifiedAt - a.modifiedAt);
 }
 
+/** Recordings made since launch. Undo can bring any of them back, so cleanup leaves them until the next launch. */
+const sessionSamples = new Set<string>();
+
 export async function saveSample(id: string, blob: Blob): Promise<void> {
+  sessionSamples.add(id);
   await idbPut('samples', id, blob);
+}
+
+export function samplesSavedThisSession(): ReadonlySet<string> {
+  return sessionSamples;
 }
 
 export async function loadSample(id: string): Promise<Blob | undefined> {

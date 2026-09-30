@@ -58,7 +58,7 @@ Pitches are resolved at play time from `(step, monster register, key, scale)`. A
 | tracks / monster type / instrument preset | `tracks[]`, `track.monster`, `track.preset` |
 | loop clips / clip duration / clip placement | `track.clips[]`, `clip.lengthBeats`, `arrangement.rows` |
 | mute state / volume / effects state | `track.sleeping` (+ `solo`), `track.volume`, `track.fx` |
-| sample references | `track.sampleId` → `samples` store |
+| sample references | `track.sampleId` → `samples` store (shared by copied songs; a recording is removed only when no saved song, the open song or its undo steps use it, and never in the session it was made) |
 | arrangement | `arrangement` |
 | settings | separate `Settings` document (below) |
 
