@@ -684,8 +684,11 @@ class Studio {
   /** Stop, clean up the sound, store it on this device, and teach it to Mimic. */
   async finishVoiceRecording(trackId: string): Promise<boolean> {
     const mic = this.mic;
+    if (!mic || !this.micRecording) {
+      this.micRecording = false;
+      return false;
+    }
     this.micRecording = false;
-    if (!mic) return false;
     const buffer = await mic.stop().catch(() => null);
     this.scheduleMicRelease();
     if (!buffer || !this.engine) return false;

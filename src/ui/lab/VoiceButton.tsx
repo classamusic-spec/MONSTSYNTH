@@ -50,6 +50,11 @@ export function VoiceButton({ track }: { track: Track }) {
       say({ text: 'Mimic can’t hear right now', icon: 'mic', monster: 'mimic' });
       return;
     }
+    if (!active.current) {
+      // The finger lifted while the microphone was still starting: never leave it listening.
+      studio.cancelVoiceRecording();
+      return;
+    }
     timer.current = setTimeout(() => void finish(), MAX_VOICE_SECONDS * 1000);
   };
 

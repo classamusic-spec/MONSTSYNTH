@@ -27,6 +27,8 @@ export function MonsterTray() {
     if (track) {
       if (s.project.tracks.length <= 1) return;
       commit((p) => removeMonster(p, track.id));
+      const after = getState();
+      if (!after.project.tracks.some((t) => t.id === after.selectedTrackId)) selectTrack(after.project.tracks[0].id);
       return;
     }
     if (s.project.tracks.length >= caps.maxMonsters) {
