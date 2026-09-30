@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { setOverlay } from '../../store/actions';
-import { getState, redo, undo, useApp } from '../../store/store';
+import { getState, useApp } from '../../store/store';
 import { studio } from '../../studio/studio';
 import { BlocksScreen } from '../blocks/BlocksScreen';
 import { useReducedMotion } from '../hooks/useCaps';
@@ -48,10 +48,10 @@ export function AppShell() {
         studio.toggleRecord();
       } else if ((key === 'z' && (e.metaKey || e.ctrlKey) && e.shiftKey) || (key === 'y' && (e.metaKey || e.ctrlKey))) {
         e.preventDefault();
-        redo();
+        studio.redo();
       } else if (key === 'z' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        undo();
+        studio.undo();
       }
     };
     window.addEventListener('keydown', onKey);

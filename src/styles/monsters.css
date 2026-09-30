@@ -159,6 +159,7 @@
 
 .goo-ring {
   position: absolute;
+  z-index: 0;
   left: 50%;
   bottom: 4%;
   width: 60%;

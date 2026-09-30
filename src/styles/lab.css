@@ -131,6 +131,7 @@
 
 .pod .monster-wrap {
   position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
   max-width: 260px;
@@ -285,7 +286,43 @@
   }
 }
 
-/* Selected monster's toys: costume + effect buddies. */
+/* Selected monster's toys: costume + effect buddies. Short screens (phones
+   held sideways) keep them beside the keys so the stage stays for monsters;
+   tall screens put them above the spotlight monster. */
+.surface > .surface-tools {
+  align-self: center;
+}
+
+@media (max-height: 559px) {
+  .pod .pod-tools {
+    display: none;
+  }
+  .pod[data-selected='true'] {
+    flex-grow: 1.45;
+  }
+  .pod:not([data-selected='true']) .pod-name {
+    display: none;
+  }
+  .pod:has(.loop-badge) .pod-name {
+    left: calc(var(--gap-s) + clamp(26px, 6.6vmin, 36px) + 6px);
+    transform: none;
+  }
+  .loop-badge {
+    top: 2px;
+    bottom: auto;
+    width: clamp(26px, 6.6vmin, 36px);
+    height: clamp(26px, 6.6vmin, 36px);
+    border-width: 2px;
+    font-size: clamp(14px, 3.4vmin, 20px);
+  }
+}
+
+@media (min-height: 560px) {
+  .surface > .surface-tools {
+    display: none;
+  }
+}
+
 .pod-tools {
   flex: 0 0 auto;
   display: grid;

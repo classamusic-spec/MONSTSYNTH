@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { magicArrange } from '../../magic/arrange';
 import { setOverlay } from '../../store/actions';
-import { commit, redo, undo, useApp } from '../../store/store';
+import { commit, getState, useApp } from '../../store/store';
 import { studio } from '../../studio/studio';
 import { onFrame } from '../../studio/visualBus';
 import { useCaps } from '../hooks/useCaps';
@@ -70,7 +70,7 @@ export function TransportRail() {
   const recState = t.recording ? 'recording' : t.armed ? 'armed' : 'idle';
 
   const doUndo = () => {
-    if (undo()) flash('undo');
+    if (studio.undo()) flash('undo');
     else say({ text: 'Nothing to undo', icon: 'undo' });
   };
 
@@ -96,7 +96,14 @@ export function TransportRail() {
           data-state={recState}
           aria-label={recState === 'idle' ? 'Record a loop' : 'Stop recording'}
           aria-pressed={recState !== 'idle'}
-          onClick={() => studio.toggleRecord()}
+          onClick={() => {
+            studio.toggleRecord();
+            const st = getState();
+            if (st.transport.armed) {
+              const monster = st.project.tracks.find((t) => t.id === st.selectedTrackId)?.monster;
+              say({ text: 'Play something!', icon: 'record', monster });
+            }
+          }}
         >
           <span className="t-face">
             <Icon name="record" />
@@ -130,7 +137,7 @@ export function TransportRail() {
           <span className="t-label">Undo</span>
         </button>
         {caps.redo && (
-          <button className="t-btn t-tiny" aria-label="Redo" disabled={!canRedo} onClick={() => redo() && flash('redo')}>
+          <button className="t-btn t-tiny" aria-label="Redo" disabled={!canRedo} onClick={() => studio.redo() && flash('redo')}>
             <span className="t-face">
               <Icon name="redo" />
             </span>

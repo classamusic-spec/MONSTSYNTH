@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { clearLoop, cycleFx, cyclePreset, toggleSleep } from '../../model/edits';
-import { FX_BUDDIES, fxStepIndex, MONSTERS, presetInfo } from '../../model/monsters';
+import { clearLoop, toggleSleep } from '../../model/edits';
+import { fxStepIndex, MONSTERS, presetInfo } from '../../model/monsters';
 import { trackHasLoop } from '../../model/project';
 import type { FxKind, Track } from '../../model/types';
 import { selectTrack } from '../../store/actions';
@@ -13,6 +13,7 @@ import { reactToNote } from '../monsters/react';
 import { Icon } from '../icons/Icon';
 import { isReducedMotion, useCaps } from '../hooks/useCaps';
 import { getSize, onSize, setSize } from './expression';
+import { PodTools } from './PodTools';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SQUISH THE MONSTER — the signature interaction.
@@ -315,42 +316,7 @@ export const MonsterPod = memo(function MonsterPod({ track, selected }: { track:
         </button>
       )}
 
-      {selected && (
-        <div className="pod-tools">
-          <button
-            className="tool-btn tool-costume"
-            aria-label={`Change ${info.name}'s sound. Now: ${preset.name}`}
-            onClick={() => {
-              commit((p) => cyclePreset(p, track.id));
-              setTimeout(() => studio.preview(track.id), 30);
-            }}
-          >
-            <Icon name="hat" />
-          </button>
-          {caps.fx.map((fx) => {
-            const level = fxLevel(fx);
-            return (
-              <button
-                key={fx}
-                className="tool-btn"
-                data-level={level}
-                style={{ ['--fx' as string]: FX_BUDDIES[fx].color }}
-                aria-label={`${FX_BUDDIES[fx].name} ${FX_BUDDIES[fx].does}: ${['off', 'a little', 'a lot'][level]}`}
-                onClick={() => {
-                  commit((p) => cycleFx(p, track.id, fx));
-                  setTimeout(() => studio.hit(track.id, track.monster === 'boom' ? 1 : 4), 30);
-                }}
-              >
-                <FxBuddy kind={fx} />
-                <span className="pips" aria-hidden>
-                  <i data-on={level >= 1} />
-                  <i data-on={level >= 2} />
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {selected && <PodTools track={track} />}
     </div>
   );
 });

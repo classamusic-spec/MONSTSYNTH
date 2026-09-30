@@ -18,7 +18,15 @@ import type { PaintBrush } from '../model/types';
 
 // App-level actions: booting, switching songs, settings, navigation.
 
-export async function boot(): Promise<void> {
+let booting: Promise<void> | null = null;
+
+/** Load settings and the last song. Safe to call more than once (React StrictMode). */
+export function boot(): Promise<void> {
+  booting ??= doBoot();
+  return booting;
+}
+
+async function doBoot(): Promise<void> {
   const settings = await loadSettings();
   let songs = await listProjects();
   let project: Project | null = null;
@@ -33,6 +41,24 @@ export async function boot(): Promise<void> {
   setProject(project);
   void saveSettings({ ...settings, lastProjectId: project.id });
   void requestPersistentStorage();
+  void collectOrphanSamples();
+}
+
+/** Remove Mimic recordings no song refers to any more (replaced or deleted sounds). */
+async function collectOrphanSamples() {
+  try {
+    const used = new Set<string>();
+    for (const id of await idbKeys('projects')) {
+      const p = await loadProject(id);
+      if (!p) continue;
+      for (const t of [...p.tracks, ...p.bench.map((b) => b.track)]) if (t.sampleId) used.add(t.sampleId);
+    }
+    const current = getState().project;
+    for (const t of [...current.tracks, ...current.bench.map((b) => b.track)]) if (t.sampleId) used.add(t.sampleId);
+    for (const id of await idbKeys('samples')) if (!used.has(id)) await idbDelete('samples', id);
+  } catch {
+    /* housekeeping only */
+  }
 }
 
 export function updateSettings(patch: Partial<Settings>) {
@@ -113,7 +139,7 @@ export async function deleteSong(id: string) {
   // Let any pending autosave land first so it cannot resurrect the deleted song.
   await flushSave();
   await deleteProject(id);
-  if (target) for (const t of target.tracks) if (t.sampleId) await deleteSample(t.sampleId);
+  if (target) for (const t of [...target.tracks, ...target.bench.map((b) => b.track)]) if (t.sampleId) await deleteSample(t.sampleId);
   const songs = getState().songs.filter((s) => s.id !== id);
   setState({ songs });
   if (getState().project.id === id) {

@@ -181,9 +181,12 @@ export function PaintScreen() {
   useEffect(() => {
     let playing = false;
     let beatFrac = 0;
+    let dirty = false;
     const offFrame = onFrame((p) => {
       playing = p.playing;
       beatFrac = p.playing && p.beat >= 0 ? (p.beat % p.loopBeats) / p.loopBeats : 0;
+      if (!playing && bursts.current.length === 0 && !dirty) return;
+      dirty = playing || bursts.current.length > 0;
       const c = fxRef.current;
       const ctx = c?.getContext('2d');
       if (!c || !ctx) return;

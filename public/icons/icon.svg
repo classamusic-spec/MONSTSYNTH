@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4f5dff"/>
+      <stop offset="0.55" stop-color="#8a4dff"/>
+      <stop offset="1" stop-color="#ff5fcf"/>
+    </linearGradient>
+    <radialGradient id="body" cx="38%" cy="30%" r="78%">
+      <stop offset="0" stop-color="#a8ecff"/>
+      <stop offset="0.48" stop-color="#35bdff"/>
+      <stop offset="1" stop-color="#1467cf"/>
+    </radialGradient>
+    <radialGradient id="ball" cx="35%" cy="30%" r="70%">
+      <stop offset="0" stop-color="#e6fbff"/>
+      <stop offset="0.55" stop-color="#a8ecff"/>
+      <stop offset="1" stop-color="#35bdff"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="400" cy="112" r="10" fill="#fff6cf" opacity=".8"/>
+  <circle cx="96" cy="150" r="7" fill="#fff6cf" opacity=".7"/>
+  <circle cx="430" cy="300" r="6" fill="#fff6cf" opacity=".6"/>
+  <g transform="translate(56 64) scale(2)">
+    <path d="M86,62 C82,44 70,34 62,24" stroke="#35bdff" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <circle cx="60" cy="21" r="12" fill="url(#ball)"/>
+    <path d="M114,62 C118,44 130,34 138,24" stroke="#35bdff" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <circle cx="140" cy="21" r="12" fill="url(#ball)"/>
+    <path d="M100,50 C141,50 163,82 165,121 L167,166 C167,175 160,181 153,179 C147,177 143,186 135,186 C128,186 125,178 118,179 C111,180 108,188 100,188 C92,188 89,180 82,179 C75,178 72,186 65,186 C57,186 53,177 47,179 C40,181 33,175 33,166 L35,121 C37,82 59,50 100,50 Z" fill="url(#body)"/>
+    <ellipse cx="70" cy="80" rx="20" ry="11" fill="#fff" opacity=".35" transform="rotate(-25 70 80)"/>
+    <circle cx="140" cy="138" r="6" fill="#a8ecff" opacity=".55"/>
+    <circle cx="58" cy="150" r="5" fill="#a8ecff" opacity=".55"/>
+    <circle cx="100" cy="106" r="31" fill="#fff"/>
+    <circle cx="100" cy="108.5" r="18.6" fill="#1a3d8f"/>
+    <circle cx="100" cy="108.5" r="11.8" fill="#0a0c29"/>
+    <circle cx="93.2" cy="101" r="5.6" fill="#fff"/>
+    <path d="M80,146 Q100,182 120,146 Q100,154 80,146 Z" fill="#3b0c3a"/>
+    <ellipse cx="100" cy="163" rx="9" ry="5.5" fill="#ff6f8f"/>
+  </g>
+</svg>

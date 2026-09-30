@@ -13,7 +13,7 @@ import { MODE_CAPS, MONSTERS } from '../model/monsters';
 import { projectHasMusic, songBeats, trackHasLoop } from '../model/project';
 import type { MonsterKind, Project, Settings, Track } from '../model/types';
 import { flushSave, loadSample, saveSample } from '../store/persistence';
-import { beginGroup, commit, endGroup, getState, setState, useApp, type TransportFlags } from '../store/store';
+import { beginGroup, commit, endGroup, getState, redo, setState, undo, useApp, type TransportFlags } from '../store/store';
 import { noteRequest, type Expression } from './notes';
 import { emitFrame, emitNote, emitStudioEvent, type NoteVisual } from './visualBus';
 
@@ -456,6 +456,19 @@ class Studio {
     }
   }
 
+  // ── History ───────────────────────────────────────────────────────────────
+
+  /** Undo always ends a recording first, so a take is undone as one piece. */
+  undo(): boolean {
+    this.stopRecording();
+    return undo();
+  }
+
+  redo(): boolean {
+    this.stopRecording();
+    return redo();
+  }
+
   // ── Transport ─────────────────────────────────────────────────────────────
 
   togglePlay() {
@@ -623,6 +636,15 @@ class Studio {
   // ── Mimic's microphone ────────────────────────────────────────────────────
 
   private micRecording = false;
+  private micIdle: ReturnType<typeof setTimeout> | null = null;
+
+  /** The microphone is only open while it is needed; the browser's mic light goes off soon after. */
+  private scheduleMicRelease() {
+    if (this.micIdle) clearTimeout(this.micIdle);
+    this.micIdle = setTimeout(() => {
+      if (!this.micRecording) this.releaseMic();
+    }, 15000);
+  }
 
   micAvailable(): boolean {
     return micSupported() && getState().settings.micAllowed;
@@ -636,6 +658,8 @@ class Studio {
       this.ctx = ctx;
       this.mic ??= new MicCapture(ctx);
       await this.mic.open();
+      // Permission granted; close again until Mimic actually listens.
+      this.releaseMic();
       return true;
     } catch {
       return false;
@@ -645,6 +669,7 @@ class Studio {
   async startVoiceRecording(): Promise<boolean> {
     if (!this.micAvailable() || !this.ctx) return false;
     try {
+      if (this.micIdle) clearTimeout(this.micIdle);
       this.mic ??= new MicCapture(this.ctx);
       await this.mic.open();
       this.mic.start();
@@ -662,6 +687,7 @@ class Studio {
     this.micRecording = false;
     if (!mic) return false;
     const buffer = await mic.stop().catch(() => null);
+    this.scheduleMicRelease();
     if (!buffer || !this.engine) return false;
     const sampleId = newId('v');
     this.sampleCache.set(sampleId, buffer);
@@ -676,6 +702,7 @@ class Studio {
   cancelVoiceRecording() {
     this.micRecording = false;
     void this.mic?.stop().catch(() => null);
+    this.scheduleMicRelease();
   }
 
   releaseMic() {

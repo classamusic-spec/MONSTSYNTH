@@ -6,6 +6,7 @@ import { studio } from '../../studio/studio';
 import { onNote } from '../../studio/visualBus';
 import { DrumIcon, KeyGlyph } from './glyphs';
 import { getSize } from './expression';
+import { PodTools } from './PodTools';
 import { VoiceButton } from './VoiceButton';
 
 // The eight big keys (or drum pads) for the monster in the spotlight.
@@ -111,6 +112,7 @@ export function PlaySurface({ track }: { track: Track }) {
 
   return (
     <div className="surface" data-monster={track.monster}>
+      <PodTools track={track} className="pod-tools surface-tools" />
       {track.monster === 'mimic' && <VoiceButton track={track} />}
       <div
         ref={keysRef}
