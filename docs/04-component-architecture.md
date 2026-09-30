@@ -85,7 +85,7 @@ Monster Synth is a React + TypeScript single-page PWA built with Vite. The code 
 | Layer | Tooling |
 |---|---|
 | model + magic | Vitest unit tests (`npm test`): scales, quantize, looper rules, sequencing across window boundaries, arrangement, painting, schema migration |
-| full app | Playwright scripts in a real Chromium: `scripts/e2e.mjs` (touch→sound, record, layer, play, undo, autosave), `scripts/e2e-more.mjs` (Blocks, Paint, Add Monster, Mimic with fake mic, grown-up gate, WAV export), `scripts/touch-check.mjs` (real touch events with the normal autoplay policy, glissando, chords, no stuck notes, 4× CPU throttle, bounded voices) |
+| full app | Playwright scripts in a real Chromium: `scripts/e2e.mjs` (touch→sound, record, layer, play, undo, autosave), `scripts/e2e-more.mjs` (Blocks, Paint, Add Monster, Mimic with fake mic, grown-up gate, WAV export), `scripts/e2e-edge.mjs` (regressions from code review: feedback sounds never recorded, redo after an empty take, focus loss, rest time, leaving the Lab mid-take, recordings shared by copied songs), `scripts/touch-check.mjs` (real touch events with the normal autoplay policy, glissando, chords, no stuck notes, 4× CPU throttle, bounded voices) |
 | accessibility | axe-core audit of every screen (0 violations at release) |
 | sound | `scripts/audio-levels.mjs` renders every preset offline and reports peak/RMS; worst-case mix check |
 | visuals | `scripts/shots.mjs`, `scripts/tour.mjs`, `scripts/crowded.mjs` screenshot phone/tablet/portrait layouts |

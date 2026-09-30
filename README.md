@@ -42,6 +42,7 @@ Browser checks use Playwright with Chromium:
 npx vite --port 5173 &              # dev server (the extended checks import modules from it)
 node scripts/e2e.mjs                # touch→sound, record, layer, play, undo, autosave
 node scripts/e2e-more.mjs           # Blocks, Paint, Add Monster, Mimic (fake mic), grown-up gate, WAV export
+node scripts/e2e-edge.mjs           # review regressions: no recorded feedback sounds, focus loss, rest time, shared recordings
 node scripts/touch-check.mjs        # real touch events, first-tap audio unlock, no stuck notes, 4× CPU throttle
 node scripts/audio-levels.mjs       # offline-render every preset, report peak/RMS, worst-case mix
 node scripts/soak.mjs               # a minute of looping + tapping: bounded voices, flat memory
