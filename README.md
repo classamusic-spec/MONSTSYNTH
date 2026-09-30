@@ -22,7 +22,7 @@ A tablet-first creative music toy for children aged about 3–10. It is built fr
 * **Effect buddies**: Echo (delay), Gloop (reverb), Chomper (crunch) and Wiggle (wobble). Each one is animated on the monster.
 * **Two modes**: *Little Monster* (3–5) and *Monster Maker* (6–10, adds speed, mood, more pads and effects, redo, solo and names).
 * **My Songs**: a shelf of song pictures. It autosaves; there is never a save dialog.
-* **Parent Space**: hold ☾ and ★ in the corners for 3 s. It has age mode, a volume ceiling, microphone permission, motion, contrast and hint settings, song management, WAV export and privacy information.
+* **Parent Space**: hold ☾ and ★ in the corners for 3 s. It has age mode, a volume ceiling, microphone permission, motion, contrast and hint settings, an optional play-time limit, song management, WAV export and privacy information.
 * **Safe by design**: no accounts, ads, purchases, chat, tracking or network calls. Everything stays on the device. It installs as an offline PWA.
 
 ## Quick start

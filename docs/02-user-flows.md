@@ -67,8 +67,14 @@ Touching a monster on stage plays it directly:
 ## F9 · Grown-up tasks
 
 1. Hold ☾ (bottom-left) and ★ (top-right) together for 3 s → a ring fills → Parent Space opens. (Keyboard users: focus either mark and press Enter → multiplication question.)
-2. Change age mode, volume ceiling, microphone, motion, contrast, hints.
+2. Change age mode, volume ceiling, microphone, motion, contrast, hints, play time.
 3. Rename, copy, delete songs; **Save audio** renders the song offline to a `.wav` (share sheet on tablets, download elsewhere).
+
+## F10 · Play time is up (optional)
+
+1. A grown-up set a play time in Parent Space (off by default).
+2. Only time the app is awake and visible counts. When it runs out, the music stops, the band yawns and falls asleep: *"Time for a break!"* — everything is already saved.
+3. The screen cannot be dismissed by the child; a grown-up holds the two corners, and closing Parent Space starts a fresh session.
 
 ## Recovery flows (no destructive mistakes)
 
@@ -80,3 +86,4 @@ Touching a monster on stage plays it directly:
 | Sent a monster home | It waits on the bench with its loop; invite it back |
 | Started a new song | Old song is still on the shelf |
 | Deleting songs | Only in Parent Space, with confirmation |
+| Something unexpected breaks | A sleepy-monster screen with one "Wake them up again" button; autosave is flushed before restarting |

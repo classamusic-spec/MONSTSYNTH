@@ -37,6 +37,7 @@ MONSTER SYNTH
           ├── Sound               volume · maximum volume (ceiling) · test sound
           ├── Microphone (Mimic)  permission switch + plain-language explanation
           ├── Comfort & access    motion · high contrast · picture hints
+          ├── Play time           optional limit (15–60 min): the monsters fall asleep when it's up
           ├── Songs               rename · copy · save audio (.wav) · delete
           └── Privacy & storage   what is stored where · storage use · delete all
 ```
