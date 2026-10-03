@@ -1,7 +1,8 @@
 import { memo, useEffect, useRef, type ComponentType, type CSSProperties } from 'react';
-import { drumRows, type CellState, type CellView } from '../../magic/steps';
+import type { NoteName } from '../../magic/noteNames';
+import { drumRows, nextTarget, type CellState, type CellTarget, type CellView, type GridProjection } from '../../magic/steps';
 import { DRUM_PADS, type ModeCaps } from '../../model/monsters';
-import type { NoteEvent } from '../../model/types';
+import type { MonsterKind, NoteEvent, NoteNameStyle } from '../../model/types';
 import { Icon } from '../icons/Icon';
 import { colTrack } from './BeatRuler';
 import { DRUM_COLORS, DrumIcon } from './glyphs';
@@ -28,29 +29,51 @@ export interface LaneRowProps {
   beatsPerBar: number;
   /** Column holding the keyboard focus in this row (-1: the row head; null: none). */
   focusCol: number | null;
-  /** Empty grid: the big drum's bar-start stones shimmer. */
+  /** Empty grid: the big drum's bar-start stones (or the middle band's bar-start spots) shimmer. */
   invite: boolean;
   register: RegisterCell;
+  /** The monster in the spotlight (the bead lane draws its key glyph). */
+  monster: MonsterKind;
+  /** Bead lane: the key's name sticker (null: names off, or a recorded voice). Drums name themselves. */
+  name: NoteName | null;
+  nameStyle: NoteNameStyle;
+  /** Bead lane: what the row says out loud ('Bloop: E'). */
+  label: string;
+}
+
+/** Where a grid's cells are on screen (measured; client coordinates). */
+export interface GridGeometry {
+  cols: { l: number; r: number }[];
+  rows: { t: number; b: number; step: number }[];
+  headR: number;
+  rulerB: number;
+  box: DOMRect;
 }
 
 /**
- * What a grid face needs from its kind of rows. Drums now; the bead lane for
- * the melodic monsters plugs in here next. Rows and heads carry
- * data-grid-row / data-grid-head, and rows, heads and cells data-step and
- * data-col, so StepGrid measures and focuses any lane the same way.
+ * What a grid face needs from its kind of rows: Boom's drum rows, or the bead
+ * lane of a melodic monster. Rows and heads carry data-grid-row /
+ * data-grid-head, and rows, heads and cells data-step and data-col, so
+ * StepGrid measures and focuses any lane the same way.
  */
 export interface GridLane {
+  /** Drums (tap, cycle, paint and erase stones) or beads (tap, drag and draw a tune). */
+  kind: 'drums' | 'beads';
   /** The rows every loop shows in this mode (they never fold). */
   base(caps: ModeCaps): readonly number[];
   /** Every row this loop has, top to bottom (`kept`: extra rows already on screen this visit). */
   rows(notes: readonly NoteEvent[], lengthBeats: number, caps: ModeCaps, kept: readonly number[]): number[];
   /** Rows beyond what fits at a finger's size fold behind a '+N' chip (drums; bead bands never fold). */
   folds: boolean;
-  /** What a tap on a dark cell writes. */
+  /** What a swipe paints onto a dark cell. */
   rowDefault(step: number, caps: ModeCaps): 'one' | 'double';
-  /** Notes ring on through the next cells (Puff). */
-  sustain: boolean;
+  /** What a tap (or Enter) turns a cell into. */
+  target(state: CellState, step: number, caps: ModeCaps): CellTarget;
+  /** Long notes ring on through the next cells (a sustained monster's tails). */
+  sustain(monster: MonsterKind): boolean;
   Row: ComponentType<LaneRowProps>;
+  /** Lane-wide drawing over the rows (the bead lane's tails and melody line), redrawn imperatively. */
+  ink?(svg: SVGSVGElement, at: GridGeometry, grid: GridProjection, notes: readonly NoteEvent[], lengthBeats: number, sustain: boolean): void;
 }
 
 function Stone({ pad, c, cell, beatsPerBar, focused, invite, name, register, r }: { pad: number; c: number; cell: CellView; beatsPerBar: number; focused: boolean; invite: boolean; name: string; register: RegisterCell; r: number }) {
@@ -117,12 +140,16 @@ export const DrumRow = memo(
 );
 
 /** Boom's lane: base rows of the mode, every drum the loop plays, and every row already shown this visit. */
+const drumDefault = (pad: number, caps: ModeCaps) => (caps.gridCellStates === 2 && pad === 2 ? 'double' : 'one');
+
 export const DRUM_LANE: GridLane = {
+  kind: 'drums',
   base: (caps) => caps.gridDrumRows,
   rows: (notes, lengthBeats, caps, kept) => drumRows({ id: '', lengthBeats, notes: [...notes] }, caps.gridDrumRows, kept),
   folds: true,
-  rowDefault: (pad, caps) => (caps.gridCellStates === 2 && pad === 2 ? 'double' : 'one'),
-  sustain: false,
+  rowDefault: drumDefault,
+  target: (state, pad, caps) => nextTarget(state, { states: caps.gridCellStates, rowDefault: drumDefault(pad, caps) }),
+  sustain: () => false,
   Row: DrumRow,
 };
 

@@ -12,6 +12,7 @@ import { ParentSpace } from '../parent/ParentSpace';
 import { LearnScreen } from '../learn/LearnScreen';
 import { SongsScreen } from '../songs/SongsScreen';
 import { BubbleLayer } from './BubbleLayer';
+import { Cheer } from './Cheer';
 import { Coach } from './Coach';
 import { Finale } from './Finale';
 import { NavDock } from './NavDock';
@@ -85,6 +86,7 @@ export function AppShell() {
       </main>
       {screen !== 'songs' && screen !== 'learn' && <TransportRail />}
       <BubbleLayer />
+      <Cheer />
       <Coach />
       <Finale />
       {overlay === 'tray' && <MonsterTray />}

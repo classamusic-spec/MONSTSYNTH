@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { moveCell, setCell } from '../../magic/arrange';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { clipForCell, moveCell, setCell } from '../../magic/arrange';
 import { toggleSleep, toggleSolo, togglePaintSleep } from '../../model/edits';
 import { MONSTERS } from '../../model/monsters';
 import { activeClip, trackHasLoop } from '../../model/project';
@@ -18,10 +18,15 @@ import { ClipThumb, PaintThumb } from './Thumbnail';
 // ─────────────────────────────────────────────────────────────────────────────
 // MONSTER BLOCKS — the song, as rows of blocks (one row per monster, one column
 // per loop). No timeline, no rulers:
-//   tap an empty spot  → the monster's loop plays there
-//   tap a block        → it goes away
+//   tap an empty spot  → the monster's loop plays there (a song kept from Learn
+//                        continues its tune: the phrase to the left)
+//   tap a block        → it goes away (with a little "pop")
 //   swipe across       → fill several spots at once
 //   drag a block       → move it (drop on another block to swap)
+// Every touch is heard: filling sings a note at once, then the loop you placed
+// plays its first two beats; pressing a block lets you hear it.
+// Keyboards and switches: one tab stop for all the blocks, arrows move,
+// Enter or Space fills or clears, Shift+←/→ moves a block along its row.
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface Row {
@@ -56,6 +61,35 @@ function auditionStep(monster: MonsterKind, col: number): number {
   return monster === 'boom' ? col % 2 : col % 8;
 }
 
+/** Who speaks for a row (the painting's row speaks with Bloop's voice). */
+function voiceOf(row: Row): MonsterKind {
+  return row.monster === 'paint' ? 'bloop' : row.monster;
+}
+
+/** A row's monster says hello on a block: the note for that spot, at once. */
+function hello(row: Row, col: number) {
+  if (row.kind === 'track') studio.hit(row.id, auditionStep(voiceOf(row), col), { vel: 0.55 }, { record: false });
+  else studio.hitMonster(voiceOf(row), auditionStep(voiceOf(row), col), 0.55);
+}
+
+/** Let the loop in a block be heard (its first two beats); the painting's row just says hello. */
+function listen(row: Row, clipId: string | null, col: number) {
+  if (row.kind === 'track' && clipId) studio.audition(row.id, clipId);
+  else hello(row, col);
+}
+
+/** A row with nothing to play yet: its monster says how to make some. */
+function noLoopHint(row: Row) {
+  // A monster with a beat grid can make its loop right here (tap its picture); others record one.
+  const track = getState().project.tracks.find((t) => t.id === row.id);
+  const grid = canGrid(track, getState().project.loopBeats);
+  say({
+    text: grid ? `Tap ${row.label} to make a beat!` : `Record a loop for ${row.label} first!`,
+    icon: grid ? 'wand' : 'record',
+    monster: voiceOf(row),
+  });
+}
+
 /** The playhead's star hops on each beat; the playing column's number bounces with it. */
 function hop(grid: HTMLElement) {
   const bead = grid.querySelector<HTMLElement>('.playhead-bead');
@@ -74,6 +108,8 @@ interface Drag {
   y0: number;
   gesture: string;
   lastCol: number;
+  /** The loop the last filled spot got (heard when the finger lifts). */
+  filled: string | null;
 }
 
 export function BlocksScreen() {
@@ -83,8 +119,12 @@ export function BlocksScreen() {
   const ghostRef = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
   const [dragging, setDragging] = useState<{ rowId: string; col: number; x: number; y: number } | null>(null);
+  // The one block keyboards and switches land on (roving tab stop).
+  const [focus, setFocus] = useState<{ rowId: string; col: number } | null>(null);
   const rows = rowsOf(project);
   const cols = project.arrangement.length;
+  const tabRow = rows.find((r) => r.id === focus?.rowId)?.id ?? rows[0]?.id;
+  const tabCol = Math.max(0, Math.min(cols - 1, focus?.col ?? 0));
 
   // Playhead: highlight the block column that is playing, fill its blocks as
   // the loop goes by (--in-col), and hop the playhead's star on every beat.
@@ -119,14 +159,26 @@ export function BlocksScreen() {
 
   const rowFor = (id: string) => rowsOf(getState().project).find((r) => r.id === id);
 
-  const fill = (rowId: string, col: number, gesture: string) => {
+  /** Put the row's loop on an empty spot; returns the loop placed there (null if nothing changed). */
+  const fill = (rowId: string, col: number, gesture: string, sing = true): string | null => {
     const row = rowFor(rowId);
-    if (!row?.clipId) return;
-    const value = row.clipId;
-    if (getState().project.arrangement.rows[rowId]?.[col]) return;
-    commit((p) => (p.arrangement.rows[rowId]?.[col] ? p : { ...p, arrangement: setCell(p.arrangement, rowId, col, value) }), { coalesce: gesture });
-    // A soft "hello" from the row's monster: a swipe across plays a little scale.
-    if (row.kind === 'track' && row.monster !== 'paint') studio.hit(row.id, auditionStep(row.monster, col), { vel: 0.55 }, { record: false });
+    const p = getState().project;
+    if (!row?.clipId || p.arrangement.rows[rowId]?.[col]) return null;
+    // Usually the monster's loop; a song kept from Learn continues the tune (the phrase to the left).
+    const value = clipForCell(p, rowId, col);
+    if (!value) return null;
+    commit((q) => (q.arrangement.rows[rowId]?.[col] ? q : { ...q, arrangement: setCell(q.arrangement, rowId, col, value) }), { coalesce: gesture });
+    // A soft "hello" from the row's monster at once: a swipe across plays a little scale.
+    if (sing) hello(row, col);
+    return value;
+  };
+
+  /** Take a block away: the preview stops and the monster goes "pop". */
+  const clear = (rowId: string, col: number) => {
+    const row = rowFor(rowId);
+    if (!commit((p) => (p.arrangement.rows[rowId]?.[col] ? { ...p, arrangement: setCell(p.arrangement, rowId, col, null) } : p))) return;
+    studio.stopAudition();
+    if (row) studio.chirp(voiceOf(row), 'pop');
   };
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -137,20 +189,27 @@ export function BlocksScreen() {
     const row = rowFor(hit.rowId);
     if (!row) return;
     if (!row.clipId) {
-      // A monster with a beat grid can make its loop right here (tap its picture); others record one.
-      const track = getState().project.tracks.find((t) => t.id === row.id);
-      const grid = canGrid(track, getState().project.loopBeats);
-      say({
-        text: grid ? `Tap ${row.label} to make a beat!` : `Record a loop for ${row.label} first!`,
-        icon: grid ? 'wand' : 'record',
-        monster: row.monster === 'paint' ? 'bloop' : row.monster,
-      });
+      noLoopHint(row);
       return;
     }
-    const filled = !!getState().project.arrangement.rows[hit.rowId]?.[hit.col];
+    const cell = getState().project.arrangement.rows[hit.rowId]?.[hit.col] ?? null;
     const gesture = `blocks-${e.pointerId}-${performance.now().toFixed(0)}`;
-    drag.current = { pointerId: e.pointerId, rowId: hit.rowId, startCol: hit.col, startFilled: filled, mode: filled ? 'pending' : 'fill', x0: e.clientX, y0: e.clientY, gesture, lastCol: hit.col };
-    if (!filled) fill(hit.rowId, hit.col, gesture);
+    const d: Drag = {
+      pointerId: e.pointerId,
+      rowId: hit.rowId,
+      startCol: hit.col,
+      startFilled: !!cell,
+      mode: cell ? 'pending' : 'fill',
+      x0: e.clientX,
+      y0: e.clientY,
+      gesture,
+      lastCol: hit.col,
+      filled: null,
+    };
+    drag.current = d;
+    // Pressing a block lets you hear it (lifting without moving then takes it away).
+    if (cell) listen(row, cell, hit.col);
+    else d.filled = fill(hit.rowId, hit.col, gesture);
   };
 
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -160,7 +219,7 @@ export function BlocksScreen() {
     if (d.mode === 'fill') {
       if (hit && hit.rowId === d.rowId && hit.col !== d.lastCol) {
         d.lastCol = hit.col;
-        fill(d.rowId, hit.col, d.gesture);
+        d.filled = fill(d.rowId, hit.col, d.gesture) ?? d.filled;
       }
       return;
     }
@@ -180,11 +239,59 @@ export function BlocksScreen() {
     if (!d || d.pointerId !== e.pointerId) return;
     drag.current = null;
     if (d.mode === 'pending') {
-      commit((p) => ({ ...p, arrangement: setCell(p.arrangement, d.rowId, d.startCol, null) }));
+      clear(d.rowId, d.startCol);
     } else if (d.mode === 'move') {
       setDragging(null);
-      if (d.lastCol !== d.startCol) commit((p) => ({ ...p, arrangement: moveCell(p.arrangement, d.rowId, d.startCol, d.lastCol) }));
+      if (d.lastCol !== d.startCol && commit((p) => ({ ...p, arrangement: moveCell(p.arrangement, d.rowId, d.startCol, d.lastCol) }))) {
+        const row = rowFor(d.rowId);
+        if (row) hello(row, d.lastCol);
+      }
+    } else if (d.filled && rowFor(d.rowId)?.kind === 'track') {
+      // The finger lifts off what it placed: hear the loop that now lives there.
+      studio.audition(d.rowId, d.filled);
     }
+  };
+
+  // ── Keyboards and switches ──
+  const focusCell = (rowId: string, col: number) => {
+    setFocus({ rowId, col });
+    gridRef.current?.querySelector<HTMLElement>(`[data-cell][data-row="${CSS.escape(rowId)}"][data-col="${col}"]`)?.focus();
+  };
+
+  /** Enter / Space (and a switch's or screen reader's click): fill an empty spot, or clear a block. */
+  const toggleCell = (rowId: string, col: number) => {
+    const row = rowFor(rowId);
+    if (!row) return;
+    if (!row.clipId) {
+      noLoopHint(row);
+      return;
+    }
+    if (getState().project.arrangement.rows[rowId]?.[col]) {
+      clear(rowId, col);
+      return;
+    }
+    // One sound, not two: the placed loop is heard (the painting's row says hello).
+    const placed = fill(rowId, col, `blocks-key-${performance.now().toFixed(0)}`, row.kind !== 'track');
+    if (placed && row.kind === 'track') studio.audition(rowId, placed);
+  };
+
+  const onCellKey = (e: ReactKeyboardEvent<HTMLButtonElement>, rowId: string, col: number) => {
+    const dx = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    const dy = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
+    if (!dx && !dy) return;
+    e.preventDefault();
+    const all = rowsOf(getState().project);
+    if (e.shiftKey && dx) {
+      // Shift+←/→ carries the block along its row (dropping on another block swaps them).
+      const to = col + dx;
+      const row = all.find((r) => r.id === rowId);
+      if (!row || to < 0 || to >= cols || !getState().project.arrangement.rows[rowId]?.[col]) return;
+      if (commit((p) => ({ ...p, arrangement: moveCell(p.arrangement, rowId, col, to) }))) hello(row, to);
+      focusCell(rowId, to);
+      return;
+    }
+    const r = Math.max(0, Math.min(all.length - 1, all.findIndex((x) => x.id === rowId) + dy));
+    focusCell(all[r].id, Math.max(0, Math.min(cols - 1, col + dx)));
   };
 
   const draggingRow = dragging ? rows.find((r) => r.id === dragging.rowId) : null;
@@ -202,6 +309,8 @@ export function BlocksScreen() {
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         data-col="-1"
+        role="group"
+        aria-label="Song blocks"
       >
         <div className="blocks-head" aria-hidden>
           <span />
@@ -260,21 +369,26 @@ export function BlocksScreen() {
                 const on = !!cells[c];
                 const isDragged = dragging?.rowId === row.id && dragging.col === c;
                 return (
-                  <div
+                  <button
                     key={c}
+                    type="button"
                     className="block"
                     data-cell
                     data-row={row.id}
                     data-col={c}
                     data-on={on}
                     data-dragged={isDragged}
-                    role="button"
+                    tabIndex={row.id === tabRow && c === tabCol ? 0 : -1}
                     aria-label={`${row.label}, block ${c + 1}: ${on ? 'playing' : 'empty'}`}
+                    onFocus={() => (focus?.rowId !== row.id || focus.col !== c) && setFocus({ rowId: row.id, col: c })}
+                    onKeyDown={(e) => onCellKey(e, row.id, c)}
+                    // Fingers and mice use the grid's pointer handlers; only keyboard and switch clicks (detail 0) land here.
+                    onClick={(e) => e.detail === 0 && toggleCell(row.id, c)}
                   >
                     {on && row.kind === 'track' && (cellClip(c) ?? clip) && <ClipThumb clip={(cellClip(c) ?? clip)!} monster={track!.monster} />}
                     {on && row.kind === 'paint' && <PaintThumb painting={project.painting} />}
-                    {!on && <span className="block-plus">+</span>}
-                  </div>
+                    {!on && <span className="block-plus" aria-hidden>+</span>}
+                  </button>
                 );
               })}
             </div>

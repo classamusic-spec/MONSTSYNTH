@@ -257,7 +257,10 @@ class Studio {
   private rolls = new Map<number, Roll>();
   /** Plays held rolls when the band is not playing. */
   private rollTransport: Transport<Scheduled> | null = null;
-  /** When the loop plays each drum (`channelId:pad` → AudioContext times), for the flam guard. */
+  /**
+   * When the loop plays each drum or key (`channelId:step` → AudioContext times):
+   * the flam guard for live drums and rolls, and the grid's catch-up dedupe.
+   */
   private seqHits = new Map<string, number[]>();
   /** Start of the finale, while a song is ending (its voices outlive the tail fade). */
   private finaleAt = Infinity;
@@ -657,14 +660,14 @@ class Studio {
     if (roll.clock === 'main' && getState().transport.recording) this.recordAt(roll, e.absBeat);
   }
 
-  /** Did the loop schedule this drum within the flam window of `at`? */
-  private seqHitNear(channelId: string, pad: number, at: number): boolean {
-    const times = this.seqHits.get(`${channelId}:${pad}`);
+  /** Did the loop schedule this drum (or key) within the flam window of `at`? */
+  private seqHitNear(channelId: string, step: number, at: number): boolean {
+    const times = this.seqHits.get(`${channelId}:${step}`);
     return !!times && times.some((t) => Math.abs(t - at) < FLAM_WINDOW);
   }
 
-  private noteSeqHit(channelId: string, pad: number, when: number) {
-    const key = `${channelId}:${pad}`;
+  private noteSeqHit(channelId: string, step: number, when: number) {
+    const key = `${channelId}:${step}`;
     const now = this.ctx?.currentTime ?? 0;
     const times = (this.seqHits.get(key) ?? []).filter((t) => t > now - 0.25);
     times.push(when);
@@ -711,24 +714,31 @@ class Studio {
     const track = getState().project.tracks.find((t) => t.id === trackId);
     const clip = track ? activeClip(track) : null;
     if (!track || !clip) return true;
-    const wasIds = new Set(was.map((n) => n.id));
+    const wasById = new Map(was.map((n) => [n.id, n]));
     const nowIds = new Set(clip.notes.map((n) => n.id));
-    const added = clip.notes.filter((n) => !wasIds.has(n.id));
+    const added = clip.notes.filter((n) => !wasById.has(n.id));
+    // A bead that jumped to another key (or was dragged there) keeps its id.
+    const moved = clip.notes.filter((n) => {
+      const w = wasById.get(n.id);
+      return !!w && (w.step !== n.step || w.beat !== n.beat);
+    });
     const removed = was.filter((n) => !nowIds.has(n.id));
     if (!hadLoop && clip.notes.length > 0) emitStudioEvent({ type: 'loop-created', trackId });
-    this.soundEdit(track, clip, added, removed, o);
+    this.soundEdit(track, clip, added, moved, removed, o);
     return true;
   }
 
-  private soundEdit(track: Track, clip: Clip, added: NoteEvent[], removed: NoteEvent[], o: { col: number; preview?: 'tap' | 'none' }) {
+  private soundEdit(track: Track, clip: Clip, added: NoteEvent[], moved: NoteEvent[], removed: NoteEvent[], o: { col: number; preview?: 'tap' | 'none' }) {
     const ctx = this.ctx;
     const transport = this.transport;
     const engine = this.engine;
     if (!ctx || !transport || !engine || getState().resting) return;
-    // The stone the finger set: the earliest new note (a double's first hit).
-    const tapped = added.reduce<NoteEvent | null>((a, n) => (!a || n.beat < a.beat ? n : a), null);
+    const earliest = (list: NoteEvent[]) => list.reduce<NoteEvent | null>((a, n) => (!a || n.beat < a.beat ? n : a), null);
+    // The stone the finger set: the earliest new note (a double's first hit), or
+    // a bead a tap made jump to another key (a drag is auditioned by the lane itself).
+    const tapped = earliest(added) ?? (o.preview === 'tap' ? earliest(moved) : null);
     if (!transport.playing) {
-      if (added.length > 0 && this.gridAutoStart) {
+      if (tapped && this.gridAutoStart) {
         this.gridAutoStart = false;
         this.startTransport('loop', GRID_START_FROM_TAP ? o.col : 0);
         if (GRID_START_FROM_TAP || o.preview === 'none' || !tapped) return;
@@ -742,37 +752,41 @@ class Studio {
       else if (removed.length > 0) this.hit(track.id, removed[0].step, { vel: 0.3 }, { record: false });
       return;
     }
-    if (this.mode !== 'loop' || added.length === 0) return;
+    if (this.mode !== 'loop' || (added.length === 0 && !tapped)) return;
     const L = clip.lengthBeats;
     const nowBeat = transport.beatAt(ctx.currentTime);
     const heard = audibleTracks(getState().project).some((t) => t.id === track.id);
     // Catch up: the transport has already handed out the next ~120 ms, so a note
     // due inside it would be skipped for a whole loop. Schedule it once now, unless
-    // that drum is already queued for this moment (the old groove's same hit after a
-    // wand tap, a stone taken away and put back, a partly lit stone rewritten onto
-    // the beat): one hit, not two.
+    // that drum (or key) is already queued for this moment (the old groove's or
+    // tune's same note after a wand tap, a stone taken away and put back, a partly
+    // lit stone rewritten onto the beat): one hit, not two. Only new notes: a bead
+    // that moved keeps its id, and its old key may already be queued.
     for (const n of added) {
       const occ = nextOccurrence(n.beat, L, nowBeat);
       if (!heard || occ >= transport.scheduledUntil - 1e-9) continue;
       const when = transport.timeAt(occ);
-      if (track.monster === 'boom' && this.seqHitNear(track.id, n.step, when)) continue;
+      if (this.seqHitNear(track.id, n.step, when)) continue;
       this.schedule({ absBeat: occ, channelId: track.id, trackId: track.id, monster: track.monster, note: n, source: 'clip' }, when);
     }
     if (!tapped || o.preview === 'none' || !heard) return;
-    if (nextOccurrence(tapped.beat, L, nowBeat) - nowBeat <= PREVIEW_NEAR) return;
+    const occ = nextOccurrence(tapped.beat, L, nowBeat);
+    // A bead that jumped inside the handed-out window: its old key plays this time
+    // round, and the new one is previewed just after it (never on top of it).
+    const queuedOld = moved.includes(tapped) && occ < transport.scheduledUntil - 1e-9;
+    if (!queuedOld && occ - nowBeat <= PREVIEW_NEAR) return;
     // A soft taste of the new stone on the next sixteenth (never off the grid).
-    const line = nextLine(nowBeat + 0.05, PREVIEW_GRID);
-    // The loop already plays this drum on that line: that hit is the preview.
+    const line = nextLine(queuedOld ? Math.max(nowBeat + 0.05, occ + 1e-6) : nowBeat + 0.05, PREVIEW_GRID);
+    // The loop already plays this drum (or key) on that line: that note is the preview.
     if (clip.notes.some((n) => n.step === tapped.step && Math.abs(wrap(n.beat, L) - wrap(line, L)) < 1e-6)) return;
     const key = `${track.id}:${tapped.step}`;
     if (this.lastPreviewLine.get(key) === line) return;
     const when = transport.timeAt(line);
-    const drum = track.monster === 'boom';
-    // That drum is already queued for that moment (an old pattern's hit): it is the preview.
-    if (drum && this.seqHitNear(track.id, tapped.step, when)) return;
+    // That drum (or key) is already queued for that moment (an old pattern's note): it is the preview.
+    if (this.seqHitNear(track.id, tapped.step, when)) return;
     this.lastPreviewLine.set(key, line);
-    // Remembered like a loop hit, so a stone put on that very line next is not doubled.
-    if (drum) this.noteSeqHit(track.id, tapped.step, when);
+    // Remembered like a loop note, so a stone put on that very line next is not doubled.
+    this.noteSeqHit(track.id, tapped.step, when);
     const p = getState().project;
     const vel = tapped.vel * 0.6;
     const durSec = Math.max(0.05, tapped.dur * (60 / p.tempo));
@@ -792,9 +806,9 @@ class Studio {
   }
 
   /**
-   * The wand ("Surprise"): the monster's loop becomes the next ready-made groove.
-   * A burst of taps is one undo step back to the child's own pattern. If nothing
-   * plays, the loop starts from beat 1.
+   * The wand ("Surprise"): the monster's loop becomes the next ready-made groove
+   * (Boom) or tune (the bead lane). A burst of taps is one undo step back to the
+   * child's own pattern. If nothing plays, the loop starts from beat 1.
    */
   gridWand(trackId: string) {
     const s = getState();
@@ -803,9 +817,9 @@ class Studio {
     const mode = s.settings.ageMode;
     const o = { beatsPerBar: s.project.beatsPerBar };
     let idx = this.wandIndex.get(trackId) ?? 0;
-    let notes = wandPattern(mode, idx, o);
-    // Every tap must change something: skip the groove the loop already plays.
-    if (patternOf(notes) === patternOf(activeClip(track)?.notes ?? [])) notes = wandPattern(mode, ++idx, o);
+    let notes = wandPattern(track.monster, mode, idx, o);
+    // Every tap must change something: skip the idea the loop already plays.
+    if (patternOf(notes) === patternOf(activeClip(track)?.notes ?? [])) notes = wandPattern(track.monster, mode, ++idx, o);
     this.wandIndex.set(trackId, idx + 1);
     this.stepEdit(trackId, (p) => replaceLoopNotes(p, trackId, notes), { col: 0, coalesce: `wand:${trackId}`, preview: 'none' });
     if (!this.transport?.playing) {
@@ -1025,7 +1039,58 @@ class Studio {
       this.startTransport('loop');
       return;
     }
-    this.startTransport(s.screen === 'blocks' ? 'song' : 'loop');
+    const mode = s.screen === 'blocks' ? 'song' : 'loop';
+    // Play on an empty song would only run a silent clock (and end with false
+    // praise). The monster wonders "huh?" instead, and the Coach shows where
+    // the music comes from. Beat Hop's grid always has its pulse to play.
+    if (!songHasSound(s.project, mode) && !(mode === 'loop' && gridShown(s))) {
+      this.nothingToPlay();
+      return;
+    }
+    this.startTransport(mode);
+  }
+
+  /** Nothing to hear: the spotlight monster says "huh?" and the UI points the way (`nothing-to-play`). */
+  private nothingToPlay() {
+    const s = getState();
+    const monster = s.project.tracks.find((t) => t.id === s.selectedTrackId)?.monster ?? s.project.tracks[0]?.monster ?? 'bloop';
+    this.chirp(monster, 'huh');
+    emitStudioEvent({ type: 'nothing-to-play' });
+  }
+
+  /**
+   * "Make it a song" in one tap: Monster Magic arranges every loop into a song,
+   * Monster Blocks opens and the song plays from block 1. One undo step takes
+   * the arrangement back. The song's first Magic starts on the beat when there
+   * is one. False (and a "huh?") when there is nothing to arrange.
+   */
+  makeSong(seed = Math.floor(Math.random() * 1e6)): boolean {
+    return this.arrangeAndPlay(seed, true);
+  }
+
+  /** Monster Blocks' Magic: a new arrangement, played from block 1 at once, so every tap is heard. */
+  rearrange(seed = Math.floor(Math.random() * 1e6)): boolean {
+    return this.arrangeAndPlay(seed, false);
+  }
+
+  private arrangeAndPlay(seed: number, openBlocks: boolean): boolean {
+    this.stopRecording();
+    const s = getState();
+    if (s.resting) return false;
+    const p = s.project;
+    const arrangement = magicArrange(p, seed, { beatFirst: !this.arranged.has(p.id) });
+    if (!songHasSound({ ...p, arrangement }, 'song')) {
+      // Nothing to arrange: no empty undo step, just a "huh?" and a pointer.
+      this.nothingToPlay();
+      return false;
+    }
+    this.arranged.add(p.id);
+    if (arrangement !== p.arrangement) commit((q) => ({ ...q, arrangement }));
+    // The screen changes first: leaving the Lab stops its loop (screenChanged), then the song starts.
+    if (openBlocks) setState({ screen: 'blocks', overlay: null });
+    if (getState().transport.playing) this.stop();
+    this.startTransport('song');
+    return true;
   }
 
   /** Start the band at `fromBeat`, by default 40 ms from now (`atTime` may lie in the past). */
@@ -1035,12 +1100,15 @@ class Studio {
     const engine = this.engine;
     if (!ctx || !transport || !engine) return;
     const p = getState().project;
+    this.stopAudition();
     this.tempo = p.tempo;
     engine.setTempo(p.tempo);
     transport.setTempo(p.tempo);
     this.visuals = [];
     this.seqHits.clear();
     this.finaleAt = Infinity;
+    // Only a song with something to hear ends with a bow (and "You made a song!").
+    this.songHadSound = mode === 'song' && songHasSound(p, 'song');
     // Mode and guards are set *before* start(): the transport schedules its first window immediately.
     this.mode = mode;
     this.skipBefore.clear();
@@ -1059,6 +1127,7 @@ class Studio {
     this.transport?.stop();
     this.engine?.stopSequenced(STOP_FADE);
     const silencedFrom = (this.ctx?.currentTime ?? 0) + STOP_FADE;
+    this.stopAudition();
     this.visuals = [];
     this.skipBefore.clear();
     this.seqHits.clear();
@@ -1075,7 +1144,7 @@ class Studio {
   private finale(when: number) {
     const ctx = this.ctx;
     const engine = this.engine;
-    if (!ctx || !engine) return;
+    if (!ctx || !engine || !this.songHadSound) return;
     const at = Math.max(ctx.currentTime, when);
     this.finaleAt = at;
     const p = getState().project;
@@ -1106,7 +1175,9 @@ class Studio {
     this.finaleAt = Infinity;
     setTransport({ playing: false, recording: false, armed: false });
     this.rehomeRolls();
-    emitStudioEvent({ type: 'finale' });
+    // No false praise: a song that had nothing to hear just stops.
+    if (this.songHadSound) emitStudioEvent({ type: 'finale' });
+    this.songHadSound = false;
   }
 
   private provide(from: number, to: number): Scheduled[] {
@@ -1165,7 +1236,8 @@ class Studio {
         persistent: e.trackId === null,
       });
     }
-    if (e.monster === 'boom') this.noteSeqHit(e.channelId, e.note.step, when);
+    // Every loop note is remembered (drums for the flam guard, any key for the grid's catch-up).
+    this.noteSeqHit(e.channelId, e.note.step, when);
     const spb = 60 / p.tempo;
     const durSec = Math.max(0.05, e.note.dur * spb);
     engine.trigger(noteRequest(p, e.monster, e.channelId, e.note.step, { vel: e.note.vel, tone: e.note.tone }), when, durSec);
@@ -1238,6 +1310,96 @@ class Studio {
         return engine?.meter() ?? 0;
       },
     });
+  }
+
+  // ── Hearing a block, and little monster sounds ────────────────────────────
+
+  /**
+   * Monster Blocks: let a block be heard. The first `beats` beats of its loop
+   * (from the beat of its first note) play on a preview channel dressed like the
+   * monster (costume, effects, Mimic's voice), on a little clock of their own.
+   * Nothing is recorded or written. While the band plays, the song is what you
+   * hear, so this stays quiet. False when there was nothing to play.
+   */
+  audition(trackId: string, clipId: string, beats = 2): boolean {
+    const ctx = this.ctx;
+    const engine = this.engine;
+    const s = getState();
+    if (!ctx || !engine || s.resting || this.transport?.playing || this.lessonTransport?.playing) return false;
+    const track = s.project.tracks.find((t) => t.id === trackId);
+    const clip = track?.clips.find((c) => c.id === clipId);
+    if (!track || !clip || clip.notes.length === 0) return false;
+    this.stopAudition();
+    const channelId = `preview:${track.monster}`;
+    engine.ensureChannel({ ...this.channelSpec(track), id: channelId, persistent: true });
+    if (track.monster === 'mimic') engine.setSample(channelId, (track.sampleId && this.sampleCache.get(track.sampleId)) || null);
+    // A loop that begins with a rest is heard from its first note's beat.
+    const from = Math.floor(Math.min(...clip.notes.map((n) => n.beat)) + 1e-9);
+    const end = from + beats;
+    this.auditionEvents = clip.notes
+      .filter((n) => n.beat >= from - 1e-9 && n.beat < end - 1e-9)
+      .map((note) => ({ absBeat: note.beat, channelId, trackId, monster: track.monster, note, end }))
+      .sort((a, b) => a.absBeat - b.absBeat);
+    this.auditionTransport ??= new Transport<AuditionEvent>(ctx, {
+      provide: (a, b) => this.auditionEvents.filter((e) => e.absBeat >= a - 1e-9 && e.absBeat < b - 1e-9),
+      schedule: (e, when) => this.scheduleAudition(e, when),
+    });
+    this.auditionTransport.setTempo(s.project.tempo);
+    this.auditionTransport.start({ atTime: ctx.currentTime + 0.02, fromBeat: from, endBeat: end });
+    return true;
+  }
+
+  /** Cut a block's preview short (the block was taken away, or the band starts). */
+  stopAudition() {
+    if (this.auditionTransport?.playing) this.auditionTransport.stop();
+    this.auditionEvents = [];
+    const now = this.ctx?.currentTime ?? 0;
+    for (const v of this.auditionVoices) if (v.endTime > now) v.kill(now, 0.04);
+    this.auditionVoices = [];
+  }
+
+  private scheduleAudition(e: AuditionEvent, when: number) {
+    const engine = this.engine;
+    if (!engine) return;
+    const p = getState().project;
+    const spb = 60 / p.tempo;
+    // A long note rings a little past the end of the preview, never for its whole length.
+    const durSec = Math.max(0.05, Math.min(e.note.dur, e.end - e.note.beat + 0.5) * spb);
+    const voice = engine.trigger(noteRequest(p, e.monster, e.channelId, e.note.step, { vel: e.note.vel, tone: e.note.tone }), when, durSec);
+    const now = this.ctx?.currentTime ?? 0;
+    this.auditionVoices = this.auditionVoices.filter((v) => v.endTime > now);
+    if (voice) this.auditionVoices.push(voice);
+    this.queueVisual(when, { trackId: e.trackId, monster: e.monster, step: e.note.step, vel: e.note.vel, dur: durSec, source: 'loop', noteId: e.note.id });
+  }
+
+  /**
+   * A monster's little voice for a moment that needs one (a speech bubble, a
+   * block popping away, Play with nothing to play): two or three notes in its
+   * own sound, never recorded. Monsters off stage sing on a channel of their own.
+   */
+  chirp(monster: MonsterKind, kind: ChirpKind) {
+    const ctx = this.ctx;
+    const engine = this.engine;
+    const s = getState();
+    if (!ctx || !engine || s.resting) return;
+    const track = s.project.tracks.find((t) => t.monster === monster);
+    // A recorded word would play whole (seconds long) for every note: Mimic chirps with its singing voice.
+    let channelId = track && !(track.monster === 'mimic' && track.sampleId) ? track.id : undefined;
+    if (!channelId || !engine.hasChannel(channelId)) {
+      channelId = `paint:${monster}`;
+      const info = MONSTERS[monster];
+      if (!engine.hasChannel(channelId)) {
+        engine.ensureChannel({ id: channelId, monster, preset: info.presets[0].id, fx: info.defaultFx, volume: 0.75, maxVoices: info.maxVoices, persistent: true });
+      }
+    }
+    const p = s.project;
+    const notes = monster === 'boom' ? CHIRPS[kind].drums : CHIRPS[kind].tune;
+    for (const [step, at, dur, vel] of notes) {
+      const when = ctx.currentTime + 0.01 + at;
+      engine.trigger(noteRequest(p, monster, channelId, step, { vel }), when, dur);
+      // Shown like a loop note: the monster sings it, but it never counts as the child playing.
+      this.queueVisual(when, { trackId: track?.id ?? null, monster, step, vel, dur, source: 'loop' });
+    }
   }
 
   // ── Song lessons ──────────────────────────────────────────────────────────
@@ -1413,6 +1575,8 @@ class Studio {
       gridAutoStart: this.gridAutoStart,
       /** Beat Hop: the last preview played while the loop ran (its beat is always on a sixteenth). */
       lastPreview: this.lastPreview,
+      /** Monster Blocks: a block is being heard on its own. */
+      auditioning: this.auditionTransport?.playing ?? false,
     };
   }
 }

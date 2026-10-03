@@ -14,7 +14,9 @@ import { VoiceButton } from './VoiceButton';
 
 // The eight big keys (or drum pads) for the monster in the spotlight.
 // One container handles every finger, so kids can play chords with several
-// fingers and slide across keys for a glissando.
+// fingers and slide across keys for a glissando. Each key is also a real
+// button (fingers pass through it to the container) so keyboards, switches and
+// screen readers can reach and play it: Enter or Space plays its note.
 
 /** Sparks per touch, and how many touch bursts one key may show at once (fast rolls stay light). */
 const SPARKS = 5;
@@ -88,7 +90,7 @@ export function PlaySurface({ track }: { track: Track }) {
   }, [names, info.name]);
   const keysRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
-  const keyEls = useRef<(HTMLDivElement | null)[]>([]);
+  const keyEls = useRef<(HTMLButtonElement | null)[]>([]);
   const fingers = useRef(new Map<number, Finger>());
   const rect = useRef<DOMRect | null>(null);
   const downCount = useRef<number[]>([]);
@@ -192,16 +194,24 @@ export function PlaySurface({ track }: { track: Track }) {
         onLostPointerCapture={onPointerUp}
       >
         {Array.from({ length: count }, (_, i) => (
-          <div
+          <button
             key={`${track.id}-${i}`}
             ref={(el) => {
               keyEls.current[i] = el;
             }}
+            type="button"
             className="key"
             data-down="false"
             style={{ ['--k' as string]: `var(--key-${drums ? DRUM_COLORS[i] : i})` }}
-            role="button"
             aria-label={drums ? DRUM_PADS[i].name : recorded ? `${info.name} note ${i + 1}` : labels[i]}
+            // Keys take no pointer events (the container plays fingers); a click here comes
+            // from a keyboard, a switch or a screen reader (detail 0), and plays the note.
+            onClick={(e) => {
+              if (e.detail !== 0) return;
+              studio.hit(track.id, i);
+              const el = keyEls.current[i];
+              if (el) glow(el, 160, 'down');
+            }}
           >
             {drums ? <DrumIcon pad={i} /> : <KeyGlyph glyph={info.glyph} index={i} count={count} />}
             {showNames && <KeyName name={names[i]} style={style} />}
@@ -210,7 +220,7 @@ export function PlaySurface({ track }: { track: Track }) {
                 {DRUM_PADS[i].short}
               </span>
             )}
-          </div>
+          </button>
         ))}
       </div>
     </div>

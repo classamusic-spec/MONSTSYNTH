@@ -1,7 +1,18 @@
 import { useEffect, useState } from 'react';
+import { getState } from '../../store/store';
+import { studio } from '../../studio/studio';
 import { MonsterArt } from '../monsters/MonsterArt';
 import { Icon } from '../icons/Icon';
-import { onSay, type BubbleMsg } from './bubbles';
+import { bubbleChirp, onSay, type BubbleMsg } from './bubbles';
+
+/** Every bubble has a voice: its monster (or the one on the keys) chirps as it appears. */
+function speak(m: BubbleMsg) {
+  const kind = bubbleChirp(m);
+  if (!kind) return;
+  const s = getState();
+  const monster = m.monster ?? s.project.tracks.find((t) => t.id === s.selectedTrackId)?.monster;
+  if (monster) studio.chirp(monster, kind);
+}
 
 export function BubbleLayer() {
   const [msg, setMsg] = useState<BubbleMsg | null>(null);
@@ -14,6 +25,7 @@ export function BubbleLayer() {
         return;
       }
       setMsg(m);
+      speak(m);
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => setMsg(null), 2600);
     });

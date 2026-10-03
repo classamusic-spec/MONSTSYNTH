@@ -1,8 +1,9 @@
 // Third end-to-end pass: edge cases found in code review, kept as regression
 // checks. Feedback sounds never land in a loop, redo survives an empty take,
 // focus loss never leaves a note stuck, rest time locks every way to play,
-// leaving the Lab ends a take, and a Mimic recording shared by a copied song
-// survives deleting the original (and is cleaned up once nothing uses it).
+// leaving the Lab ends a take, a Mimic recording shared by a copied song
+// survives deleting the original (and is cleaned up once nothing uses it), and
+// an empty song has no dead ends (no silent play, no false praise, no ghost undo).
 import { chromium } from 'playwright';
 
 const url = process.argv[2] || 'http://127.0.0.1:5173/';
@@ -178,6 +179,36 @@ for (let i = 0; i < 20 && !gone; i++) {
   gone = !(await sampleStored(sampleId));
 }
 check('a recording no song uses is cleaned up on the next launch', gone);
+
+// ── An empty song: Play and Magic never pretend ────────────────────────────
+await page.mouse.click(512, 384);
+await page.waitForTimeout(400);
+await page.evaluate(async () => {
+  await window.__monster.actions.newSong('blank');
+  window.__nothing = 0;
+  window.__monster.bus.onStudioEvent((e) => e.type === 'nothing-to-play' && window.__nothing++);
+});
+await page.waitForTimeout(200);
+await button('Play').click();
+await page.waitForTimeout(200);
+s = await S();
+check('Play on an empty song in the Lab does not start a silent loop', !s.transport.playing && (await page.evaluate(() => window.__nothing)) === 1);
+await page.locator('.dock-btn[data-screen="blocks"]').click();
+await page.waitForTimeout(200);
+await button('Play the song').click();
+await page.waitForTimeout(200);
+s = await S();
+const pastBeforeMagic = s.past.length;
+await page.locator('.t-magic').click();
+await page.waitForTimeout(200);
+const finaleSeen = await page
+  .waitForSelector('.finale', { timeout: 1500 })
+  .then(() => true)
+  .catch(() => false);
+s = await S();
+check('Play on an empty song in Blocks stays stopped, with no finale', !s.transport.playing && !finaleSeen);
+check('Magic on an empty song adds no undo step', s.past.length === 0 && pastBeforeMagic === 0, `${s.past.length} steps`);
+check('each dead end answers (a "huh?" and a pointer), every time', (await page.evaluate(() => window.__nothing)) === 3);
 
 check('no console errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 await browser.close();

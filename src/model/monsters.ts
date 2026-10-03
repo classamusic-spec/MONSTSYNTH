@@ -54,6 +54,8 @@ export interface MonsterInfo {
   gridColumnCap: number;
   /** Beat Hop: length of a note placed on the grid, in beats. */
   gridDur: number;
+  /** Beat Hop: one long note at a time (Puff): a new bead ends the note ringing into its beat. */
+  gridMono: boolean;
 }
 
 const fx = (echo = 0, gloop = 0, chomper = 0, wiggle = 0): FxLevels => ({ echo, gloop, chomper, wiggle });
@@ -84,6 +86,7 @@ export const MONSTERS: Record<MonsterKind, MonsterInfo> = {
     paintMode: 'sustain',
     gridColumnCap: 3,
     gridDur: 0.9,
+    gridMono: false,
   },
   boom: {
     kind: 'boom',
@@ -109,6 +112,7 @@ export const MONSTERS: Record<MonsterKind, MonsterInfo> = {
     paintMode: 'hits',
     gridColumnCap: Infinity,
     gridDur: 0.5,
+    gridMono: false,
   },
   grumble: {
     kind: 'grumble',
@@ -134,6 +138,7 @@ export const MONSTERS: Record<MonsterKind, MonsterInfo> = {
     paintMode: 'sustain',
     gridColumnCap: 1,
     gridDur: 0.9,
+    gridMono: false,
   },
   spark: {
     kind: 'spark',
@@ -159,6 +164,7 @@ export const MONSTERS: Record<MonsterKind, MonsterInfo> = {
     paintMode: 'hits',
     gridColumnCap: 3,
     gridDur: 0.5,
+    gridMono: false,
   },
   puff: {
     kind: 'puff',
@@ -184,6 +190,7 @@ export const MONSTERS: Record<MonsterKind, MonsterInfo> = {
     paintMode: 'sustain',
     gridColumnCap: 1,
     gridDur: 1.9,
+    gridMono: true,
   },
   mimic: {
     kind: 'mimic',
@@ -209,6 +216,7 @@ export const MONSTERS: Record<MonsterKind, MonsterInfo> = {
     paintMode: 'sustain',
     gridColumnCap: 2,
     gridDur: 0.9,
+    gridMono: false,
   },
 };
 

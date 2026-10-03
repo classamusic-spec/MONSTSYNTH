@@ -47,6 +47,11 @@ export interface AppState {
   transport: TransportFlags;
   overlay: Overlay;
   paint: { tool: PaintTool; brush: PaintBrush };
+  /**
+   * Monsters whose first loop was just made and is waiting in Monster Blocks
+   * (a dot on the Blocks button until it is visited). UI only, never saved.
+   */
+  newBlocks: string[];
   past: HistoryEntry[];
   future: Project[];
 }
@@ -69,6 +74,7 @@ export const useApp = create<AppState>(() => ({
   transport: { playing: false, recording: false, armed: false, mode: 'loop' },
   overlay: null,
   paint: { tool: 'brush', brush: 'bloop' },
+  newBlocks: [],
   past: [],
   future: [],
 }));

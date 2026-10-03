@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "node scripts/e2e.mjs && node scripts/e2e-more.mjs && node scripts/e2e-edge.mjs && node scripts/e2e-learn.mjs && node scripts/e2e-beat.mjs && node scripts/e2e-steps.mjs && node scripts/e2e-visual.mjs",
+    "e2e": "node scripts/e2e.mjs && node scripts/e2e-more.mjs && node scripts/e2e-edge.mjs && node scripts/e2e-learn.mjs && node scripts/e2e-beat.mjs && node scripts/e2e-steps.mjs && node scripts/e2e-visual.mjs && node scripts/e2e-ux.mjs",
     "check": "tsc --noEmit && vitest run",
     "build:demo": "node scripts/build-demo.mjs"
   },

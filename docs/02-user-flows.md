@@ -5,7 +5,7 @@ Flows are written as what the child does → what the product does. Every step p
 ## F1 · First sound in under five seconds
 
 1. App opens on the **Monster Lab**. The monsters are asleep (eyes shut, dimmed). A glowing sun with a tapping hand pulses in the middle; for readers it says *"Tap to wake the monsters!"*.
-2. Child taps anywhere → audio unlocks (the tap is the browser's required user gesture) → each monster wakes in turn and sings one note of a chord (≈0.5 s).
+2. Child taps anywhere → audio unlocks (the tap is the browser's required user gesture) → each monster wakes in turn, bounces and sings one note of a chord (≈0.5 s).
 3. Bloop stands in the spotlight above eight rainbow keys. Child touches a key → Bloop sings, its mouth opens, the key sinks and ripples.
 4. If nothing is touched for 3 s, a pointing hand taps a key (wordless hint).
 
@@ -14,7 +14,7 @@ Flows are written as what the child does → what the product does. Every step p
 ## F2 · Make a loop (no instructions)
 
 1. Child taps **●** (Record). Nothing is playing and the song is empty, so Record *arms*: the button blinks and its label reads "Play!".
-2. The first note the child plays **becomes the downbeat**: the loop starts exactly there. The loop ring around ▶ begins to turn.
+2. The first note the child plays **becomes the downbeat**: the loop starts exactly there. The loop ring around ▶ begins to turn. A first loop is cheered: the monster jumps and throws sparkles, its loop badge pops in, and a dot in the monster's colour appears on the **Blocks** button (the loop is already in the song) until Blocks is visited.
 3. Child keeps playing. Notes are pulled onto the beat (soft quantize; drums snap exactly onto it) and placed into Bloop's loop. A soft woodblock tick marks each beat for the whole take when it began without a drum loop.
 4. Child taps ● again (or stops playing for two loops, and recording switches off by itself). The loop keeps playing — the child immediately hears their music repeat.
 5. Undo removes the whole take in one step.
@@ -23,7 +23,7 @@ Flows are written as what the child does → what the product does. Every step p
 
 1. While the loop plays, the child touches **Boom** on the stage → Boom moves into the spotlight, the keys become drum pads, Boom plays a drum.
 2. Child taps ● and plays drums along with the loop. Notes land in sync because both loops share one clock.
-3. After the first loop, the coach hand briefly points at another monster to suggest adding a layer.
+3. After the first loop, the coach hand briefly points at another monster to suggest adding a layer. After the second, it points at the **Song** button (Little Monsters) or at Blocks (Monster Makers).
 
 ## F4 · Squish the Monster (expressive play)
 
@@ -41,9 +41,20 @@ Touching a monster on stage plays it directly:
 ## F5 · Build a song (Monster Blocks)
 
 1. Child opens **Blocks**. Every monster with a loop already fills its row (the first recording auto-fills the row), so the song exists immediately.
-2. Tap a block → it disappears (a gap in the song). Tap an empty spot → the loop returns. Swipe across empty spots → several appear. Drag a block → it moves; dropping on another block swaps them.
-3. Tap ▶ → the song plays once from block 1 to block 8 with a playhead. At the end, stars rain down and the monsters bow: *"You made a song!"*.
-4. ✨ Magic (the wand where Record usually sits) builds an arrangement: monsters enter one by one, a breakdown drops the rhythm, everyone plays the finale. Every tap gives a different arrangement; Undo goes back.
+2. Every touch is heard, and none ever changes a loop's notes:
+   * Tap an empty spot → the loop returns: the monster sings a hello note at once (a swipe across empty spots climbs the scale), and when the finger lifts, the loop placed there plays its first two beats.
+   * Press a block → its loop plays (two beats, on a preview channel dressed like the monster). Lift without moving → the block goes away with a soft *pop*.
+   * Drag a block → it moves (dropping on another block swaps them) and lands with a hello.
+   * While the song plays, the song is what you hear: pressing a block adds no preview on top.
+3. A song kept from **Learn** has one phrase per block (A B C A …). Filling a gap there continues the tune: the block gets the phrase to its left.
+4. Tap ▶ → the song plays once from block 1 to block 8 with a playhead. At the end, stars rain down and the monsters bow: *"You made a song!"* (only when the song had something to hear).
+5. ✨ Magic (the wand where Record usually sits) builds an arrangement and plays it at once from block 1, so every tap is heard: monsters enter one by one, a breakdown drops the rhythm, everyone plays the finale. Every tap gives a different arrangement; Undo goes back. Rows that play several phrases (a kept lesson's tune, and the bass and sparkles that follow its chords) keep every phrase in its block, from block 1, however often Magic is tapped: the song still starts at its beginning, and Magic arranges the other layers (the beat) around it. The first Magic of a song with a beat starts on the beat (Boom enters in block 1).
+
+## F5b · Make it a song in one tap (Little Monsters)
+
+1. Once two monsters have loops, a **Song** button (the wand over a stack of blocks) appears in the rail under Undo, where Monster Makers have their Magic panel button. It never covers Play, Record, Undo or Beat Hop's Surprise wand.
+2. One tap → Monster Magic arranges every loop into a song (the beat first, when there is one), Monster Blocks opens and the song plays from block 1.
+3. One Undo takes the arrangement back.
 
 ## F6 · Sound Painting
 
@@ -76,12 +87,37 @@ Touching a monster on stage plays it directly:
 2. Only time the app is awake and visible counts. When it runs out, the music stops, the band yawns and falls asleep: *"Time for a break!"* — everything is already saved.
 3. The screen cannot be dismissed by the child; a grown-up holds the two corners, and closing Parent Space starts a fresh session.
 
+## F11 · Nothing to play yet (no dead ends)
+
+Play (or Space, or Magic) on a song with nothing to hear never runs a silent loop, never says *"You made a song!"*, and never adds an empty undo step. Instead the monster on the keys goes *"huh?"* (two rising notes), a bubble says what to do, and the coach hand (when hints are on) points where the music comes from, every time, not once a session:
+
+| Where | What is missing | The hand points at |
+|---|---|---|
+| Lab | no loop yet | Record (*"Record a loop first!"*) |
+| Lab | every loop asleep | a sleeping loop badge (*"Wake a monster!"*) |
+| Blocks | no loop yet | the Lab button (*"Make a loop in the Lab first!"*) |
+| Blocks | loops, but no blocks | an empty block of a monster with a loop (*"Tap a block!"*) |
+| Blocks | every looped monster asleep | a sleeping row's monster (*"Wake a monster!"*) |
+| Paint | nothing drawn | the canvas (*"Draw your music!"*) |
+
+Beat Hop's grid always has its pulse, so Play there always starts.
+
+Every bubble has a voice: its monster chirps as it appears (*"yay!"* for good news, *"huh?"* otherwise).
+
+## F12 · Keyboards, switches and screen readers
+
+* **Lab:** every key is a real button in the Tab order, named by its note (*"Bloop: E"*); Enter or Space plays it (and records during a take). Fingers still glide across keys (the keys let touches through to the keyboard behind them). A–K play too, 1–6 pick a monster.
+* **Blocks:** all the blocks are one tab stop. Arrows move between blocks and monsters, Enter or Space fills an empty spot (and plays it) or clears a block, Shift+← / → carries a block along its row.
+* **Reduced motion** (Parent Space, or the device setting): no blinking, no echo ghosts, no jumps or bounces; celebrations become a soft glow and the Blocks dot stays still.
+* An axe-core pass over every screen is part of the browser checks and fails on any violation.
+
 ## Recovery flows (no destructive mistakes)
 
 | Accident | Recovery |
 |---|---|
 | Recorded something unwanted | Undo (one step per take) |
 | Deleted a block / moved it | Undo |
+| Magic or **Song** rearranged the song | Undo (one step) |
 | Cleared a monster's loop (hold its loop badge 1 s) | Undo |
 | Sent a monster home | It waits on the bench with its loop; invite it back |
 | Started a new song | Old song is still on the shelf |

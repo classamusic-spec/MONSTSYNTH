@@ -127,6 +127,20 @@ describe('Monster Magic keeps a song kept from Learn', () => {
     }
   });
 
+  it('tap after tap, the tune and its chords stay whole and in order', () => {
+    let p = song;
+    for (let seed = 0; seed < 12; seed++) {
+      p = { ...p, arrangement: magicArrange(p, seed * 7 + 1, { beatFirst: seed === 0 }) };
+      for (const t of song.tracks) {
+        if (isMultiClipRow(t, song.arrangement.rows[t.id])) expect(p.arrangement.rows[t.id]).toEqual(song.arrangement.rows[t.id]);
+      }
+    }
+    // Magic still arranges the beat around the tune: it does not always play.
+    const boom = song.tracks.find((t) => t.monster === 'boom')!.id;
+    const shapes = new Set(Array.from({ length: 12 }, (_, seed) => magicArrange(song, seed).rows[boom].map((c) => (c ? 'X' : '.')).join('')));
+    expect(shapes.size).toBeGreaterThan(1);
+  });
+
   it('every kept lesson survives Magic with all of its phrases', () => {
     for (const lesson of TEACH_SONGS) {
       const p = lessonProject(lesson, 3);

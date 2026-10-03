@@ -93,6 +93,17 @@ export function setLabView(labView: LabView) {
   if (getState().labView !== labView) setState({ labView });
 }
 
+/** A monster's first loop is waiting in Monster Blocks (the Blocks button wears a dot until visited). */
+export function markNewBlock(trackId: string) {
+  const s = getState();
+  if (s.screen === 'blocks' || s.newBlocks.includes(trackId)) return;
+  setState({ newBlocks: [...s.newBlocks, trackId] });
+}
+
+export function clearNewBlocks() {
+  if (getState().newBlocks.length > 0) setState({ newBlocks: [] });
+}
+
 export function setOverlay(overlay: Overlay) {
   setState({ overlay });
 }
@@ -109,7 +120,7 @@ async function switchTo(project: Project) {
   await flushSave();
   setProject(project);
   updateSettings({ lastProjectId: project.id });
-  setState({ screen: 'lab', overlay: null, selectedTrackId: project.tracks[0].id, labView: 'keys' });
+  setState({ screen: 'lab', overlay: null, selectedTrackId: project.tracks[0].id, labView: 'keys', newBlocks: [] });
 }
 
 export async function openSong(id: string) {

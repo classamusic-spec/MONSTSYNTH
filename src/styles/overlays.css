@@ -606,6 +606,11 @@
   color: var(--ink-3);
 }
 
+/* On a monster's own colour (on stage) the role needs the brighter ink to stay readable. */
+.tray-card[data-on='true'] .tray-role {
+  color: var(--ink-2);
+}
+
 .tray-badge {
   position: absolute;
   top: 6px;
@@ -742,6 +747,11 @@
   border-color: #fff;
   border-left-color: var(--m);
   background: rgba(154, 92, 255, 0.35);
+}
+
+/* The chosen mood's hint sits on purple: white keeps it readable. */
+.mood[data-on='true'] > strong + span {
+  color: #fff;
 }
 
 .magic-note {

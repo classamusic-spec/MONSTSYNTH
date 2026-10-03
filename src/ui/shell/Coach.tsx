@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { activeClip } from '../../model/project';
+import { activeClip, trackHasLoop } from '../../model/project';
 import { getState, labFace, useApp, type AppState } from '../../store/store';
 import { studio } from '../../studio/studio';
 import { onNote, onStudioEvent } from '../../studio/visualBus';
-import { Icon } from '../icons/Icon';
+import { Icon, type IconName } from '../icons/Icon';
+import { say } from './bubbles';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Wordless coach. A pointing hand appears only when a child seems stuck:
@@ -12,9 +13,33 @@ import { Icon } from '../icons/Icon';
 //   lots of drumming on Boom   → points at the flip button (Beat Hop)
 //   stones placed after Stop   → points at Play
 //   first loop made (a take, or stones on the grid) → points at another monster (add a layer)
-//   a few loops made           → points at Monster Blocks (make a song)
+//   second loop made           → points at "make it a song" (Little) or Monster Blocks (Maker)
 // Hints never block anything and can be switched off in Parent Space.
+// Play (or Magic) with nothing to hear is answered every time, not once: the
+// monster has already said "huh?", a bubble shows what to do, and the hand
+// points where the music comes from.
 // ─────────────────────────────────────────────────────────────────────────────
+
+interface Way {
+  selector: string;
+  text: string;
+  icon: IconName;
+}
+
+/** Where the music comes from, when Play had nothing to play. */
+function wayToMusic(s: AppState): Way {
+  const looped = s.project.tracks.filter(trackHasLoop);
+  const awake = looped.some((t) => !t.sleeping);
+  if (s.screen === 'blocks') {
+    // Loops wait for blocks; sleeping monsters wait to be woken; otherwise make a loop first.
+    if (awake) return { selector: '.block-row[data-empty="false"][data-sleeping="false"] .block[data-on="false"]', text: 'Tap a block!', icon: 'blocks' };
+    if (looped.length) return { selector: '.block-row[data-sleeping="true"] .row-avatar', text: 'Wake a monster!', icon: 'zzz' };
+    return { selector: '.dock-btn[data-screen="lab"]', text: 'Make a loop in the Lab first!', icon: 'lab' };
+  }
+  if (s.screen === 'paint') return { selector: '.paint-canvas', text: 'Draw your music!', icon: 'brush' };
+  if (looped.length && !awake) return { selector: '.loop-badge[data-sleeping="true"]', text: 'Wake a monster!', icon: 'zzz' };
+  return { selector: '.t-rec', text: 'Record a loop first!', icon: 'record' };
+}
 
 /** Notes in the spotlight monster's loop. */
 function spotlightNotes(s: AppState): number {
@@ -35,6 +60,8 @@ export function Coach() {
   const handRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
   const done = useRef(new Set<string>());
+  /** While the hand answers a "nothing to play", the once-a-session hints wait (they can come later). */
+  const answering = useRef(0);
 
   useEffect(() => {
     if (!enabled || !awake) return;
@@ -47,7 +74,7 @@ export function Coach() {
     const gridLoops = new Set<string>(); // monsters whose first loop was made on the grid
     const timers: ReturnType<typeof setTimeout>[] = [];
     const show = (id: string, selector: string, ms: number) => {
-      if (done.current.has(id)) return;
+      if (done.current.has(id) || performance.now() < answering.current) return;
       done.current.add(id);
       setTarget({ selector, until: performance.now() + ms });
     };
@@ -86,7 +113,10 @@ export function Coach() {
     const countLoop = (delay: number) => {
       loops++;
       if (loops === 1) timers.push(setTimeout(() => show('add-layer', '.pod:not([data-selected="true"]) .pod-hit', 5000), delay));
-      if (loops === 3) timers.push(setTimeout(() => show('make-song', '.dock-btn[data-screen="blocks"]', 5000), delay));
+      // Two loops make a song: Little Monsters have a button for it, Monster Makers go to Blocks.
+      if (loops === 2) {
+        timers.push(setTimeout(() => show('make-song', document.querySelector('.t-song') ? '.t-song' : '.dock-btn[data-screen="blocks"]', 5000), delay));
+      }
     };
     const offEvent = onStudioEvent((e) => {
       if (e.type === 'record-start') {
@@ -108,6 +138,24 @@ export function Coach() {
       timers.forEach(clearTimeout);
     };
   }, [enabled, awake]);
+
+  // Nothing to play: a bubble every time (it says what the "huh?" meant), and
+  // the hand too when hints are on (not limited to once a session).
+  useEffect(
+    () =>
+      onStudioEvent((e) => {
+        if (e.type !== 'nothing-to-play') return;
+        const s = getState();
+        const way = wayToMusic(s);
+        const monster = s.project.tracks.find((t) => t.id === s.selectedTrackId)?.monster;
+        say({ text: way.text, icon: way.icon, monster, chirp: null });
+        if (s.settings.hints && document.querySelector(way.selector)) {
+          answering.current = performance.now() + 4000;
+          setTarget({ selector: way.selector, until: answering.current });
+        }
+      }),
+    [],
+  );
 
   // Follow the target element while the hint is visible.
   useEffect(() => {

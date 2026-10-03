@@ -8,6 +8,7 @@ import {
   clearLoop,
   cycleFx,
   editActiveClip,
+  moveCellEdit,
   recordNote,
   removeMonster,
   replaceLoopNotes,
@@ -140,6 +141,24 @@ describe('Beat Hop edits', () => {
     p = replaceLoopNotes(p, id, groove);
     expect(activeClip(boomOf(p))!.notes).toEqual(groove);
     expect(boomOf(p).clips).toHaveLength(1);
+  });
+
+  it('a bead drag moves the note (same id) and wakes the monster; no move is no change', () => {
+    let p = createProject({ seed: 28 });
+    const grumble = p.tracks.find((t) => t.monster === 'grumble')!.id;
+    const bead: CellWrite = { step: 2, col: 5, target: 'one', lengthBeats: 8, beatsPerBar: 4, isDrum: false, columnCap: 1, dur: 0.9 };
+    p = setCellEdit(p, grumble, bead);
+    const id = activeClip(p.tracks.find((t) => t.id === grumble)!)!.notes[0].id;
+    p = { ...p, tracks: p.tracks.map((t) => (t.id === grumble ? { ...t, sleeping: true } : t)) };
+    const moved = moveCellEdit(p, grumble, 5, 2, 6);
+    const g = moved.tracks.find((t) => t.id === grumble)!;
+    expect(activeClip(g)!.notes).toEqual([{ id, beat: 5, step: 6, dur: 0.9, vel: 0.85, tone: 0 }]);
+    expect(g.sleeping).toBe(false);
+    expect(moveCellEdit(moved, grumble, 5, 6, 6)).toBe(moved);
+    expect(moveCellEdit(moved, grumble, 4, 6, 1)).toBe(moved);
+    // Other monsters and the song are untouched.
+    expect(moved.tracks.filter((t) => t.id !== grumble)).toEqual(p.tracks.filter((t) => t.id !== grumble));
+    expect(moved.arrangement).toBe(p.arrangement);
   });
 
   it('tidies only the active loop of that monster, and is a no-op when tidy', () => {

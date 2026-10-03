@@ -2,7 +2,9 @@
    The keys folded into stepping stones: the same panel, the same key colours,
    gradient and lip. A row per drum (its picture on its pad colour at the
    head), a column per beat, a wider gap between the two bars, and a ruler on
-   top that matches the dots around Play. Loaded after lab.css and keys.css. */
+   top that matches the dots around Play. The melodic monsters get a bead lane
+   instead (eight bands in the key colours, below). Loaded after lab.css and
+   keys.css. */
 
 .surface-grid {
   /* The grid face is a .surface too; its side column and grid sit in a row. */
@@ -36,7 +38,8 @@
 }
 
 .grid-ruler,
-.drum-row {
+.drum-row,
+.bead-band {
   display: grid;
   grid-template-columns: var(--tpl);
   column-gap: var(--cg);
@@ -694,6 +697,300 @@
   }
 }
 
+/* ── The bead lane: the keys turned sideways ─────────────────────────────────
+   Eight bands in the key colours, key 1 at the bottom, touching like the bars
+   of a xylophone; one column per beat (beats 1 and 3 of each bar a little
+   lighter). Empty spots are faint pegs; a bead is the monster's key picture in
+   its band's colour with a white edge. Puff's tails and the tune's dotted line
+   are one SVG drawn under the beads (StepGrid paints it imperatively). */
+
+.step-grid[data-lane='beads'] .grid-rows {
+  row-gap: 0;
+}
+
+.bead-band > * {
+  grid-row: 1;
+}
+
+.band-tint {
+  grid-column: 2 / -1;
+  min-height: 0;
+  background: color-mix(in srgb, var(--k) 13%, var(--sky-1));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--k) 20%, transparent);
+}
+
+/* Neighbouring bands never blur together (green next to teal): every other one is a touch brighter. */
+.bead-band:nth-child(even) .band-tint {
+  background: color-mix(in srgb, var(--k) 19%, var(--sky-1));
+}
+
+.bead-band:first-child .band-tint {
+  border-top-left-radius: var(--radius-s);
+  border-top-right-radius: var(--radius-s);
+}
+
+.bead-band:last-child .band-tint {
+  border-bottom-left-radius: var(--radius-s);
+  border-bottom-right-radius: var(--radius-s);
+}
+
+/* A spot is a beat's slice of a band: the whole of it takes a touch. */
+.bead-spot {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  container-type: size;
+  background: rgba(255, 255, 255, 0.025);
+  outline-offset: -3px;
+}
+
+.bead-spot[data-strong='true'] {
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.bead-band:first-child .bead-spot {
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+}
+
+.bead-band:last-child .bead-spot {
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+.spot-dot {
+  width: clamp(5px, 1.3vmin, 9px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--k) 58%, transparent);
+  transition:
+    scale 90ms var(--ease-out),
+    background 120ms;
+}
+
+.bead-spot[data-strong='true'] .spot-dot {
+  width: clamp(6px, 1.6vmin, 11px);
+}
+
+.bead-spot[data-state='one'] .spot-dot {
+  opacity: 0;
+}
+
+.bead-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+/* The bead: a little louder, a little bigger (like the stones). It may reach a
+   little over its band's edges on a phone; its touch area is the whole spot. */
+.bead {
+  --size: min(76cqw, 136cqh, 68px);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--size);
+  height: var(--size);
+  translate: -50% -50%;
+  display: grid;
+  scale: calc(0.82 + var(--v, 1) * 0.2);
+  animation: bead-in 240ms var(--ease-pop);
+}
+
+.bead > .glyph {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 2px 0 color-mix(in srgb, var(--k) 45%, black)) drop-shadow(0 3px 5px rgba(4, 5, 30, 0.45));
+  transition: transform 90ms var(--ease-out);
+}
+
+/* The key picture's own shape takes the band colour, with a white edge outside it. */
+.bead > .glyph > g > :first-child {
+  fill: var(--k);
+  stroke: #fff;
+  stroke-width: 9px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+
+@keyframes bead-in {
+  from {
+    scale: 0.2;
+    opacity: 0;
+  }
+}
+
+/* Off the beat (played live): small beads exactly where the notes are in the beat. */
+.bead-subs > i {
+  position: absolute;
+  left: calc(12.5% + var(--s) * 25%);
+  top: 50%;
+  width: min(32cqw, 66cqh, 22px);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--k) 60%, white), var(--k) 60%, color-mix(in srgb, var(--k) 80%, black));
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.9),
+    0 2px 5px rgba(4, 5, 30, 0.5);
+}
+
+/* Pressed: an empty peg swells; a held bead lifts. */
+.bead-spot[data-down='true'] .spot-dot {
+  scale: 2.2;
+  background: color-mix(in srgb, var(--k) 85%, white);
+}
+
+.bead-spot[data-down='true'] .bead > .glyph {
+  transform: scale(1.14);
+}
+
+.bead-spot[data-glow='true'] .bead,
+.bead-spot[data-glow='true'] .bead-subs > i {
+  filter: brightness(1.3);
+}
+
+/* The pop ring and the poof, sized to the bead. */
+.bead-spot > .stone-ring,
+.bead-spot > .stone-poof {
+  top: 50%;
+  width: min(66cqw, 128cqh, 60px);
+}
+
+.bead-spot > .stone-ring {
+  border-color: color-mix(in srgb, var(--k) 35%, white);
+}
+
+/* The ink: Puff's tails (as long as each note rings) and the tune's dotted line. */
+.bead-ink {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.bead-tails > path {
+  fill: none;
+  stroke: var(--k);
+  stroke-width: var(--tail, 10px);
+  stroke-linecap: round;
+  opacity: 0.6;
+}
+
+.bead-contour {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.36);
+  stroke-width: 3.5px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 0.1 9;
+}
+
+/* Row heads: the keys turned sideways, mini keys in the key colours (they play their note). */
+.bead-head {
+  position: relative;
+  min-height: 0;
+  display: grid;
+  padding-block: 1px;
+}
+
+.row-key {
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  container-type: size;
+  border-radius: clamp(7px, 1.3vmin, 12px);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--k) 78%, white) 0%, var(--k) 45%, color-mix(in srgb, var(--k) 85%, black) 100%);
+  box-shadow:
+    0 2px 0 color-mix(in srgb, var(--k) 55%, black),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.row-key > .glyph {
+  height: min(82cqh, 40px);
+  width: auto;
+  aspect-ratio: 1;
+  flex: 0 1 auto;
+  min-width: 0;
+  opacity: 0.85;
+  filter: drop-shadow(0 1px 0 color-mix(in srgb, var(--k) 50%, black));
+}
+
+/* The name sticker (letters or do re mi), like the keys' stickers. */
+.bead-name {
+  flex: 0 0 auto;
+  min-width: min(72cqh, 30px);
+  height: min(72cqh, 30px);
+  padding: 0 0.28em;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.94);
+  color: color-mix(in srgb, var(--k) 38%, black);
+  font: 700 min(54cqh, 18px) / 1 var(--font);
+  white-space: nowrap;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.18);
+}
+
+.bead-name[data-acc] {
+  background: color-mix(in srgb, var(--k) 30%, #0b0d30);
+  color: #fff;
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.22),
+    inset 0 0 0 1.5px rgba(255, 255, 255, 0.35);
+}
+
+/* A narrow head with a name: the sticker is the key's face (the band colour already says which key). */
+@container (max-width: 50px) {
+  .row-key[data-names='true'] > .glyph {
+    display: none;
+  }
+}
+
+/* An empty lane invites: the middle band's pegs on each bar's first beat glow. */
+.step-grid[data-empty='true'] .bead-spot[data-invite='true'] .spot-dot {
+  animation: spot-invite 2.2s ease-in-out infinite;
+}
+
+@keyframes spot-invite {
+  0%,
+  100% {
+    scale: 1;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--k) 0%, transparent);
+  }
+  50% {
+    scale: 2.4;
+    background: color-mix(in srgb, var(--k) 90%, white);
+    box-shadow: 0 0 10px 2px color-mix(in srgb, var(--k) 60%, transparent);
+  }
+}
+
+/* Phones: eight bands need the height, so the stage stays slim (as with five drum rows). */
+@media (max-height: 559px) {
+  .lab[data-view='grid']:has(.step-grid[data-lane='beads']) {
+    grid-template-rows: 96px minmax(0, 1fr);
+  }
+  .lab[data-view='grid']:has(.step-grid[data-lane='beads']) .stage {
+    --badge: 24px;
+  }
+  .lab[data-view='grid']:has(.step-grid[data-lane='beads']) .add-seat {
+    height: 44px;
+    min-height: 0;
+    margin-bottom: var(--lift);
+  }
+}
+
 /* ── Short phones: tighter ruler and heads ───────────────────────────────── */
 
 @media (max-height: 559px) {
@@ -746,6 +1043,8 @@
 
 .app[data-motion='reduce'] .step-grid .stone[data-invite='true'] .stone-socket,
 .app[data-motion='reduce'] .step-grid .stone[data-invite='true'] .stone-socket > .glyph,
+.app[data-motion='reduce'] .step-grid .bead-spot[data-invite='true'] .spot-dot,
+.app[data-motion='reduce'] .bead,
 .app[data-motion='reduce'] .surface-flip,
 .app[data-motion='reduce'] .surface-tidy,
 .app[data-motion='reduce'] .t-surprise .t-face,
@@ -753,11 +1052,22 @@
   animation: none;
 }
 
-/* Still an invitation without motion: a steady ring on the stones to tap first. */
+/* Still an invitation without motion: a steady ring on the stones (or pegs) to tap first. */
 .app[data-motion='reduce'] .step-grid[data-empty='true'] .stone[data-invite='true'] .stone-socket {
   box-shadow:
     inset 0 3px 7px rgba(3, 4, 26, 0.4),
     inset 0 0 0 2.5px color-mix(in srgb, var(--k) 90%, white);
+}
+
+.app[data-motion='reduce'] .step-grid[data-empty='true'] .bead-spot[data-invite='true'] .spot-dot {
+  scale: 1.8;
+  background: color-mix(in srgb, var(--k) 90%, white);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+
+.app[data-motion='reduce'] .spot-dot,
+.app[data-motion='reduce'] .bead > .glyph {
+  transition: none;
 }
 
 /* ── High contrast: outlined sockets, ringed stones ───────────────────────── */
@@ -789,4 +1099,41 @@
 .app[data-contrast='high'] .stone:focus-visible {
   outline: 4px solid var(--focus);
   outline-offset: 3px;
+}
+
+.app[data-contrast='high'] .band-tint {
+  box-shadow: inset 0 -1px 0 var(--edge-strong);
+}
+
+.app[data-contrast='high'] .spot-dot {
+  background: color-mix(in srgb, var(--k) 70%, white);
+}
+
+.app[data-contrast='high'] .bead > .glyph > g > :first-child {
+  stroke-width: 12px;
+}
+
+.app[data-contrast='high'] .row-key {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: -2px;
+}
+
+.app[data-contrast='high'] .bead-name {
+  color: #000;
+  background: #fff;
+}
+
+.app[data-contrast='high'] .bead-name[data-acc] {
+  color: #fff;
+  background: #000;
+  box-shadow: inset 0 0 0 1.5px #fff;
+}
+
+.app[data-contrast='high'] .bead-contour {
+  stroke: rgba(255, 255, 255, 0.7);
+}
+
+.app[data-contrast='high'] .bead-spot:focus-visible {
+  outline: 4px solid var(--focus);
+  outline-offset: -4px;
 }

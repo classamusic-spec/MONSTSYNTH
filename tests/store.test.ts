@@ -125,13 +125,17 @@ describe('Beat Hop history', () => {
     expect(activeClip(getState().project.tracks[0])!.notes[0].beat).toBe(0.96);
   });
 
-  it('shows the grid face only for a monster that has one', () => {
+  it('shows the grid face for every monster (Boom\'s stones, a bead lane), but only for a loop of whole beats', () => {
     const s = getState();
     setState({ labView: 'grid', selectedTrackId: boom() });
     expect(labFace(getState())).toBe('grid');
-    setState({ selectedTrackId: s.project.tracks[0].id });
+    setState({ selectedTrackId: bloop() });
+    expect(labFace(getState())).toBe('grid');
+    // A loop that is not whole beats has no grid columns: the keys stay.
+    const odd = { ...s.project, tracks: s.project.tracks.map((t, i) => (i === 0 ? { ...t, clips: [{ id: 'odd', lengthBeats: 6.5, notes: [] }], activeClipId: 'odd' } : t)) };
+    setState({ project: odd });
     expect(labFace(getState())).toBe('keys');
-    setState({ labView: 'keys', selectedTrackId: boom() });
+    setState({ project: s.project, labView: 'keys', selectedTrackId: boom() });
     expect(labFace(getState())).toBe('keys');
   });
 });

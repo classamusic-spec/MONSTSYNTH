@@ -161,6 +161,88 @@
   }
 }
 
+/* A new loop waits in Monster Blocks: a dot in its monster's colour pulses on
+   the Blocks button until Blocks is visited (a still dot with reduced motion). */
+.dock-btn .dock-icon {
+  position: relative;
+}
+
+.dock-new {
+  --c: var(--bloop);
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--c);
+  border: 2.5px solid #fff;
+  box-shadow: 0 0 0 0 var(--c);
+  pointer-events: none;
+  animation: dock-new 1.4s ease-in-out infinite;
+}
+
+.dock-btn[data-new='boom'] .dock-new {
+  --c: var(--boom);
+}
+.dock-btn[data-new='grumble'] .dock-new {
+  --c: var(--grumble);
+}
+.dock-btn[data-new='spark'] .dock-new {
+  --c: var(--spark);
+}
+.dock-btn[data-new='puff'] .dock-new {
+  --c: var(--puff);
+}
+.dock-btn[data-new='mimic'] .dock-new {
+  --c: var(--mimic);
+}
+
+@keyframes dock-new {
+  0%,
+  100% {
+    scale: 1;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--c) 70%, transparent);
+  }
+  50% {
+    scale: 1.25;
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--c) 0%, transparent);
+  }
+}
+
+.app[data-motion='reduce'] .dock-new {
+  animation: none;
+}
+
+/* A soft light in the monster's colour behind a cheering monster (Cheer). */
+.cheer-glow {
+  position: absolute;
+  z-index: 0;
+  left: 50%;
+  bottom: 0;
+  width: 92%;
+  aspect-ratio: 1;
+  max-height: 100%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--glow, #ffd84d) 60%, transparent), transparent);
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* Sparkles thrown up by a monster whose first loop was just made (Cheer). */
+.cheer-spark {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 38%;
+  width: 16px;
+  height: 16px;
+  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  pointer-events: none;
+  opacity: 0;
+}
+
 @media (orientation: portrait) {
   .dock {
     flex-direction: row;
@@ -402,6 +484,33 @@
 
 .t-btn[data-bump='true'] .t-face {
   animation: bump 420ms var(--ease-pop);
+}
+
+/* "Make it a song" (Little Monsters, two loops or more): the wand over a stack
+   of blocks, in the Magic panel's place under Undo. */
+.t-song .t-face {
+  background: radial-gradient(circle at 35% 28%, #ffd76a 0%, #ff8a2b 72%);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.85);
+  overflow: visible;
+}
+
+.t-song .t-song-blocks {
+  width: 62%;
+  height: 62%;
+}
+
+.t-song .t-song-wand {
+  position: absolute;
+  right: -8%;
+  top: -10%;
+  width: 46%;
+  height: 46%;
+  padding: 3px;
+  border-radius: 50%;
+  background: #6a3fe0;
+  color: #fff6c7;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
 @keyframes bump {

@@ -49,7 +49,7 @@ export function MonsterTray() {
       <div className="sheet tray" role="dialog" aria-modal="true" aria-labelledby="tray-title" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
           <h2 id="tray-title">Monster friends</h2>
-          <div className="seats" aria-label={`${tracks.length} of ${caps.maxMonsters} places on stage used`}>
+          <div className="seats" role="img" aria-label={`${tracks.length} of ${caps.maxMonsters} places on stage used`}>
             {Array.from({ length: caps.maxMonsters }, (_, i) => (
               <span key={i} data-on={i < tracks.length} />
             ))}

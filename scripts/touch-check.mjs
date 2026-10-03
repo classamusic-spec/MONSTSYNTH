@@ -1,7 +1,9 @@
 // Real touch events (no autoplay bypass): first tap unlocks audio, touch keys,
 // glissando, monster squish drag, multi-finger chord, hold-to-roll, performance
-// under CPU throttle, and Beat Hop's stones (rapid multi-finger taps and a paint
-// swipe under CPU throttle, and taps that slide a little).
+// under CPU throttle, Beat Hop's stones (rapid multi-finger taps and a paint
+// swipe under CPU throttle, and taps that slide a little), and the bead lane
+// (two-finger bead taps, a bead dragged through the keys and a drawn tune under
+// CPU throttle, with no stuck voices).
 import { chromium } from 'playwright';
 
 const url = process.argv[2] || 'http://127.0.0.1:5173/';
@@ -265,6 +267,109 @@ for (const [dx, dy, edge] of [
 }
 await page.evaluate(() => window.__monster.studio.stop());
 check('Beat Hop: a tap that slides 5–6 px from a stone\'s edge lights that one stone only', slid.every((x) => x === '1@2'), slid.join(' | '));
+
+// 10. The bead lane under a 4× slower CPU while the band plays: two fingers tapping beads
+//     in different beats, a bead dragged up through the keys, and a tune drawn with one
+//     finger. Every gesture lands, nothing sticks, and the playhead keeps moving.
+await page.evaluate(async () => {
+  const m = window.__monster;
+  m.studio.stop();
+  await m.actions.newSong('band');
+  m.actions.selectTrack(m.getState().project.tracks.find((t) => t.monster === 'bloop').id);
+  m.actions.setLabView('grid');
+});
+await page.waitForTimeout(400);
+const spot = async (step, col) => {
+  const b = await page.locator(`.step-grid .bead-spot[data-step="${step}"][data-col="${col}"]`).boundingBox();
+  return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+};
+const bloopNotes = () =>
+  page.evaluate(() => {
+    const t = window.__monster.getState().project.tracks.find((x) => x.monster === 'bloop');
+    return t.clips.find((c) => c.id === t.activeClipId).notes.map((n) => ({ id: n.id, beat: n.beat, step: n.step }));
+  });
+const sigOf = (notes) => notes.map((n) => `${n.step}@${n.beat}`).sort().join(' ');
+await page.evaluate(() => window.__monster.studio.play());
+await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+const laneBeat0 = (await dbg()).beat;
+// Two fingers at once, in two different beats each time (a tap adds a bead, or takes one away).
+const pairs = [
+  [[5, 0], [2, 4]],
+  [[6, 1], [3, 5]],
+  [[4, 2], [7, 6]],
+  [[5, 0], [1, 7]],
+  [[2, 3], [6, 5]],
+  [[3, 1], [4, 6]],
+];
+const beadExpected = await page.evaluate(async (pairs) => {
+  const steps = await import('/src/magic/steps.ts');
+  const s = window.__monster.getState();
+  const t = s.project.tracks.find((x) => x.monster === 'bloop');
+  let clip = t.clips.find((c) => c.id === t.activeClipId);
+  for (const [step, col] of pairs.flat()) {
+    const target = steps.cellState(clip.notes, step, col, clip.lengthBeats) === 'off' ? 'one' : 'off';
+    clip = steps.writeCell(clip, { step, col, target, lengthBeats: clip.lengthBeats, beatsPerBar: s.project.beatsPerBar, isDrum: false, columnCap: 1, dur: 0.9 }).clip;
+  }
+  return clip.notes.map((n) => `${n.step}@${n.beat}`).sort().join(' ');
+}, pairs);
+for (const [[s1, c1], [s2, c2]] of pairs) {
+  const a = await spot(s1, c1);
+  const b = await spot(s2, c2);
+  await touch('touchStart', [{ x: a.x, y: a.y, id: 1 }, { x: b.x, y: b.y, id: 2 }]);
+  await page.waitForTimeout(30);
+  await touch('touchEnd', []);
+  await page.waitForTimeout(25);
+}
+const afterTaps = await bloopNotes();
+check('Bead lane: rapid two-finger bead taps all land (12 taps) under a 4× slower CPU', sigOf(afterTaps) === beadExpected, `${sigOf(afterTaps)} vs ${beadExpected}`);
+// Drag the bead on beat 5 (key 3) up through the keys to key 6.
+const dragId = afterTaps.find((n) => n.beat === 5)?.id;
+const pastDrag0 = await page.evaluate(() => window.__monster.getState().past.length);
+{
+  const from = await spot(3, 5);
+  const to = await spot(6, 5);
+  await touch('touchStart', [{ x: from.x, y: from.y, id: 1 }]);
+  for (let i = 1; i <= 12; i++) {
+    await touch('touchMove', [{ x: from.x + (i % 2), y: from.y + ((to.y - from.y) * i) / 12, id: 1 }]);
+    await page.waitForTimeout(15);
+  }
+  await touch('touchEnd', []);
+  await page.waitForTimeout(200);
+}
+const dragged = (await bloopNotes()).find((n) => n.id === dragId);
+const pastDrag1 = await page.evaluate(() => window.__monster.getState().past.length);
+check('Bead lane: a bead dragged up three keys under load keeps its id, one undo step', !!dragged && dragged.step === 6 && dragged.beat === 5 && pastDrag1 - pastDrag0 === 1, JSON.stringify({ dragged, steps: pastDrag1 - pastDrag0 }));
+// Draw a tune along the top band from an empty spot: every beat gets its bead up there.
+const topFree = await page.evaluate(() => {
+  const s = [...document.querySelectorAll('.bead-spot[data-step="7"]')].find((el) => el.dataset.state === 'off');
+  return s ? Number(s.dataset.col) : -1;
+});
+{
+  const a = await spot(7, 0);
+  const b = await spot(7, 7);
+  const start = topFree === 0 ? a : await spot(7, topFree);
+  await touch('touchStart', [{ x: start.x, y: start.y, id: 1 }]);
+  if (topFree !== 0) {
+    await touch('touchMove', [{ x: a.x, y: a.y, id: 1 }]);
+    await page.waitForTimeout(15);
+  }
+  for (let i = 1; i <= 14; i++) {
+    await touch('touchMove', [{ x: a.x + ((b.x - a.x) * i) / 14, y: a.y, id: 1 }]);
+    await page.waitForTimeout(15);
+  }
+  await touch('touchEnd', []);
+  await page.waitForTimeout(250);
+}
+const drawnTop = (await bloopNotes()).filter((n) => n.step === 7).map((n) => n.beat).sort((x, y) => x - y);
+const laneBeat1 = (await dbg()).beat;
+await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+await page.evaluate(() => window.__monster.studio.stop());
+await page.waitForTimeout(600);
+const laneEnd = await dbg();
+const laneDown = await page.$$eval('.step-grid .bead-spot[data-down="true"]', (els) => els.length);
+check('Bead lane: a tune drawn along the top band puts a bead in every beat', drawnTop.join(',') === '0,1,2,3,4,5,6,7', drawnTop.join(','));
+check('Bead lane: the playhead keeps moving while beads are tapped, dragged and drawn', laneBeat1 - laneBeat0 > 2, `${laneBeat0.toFixed(2)} → ${laneBeat1.toFixed(2)}`);
+check('Bead lane: no stuck voices, notes or pressed spots afterwards', laneEnd.held === 0 && laneEnd.live === 0 && laneEnd.voices === 0 && laneDown === 0, `${laneEnd.held} held, ${laneEnd.live} live, ${laneEnd.voices} voices, ${laneDown} pressed`);
 check('no page errors', errors.length === 0, errors.join(' | '));
 await browser.close();
 const failed = results.filter((r) => !r.ok).length;

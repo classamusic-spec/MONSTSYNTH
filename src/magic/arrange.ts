@@ -105,6 +105,8 @@ interface Layer {
   /** What each block plays once the layer is in: one loop everywhere, or the row's own phrase per block. */
   pattern: string[];
   monster: MonsterKind | 'paint';
+  /** A tune of several phrases plays the whole song, from block 1 (never brought in late or dropped). */
+  whole: boolean;
 }
 
 /**
@@ -141,8 +143,11 @@ export interface ArrangeOptions {
  * a breakdown where the rhythm drops out, and everyone plays at the end. Each seed
  * gives a different (but always musical) arrangement so repeated taps reward play.
  *
- * A row that already plays several loops (a song kept from Learn) keeps its
- * phrases, block by block: Magic only decides when it comes in and rests.
+ * A row that already plays several loops (a song kept from Learn: the tune, and
+ * the bass and sparkles that follow its chords) keeps its phrases, block by
+ * block, from block 1: the song still starts at its beginning, and a block Magic
+ * emptied can never be refilled with the wrong phrase by the next tap. Magic
+ * arranges the other layers around it (the beat comes in, drops out, returns).
  * Returns the project's own arrangement (the same object) when nothing changes.
  */
 export function magicArrange(project: Project, seed: number, opts: ArrangeOptions = {}): Arrangement {
@@ -156,14 +161,14 @@ export function magicArrange(project: Project, seed: number, opts: ArrangeOption
     const row = base.rows[t.id];
     const phrases = isMultiClipRow(t, row) ? phrasePattern(t, row) : null;
     if (phrases) {
-      layers.push({ rowId: t.id, pattern: phrases, monster: t.monster });
+      layers.push({ rowId: t.id, pattern: phrases, monster: t.monster, whole: true });
       continue;
     }
     const clip = activeClip(t);
-    if (clip && trackHasLoop(t)) layers.push({ rowId: t.id, pattern: new Array(length).fill(clip.id), monster: t.monster });
+    if (clip && trackHasLoop(t)) layers.push({ rowId: t.id, pattern: new Array(length).fill(clip.id), monster: t.monster, whole: false });
   }
   if (project.painting.strokes.length > 0 && !project.painting.sleeping) {
-    layers.push({ rowId: PAINT_ROW, pattern: new Array(length).fill(PAINT_ROW), monster: 'paint' });
+    layers.push({ rowId: PAINT_ROW, pattern: new Array(length).fill(PAINT_ROW), monster: 'paint', whole: false });
   }
 
   const next = cloneArrangement(base);
@@ -186,13 +191,14 @@ function arrangeLayers(next: Arrangement, layers: Layer[], seed: number, rnd: ()
   const breakdownAt = length >= 6 && layers.length >= 2 && rnd() < 0.85 ? length - 3 - (rnd() < 0.3 ? 1 : 0) : -1;
   const entryWindow = breakdownAt > 0 ? breakdownAt : length - 1;
   layers.forEach((layer, i) => {
-    const enter = Math.min(entryWindow - 1, Math.floor((i * entryWindow) / layers.length));
+    const enter = layer.whole ? 0 : Math.min(entryWindow - 1, Math.floor((i * entryWindow) / layers.length));
     for (let col = Math.max(0, enter); col < length; col++) next.rows[layer.rowId][col] = layer.pattern[col];
   });
 
-  if (breakdownAt > 0) {
-    let dropped = layers.filter((l) => RHYTHM.includes(l.monster));
-    if (dropped.length === 0 || dropped.length === layers.length) dropped = [layers[0]];
+  const gated = layers.filter((l) => !l.whole);
+  if (breakdownAt > 0 && gated.length > 0) {
+    let dropped = gated.filter((l) => RHYTHM.includes(l.monster));
+    if (dropped.length === 0 || dropped.length === layers.length) dropped = [gated[0]];
     for (const l of dropped) next.rows[l.rowId][breakdownAt] = null;
     // Make sure the breakdown block still has somebody singing.
     const stillPlaying = layers.some((l) => next.rows[l.rowId][breakdownAt]);

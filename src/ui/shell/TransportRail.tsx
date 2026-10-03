@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { magicArrange } from '../../magic/arrange';
 import { setOverlay } from '../../store/actions';
-import { activeClip } from '../../model/project';
-import { commit, getState, labFace, useApp } from '../../store/store';
+import { activeClip, trackHasLoop } from '../../model/project';
+import { getState, labFace, useApp } from '../../store/store';
 import { studio } from '../../studio/studio';
 import { onFrame } from '../../studio/visualBus';
 import { useCaps } from '../hooks/useCaps';
@@ -11,8 +10,10 @@ import { hush, say } from './bubbles';
 
 // Big, always-in-the-same-place controls: Play, Record, Undo (+ Redo and the
 // Monster Magic panel for Monster Makers). On Monster Blocks, Record becomes the
-// magic wand that turns loops into a song; under Beat Hop's grid it becomes the
-// "Surprise" wand that stamps a ready-made groove.
+// magic wand that turns loops into a song (and plays it); under Beat Hop's grid
+// it becomes the "Surprise" wand that stamps a ready-made groove. Little
+// Monsters with two loops get a "make it a song" button in the Magic panel's
+// place: one tap arranges the song, opens Blocks and plays it.
 
 const R = 46;
 const C = 2 * Math.PI * R;
@@ -69,6 +70,7 @@ export function TransportRail() {
     return !t || (activeClip(t)?.notes.length ?? 0) === 0;
   });
   const caps = useCaps();
+  const songReady = useApp((s) => s.project.tracks.filter(trackHasLoop).length >= 2);
   const [bump, setBump] = useState<string | null>(null);
   // "Play something!" goes as soon as the take starts (or is called off), so it
   // never hides the effect buddies a child reaches for mid-take.
@@ -154,8 +156,8 @@ export function TransportRail() {
           data-bump={bump === 'magic'}
           aria-label="Monster Magic: turn my loops into a song"
           onClick={() => {
-            commit((p) => ({ ...p, arrangement: magicArrange(p, Math.floor(Math.random() * 1e6)) }));
-            flash('magic');
+            // A new arrangement, heard at once from block 1 (with nothing to arrange: a "huh?" and no undo step).
+            if (studio.rearrange()) flash('magic');
           }}
         >
           <span className="t-face">
@@ -181,6 +183,25 @@ export function TransportRail() {
           </button>
         )}
       </div>
+
+      {/* Little Monsters: the Magic panel's place holds "make it a song" (the wand, then the blocks). */}
+      {!caps.magicPanel && screen === 'lab' && songReady && (
+        <button
+          className="t-btn t-small t-song"
+          data-bump={bump === 'song'}
+          aria-label="Make it a song: Monster Magic builds a song from my loops and plays it"
+          onClick={() => {
+            flash('song');
+            studio.makeSong();
+          }}
+        >
+          <span className="t-face">
+            <Icon name="wand" className="t-song-wand" />
+            <Icon name="blocks" className="t-song-blocks" />
+          </span>
+          <span className="t-label">Song</span>
+        </button>
+      )}
 
       {caps.magicPanel && screen === 'lab' && (
         <button className="t-btn t-tiny t-magic" aria-label="Monster Magic settings: speed and mood" onClick={() => setOverlay('magic')}>

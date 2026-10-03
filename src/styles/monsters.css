@@ -218,6 +218,16 @@
   animation: none !important;
 }
 
+/* …and no blinking (eyes rest open, or half open for Grumble), and no echo
+   ghosts flashing after each note. */
+.app[data-motion='reduce'] .monster-svg .m-lid {
+  animation: none !important;
+}
+
+.app[data-motion='reduce'] .monster-svg .m-echoes {
+  display: none;
+}
+
 /* Closed eyes: a soft curve drawn over the lid whenever a monster sleeps. */
 .monster-svg .m-lid-line {
   opacity: 0;

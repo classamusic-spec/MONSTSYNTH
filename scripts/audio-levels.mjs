@@ -1,6 +1,8 @@
 // Render every preset offline in a real browser and report peak / RMS levels,
 // so gain staging stays even across monsters. Also renders Beat Hop's densest
-// drum grids and every wand groove, which must stay inside the master gate.
+// drum grids, every wand groove, every melodic monster's fullest bead lane and
+// every wand tune, and the whole band stamped at once, which must all stay
+// inside the master gate.
 // Usage: node scripts/audio-levels.mjs [url]
 import { chromium } from 'playwright';
 
@@ -100,17 +102,70 @@ const report = await page.evaluate(async () => {
     const m = measure(await renderSong(boomOnly(notes)));
     gridRows.push({ grid: name, notes: notes.length, peakDb: db(m.peak), rmsDb: db(m.rms), peak: m.peak });
   }
-  return { rows, click, band: { peakDb: db(b.peak), rmsDb: db(b.rms), seconds: band.duration.toFixed(1) }, worst: { peakDb: db(w.peak), rmsDb: db(w.rms), peak: w.peak }, gridRows };
+
+  // The bead lane: each melodic monster alone (Maker), its fullest lane (the column
+  // cap in every beat, low keys, which are the loudest) and every wand tune.
+  const { TUNES, tuneNotes, wandPattern } = await import('/src/magic/grooves.ts');
+  const { gridColumnCap } = await import('/src/model/monsters.ts');
+  const only = (monster, notes) => {
+    const p = createProject({ seed: 6, monsters: [monster] });
+    const clip = { id: 'c', lengthBeats: 8, notes };
+    p.tracks = p.tracks.map((t) => ({ ...t, clips: [clip], activeClipId: 'c' }));
+    return p;
+  };
+  const fullLane = (monster) => {
+    const info = MONSTERS[monster];
+    const cap = gridColumnCap(monster, 'maker');
+    let clip = { id: 'c', lengthBeats: 8, notes: [] };
+    for (let c = 0; c < 8; c++) {
+      for (let k = 0; k < cap; k++) {
+        clip = writeCell(clip, { step: k * 2, col: c, target: 'one', lengthBeats: 8, beatsPerBar: 4, isDrum: false, columnCap: cap, dur: info.gridDur, trimPrevious: info.gridMono }).clip;
+      }
+    }
+    return clip.notes;
+  };
+  const melodic = ['bloop', 'grumble', 'spark', 'puff', 'mimic'];
+  const laneRows = [];
+  for (const monster of melodic) {
+    const lanes = [[`${monster}: full lane (${gridColumnCap(monster, 'maker')} per beat)`, fullLane(monster)]];
+    for (const t of TUNES[monster]) lanes.push([`${monster}: tune ${t.id}${t.maker ? ' (Maker)' : ''}`, tuneNotes(monster, t, { beatsPerBar: 4 })]);
+    for (const [name, notes] of lanes) {
+      const m = measure(await renderSong(only(monster, notes)));
+      laneRows.push({ lane: name, notes: notes.length, peakDb: db(m.peak), rmsDb: db(m.rms), peak: m.peak });
+    }
+  }
+  // The whole band stamped by the wand at once: every monster's busiest Maker idea, together.
+  const all6 = createProject({ seed: 7, monsters: ['boom', ...melodic] });
+  const busiest = (monster) => {
+    let best = [];
+    for (let k = 0; k < 10; k++) {
+      const notes = wandPattern(monster, 'maker', k, { beatsPerBar: 4 });
+      if (notes.length > best.length) best = notes;
+    }
+    return best;
+  };
+  all6.tracks = all6.tracks.map((t) => {
+    const clip = { id: `c-${t.monster}`, lengthBeats: 8, notes: busiest(t.monster) };
+    return { ...t, clips: [clip], activeClipId: clip.id };
+  });
+  const whole = measure(await renderSong(all6));
+  laneRows.push({ lane: 'whole band: every monster\'s busiest wand idea', notes: all6.tracks.reduce((n, t) => n + t.clips[0].notes.length, 0), peakDb: db(whole.peak), rmsDb: db(whole.rms), peak: whole.peak });
+  return { rows, click, band: { peakDb: db(b.peak), rmsDb: db(b.rms), seconds: band.duration.toFixed(1) }, worst: { peakDb: db(w.peak), rmsDb: db(w.rms), peak: w.peak }, gridRows, laneRows };
 });
 console.table(report.rows);
 console.log('Metronome tick (accent) vs kick:', report.click);
 console.log('Monster Band song:', report.band);
 console.log('Worst case (all fx max):', { peakDb: report.worst.peakDb, rmsDb: report.worst.rmsDb });
 console.table(report.gridRows.map(({ peak, ...r }) => r));
+console.table(report.laneRows.map(({ peak, ...r }) => r));
 // The master gate: the limiter and soft clip keep everything under −1 dBFS.
 const GATE_DB = -1;
-const over = report.gridRows.filter((r) => 20 * Math.log10(r.peak) > GATE_DB);
+const over = [...report.gridRows, ...report.laneRows.map((r) => ({ ...r, grid: r.lane }))].filter((r) => 20 * Math.log10(r.peak) > GATE_DB);
 if (20 * Math.log10(report.worst.peak) > GATE_DB) over.push({ grid: 'worst case' });
-console.log(over.length ? `FAIL  over the ${GATE_DB} dBFS master gate: ${over.map((r) => r.grid).join(', ')}` : `PASS  every grid and wand groove stays under the ${GATE_DB} dBFS master gate`);
+console.log(
+  over.length
+    ? `FAIL  over the ${GATE_DB} dBFS master gate: ${over.map((r) => r.grid).join(', ')}`
+    : `PASS  every grid, wand groove, bead lane and wand tune stays under the ${GATE_DB} dBFS master gate`,
+);
 await browser.close();
 process.exit(over.length ? 1 : 0);

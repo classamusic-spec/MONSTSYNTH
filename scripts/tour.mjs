@@ -47,6 +47,10 @@ for (const v of VIEWS) {
   await page.locator('.t-play').click();
   await page.waitForTimeout(1300);
   await shot('2b-grid-little-playing');
+  // Bloop's bead lane (the grid follows the spotlight), playing the band's tune.
+  await page.locator('.pod[data-monster="bloop"] .pod-hit').click();
+  await page.waitForTimeout(1300);
+  await shot('2c-beads-little-playing');
   await page.locator('.t-play').click();
   await page.locator('.surface-flip').click();
   await page.waitForTimeout(200);
@@ -118,6 +122,13 @@ for (const v of VIEWS) {
     await shot('6d-grid-maker-more-drums-tray');
     await page.locator('.picker-close').click();
   }
+  // The bead lane in Monster Maker: Bloop's chords (the wand's fourth tune), with letters.
+  await page.locator('.pod[data-monster="bloop"] .pod-hit').click();
+  await page.waitForTimeout(300);
+  for (let i = 0; i < 4; i++) await page.locator('.t-surprise').click();
+  await page.waitForTimeout(900);
+  await shot('6e-beads-maker-chords');
+  await page.locator('.t-play').click();
   await page.locator('.surface-flip').click();
   await page.waitForTimeout(200);
   await page.locator('.t-magic').click();

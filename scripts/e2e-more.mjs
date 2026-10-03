@@ -1,5 +1,7 @@
 // Second end-to-end pass: names on the keys, Monster Blocks, Sound Painting,
-// Add Monster, Mimic (with a fake microphone), the grown-up gate, and WAV export.
+// Add Monster, Mimic (with a fake microphone), the grown-up gate, an
+// accessibility gate (axe-core on every screen), and WAV export.
+import { existsSync, readFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 
 const url = process.argv[2] || 'http://127.0.0.1:5173/';
@@ -211,11 +213,15 @@ await page.mouse.up();
 s = await S();
 check('dragging moves a block', !s.project.arrangement.rows[bloopId][0] && !!s.project.arrangement.rows[bloopId][5]);
 
-// Magic arrange + play the song to the finale.
+// Magic arrange (heard at once, from block 1) + play the song to the finale.
 await page.locator('.t-magic').click();
+await page.waitForTimeout(150);
 s = await S();
 const filledCols = s.project.arrangement.rows[bloopId].filter(Boolean).length;
 check('Monster Magic arranges the song', filledCols > 0);
+const magicBeat = await page.evaluate(() => window.__monster.studio.debug().beat);
+check('…and plays it at once from block 1', s.transport.playing && s.transport.mode === 'song' && magicBeat < 1, `beat ${magicBeat.toFixed(2)}`);
+await page.locator('.t-play').click();
 await page.evaluate(() => {
   const st = window.__monster.getState();
   window.__monster.setState({ project: { ...st.project, tempo: 140, arrangement: { ...st.project.arrangement, length: 2, rows: Object.fromEntries(Object.entries(st.project.arrangement.rows).map(([k, v]) => [k, v.slice(0, 2)])) } } });
@@ -348,6 +354,50 @@ check('the gate does not open early', (await S()).overlay !== 'parent');
 await page.waitForTimeout(2200);
 await touch('touchEnd', []);
 check('holding both corners opens Parent Space', (await S()).overlay === 'parent');
+
+// ── Accessibility gate: axe-core finds nothing on any screen ───────────────
+// Lab (keys face), Blocks, Paint, Songs, the Learn shelf, a lesson, the Add
+// Monster tray, the Monster Magic panel and Parent Space. (Beat Hop's grid face
+// is scanned by e2e-steps.) Any violation fails the run.
+const axePath = new URL('../node_modules/axe-core/axe.min.js', import.meta.url);
+if (!existsSync(axePath)) {
+  check('axe-core is installed for the accessibility gate (npm i -D axe-core)', false);
+} else {
+  await page.addScriptTag({ content: readFileSync(axePath, 'utf8') });
+  const M = (fn, arg) => page.evaluate(fn, arg);
+  const axe = async (label) => {
+    await page.waitForTimeout(400);
+    const found = await page.evaluate(async () => {
+      const r = await window.axe.run(document.body, { resultTypes: ['violations'] });
+      return r.violations.map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(' ')).slice(0, 4).join(', ')}`);
+    });
+    check(`axe: no violations on ${label}`, found.length === 0, found.join(' | '));
+  };
+  await axe('Parent Space');
+  await M(() => window.__monster.actions.setOverlay(null));
+  await M(() => {
+    window.__monster.actions.setLabView('keys');
+    window.__monster.actions.setScreen('lab');
+  });
+  await axe('the Lab (keys)');
+  await M(() => window.__monster.actions.setOverlay('tray'));
+  await axe('the Add Monster tray');
+  await M(() => window.__monster.actions.setOverlay('magic'));
+  await axe('the Monster Magic panel');
+  await M(() => window.__monster.actions.setOverlay(null));
+  await M(() => window.__monster.actions.setScreen('blocks'));
+  await axe('Monster Blocks');
+  await M(() => window.__monster.actions.setScreen('paint'));
+  await axe('Sound Painting');
+  await M(() => window.__monster.actions.setScreen('songs'));
+  await axe('the Songs shelf');
+  await M(() => window.__monster.actions.setScreen('learn'));
+  await axe('the Learn shelf');
+  await page.locator('.lesson-shelf button').first().click();
+  await axe('a lesson');
+  await page.locator('.lesson-bar .lesson-btn').first().click();
+  await M(() => window.__monster.actions.setScreen('lab'));
+}
 
 // ── Export: render the song to WAV offline ─────────────────────────────────
 const wav = await page.evaluate(async () => {

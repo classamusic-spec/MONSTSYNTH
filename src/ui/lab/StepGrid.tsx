@@ -10,9 +10,9 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import { cellState, fineSlot, foldDrumRows, gridColumns, nextTarget, projectGrid, writeCell, type CellTarget, type CellWrite } from '../../magic/steps';
+import { BEAD_KEYS, cellOf, cellState, fineSlot, foldDrumRows, gridColumns, hasGridFace, projectGrid, writeCell, type CellTarget, type CellWrite } from '../../magic/steps';
 import { wrap } from '../../magic/timing';
-import { setCellEdit } from '../../model/edits';
+import { moveCellEdit, setCellEdit } from '../../model/edits';
 import { gridColumnCap, MODE_CAPS, MONSTERS } from '../../model/monsters';
 import { activeClip } from '../../model/project';
 import type { MonsterKind, NoteEvent, Track } from '../../model/types';
@@ -21,26 +21,34 @@ import { studio } from '../../studio/studio';
 import { onFrame, onNote } from '../../studio/visualBus';
 import { glow } from '../common/glow';
 import { isReducedMotion } from '../hooks/useCaps';
+import { useKeyNames } from '../hooks/useKeyNames';
+import { BEAD_LANE } from './BeadLane';
 import { BeatRuler, gridTemplate } from './BeatRuler';
-import { AddFace, AddRowPicker, DRUM_LANE, rowSignature, type GridLane } from './DrumRows';
+import { AddFace, AddRowPicker, DRUM_LANE, rowSignature, type GridGeometry, type GridLane } from './DrumRows';
 import { SurfaceSide } from './SurfaceSide';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BEAT HOP — the back of the keys: a grid of stepping stones for the monster in
-// the spotlight (Boom: one row per drum). One column is one beat.
+// BEAT HOP — the back of the keys: a grid for the monster in the spotlight. One
+// column is one beat. Boom gets a row of stepping stones per drum:
 //   tap a dark stone   → it lights (and is heard on the beat)
 //   tap a lit stone    → off (Little Monster) or one → double → off (Monster Maker)
 //   swipe              → paint across rows and columns (or erase, starting on a lit stone)
 //   tap a drum picture → that drum plays (nothing is written)
-//   tap the ruler      → that beat's drums play, and the mini monster jumps
+// The melodic monsters get a bead lane (eight key bands, see BeadLane):
+//   tap an empty spot  → a bead (a full beat lets go of its oldest bead: it jumps there)
+//   tap a bead         → it pops away
+//   drag a bead        → up or down through the keys, each new key sounding at once
+//   drag sideways      → draw a tune: a bead in every beat the finger crosses
+//   tap a mini key     → that note plays (nothing is written)
+// And on both, tap the ruler → that beat's notes play, and the mini monster jumps.
 // One pointer handler for the whole grid, with maths hit-testing over measured
 // cells (gaps are never dead zones); every gesture is one undo step (fingers
 // down together share one). A finger may wander a little before a tap becomes
 // a swipe. Rows only ever grow while the grid is open (a drum whose last stone
 // goes out keeps its row), and when there are more drums than fit at a
 // finger's size the least-used extras fold behind a '+N' chip. The playhead,
-// the hopping monster and the stone pops are imperative (no React state per
-// frame or per note).
+// the hopping monster, the pops and the bead lane's ink are imperative (no
+// React state per frame or per note).
 // ─────────────────────────────────────────────────────────────────────────────
 
 const NO_NOTES: NoteEvent[] = [];
@@ -54,18 +62,17 @@ const MIN_STONE = 44;
 const SLOP = 10;
 /** Px past a stone's edge before a swipe leaves it. */
 const STICK = 6;
+/** A bead dragged through the keys sounds each new key at most this often (the last one always sounds). */
+const GLISS_MS = 60;
+/** A bead's drag audition is soft (the child is looking for a note, as on the keys). */
+const GLISS_VEL = 0.6;
 
-interface Geo {
-  cols: { l: number; r: number }[];
-  rows: { t: number; b: number; step: number }[];
-  headR: number;
-  rulerB: number;
-  box: DOMRect;
-}
+type Geo = GridGeometry;
 
 interface Gesture {
   key: string;
-  mode: 'paint' | 'erase';
+  /** Drums: paint or erase stones. Beads: drag a bead (started on one) or draw a tune (started on an empty spot). */
+  mode: 'paint' | 'erase' | 'drag' | 'draw';
   start: { step: number; col: number };
   startTarget: CellTarget;
   /** The cell under the finger now (by row step, so rows changing under a held finger cannot redirect it). */
@@ -73,7 +80,16 @@ interface Gesture {
   down: [number, number];
   moved: boolean;
   el: HTMLElement | null;
+  /** Beads: the key of the bead this gesture holds (drag) or drew in each beat (draw). */
+  bead: Map<number, number>;
+  /** Drag: the bead has changed key (so letting go is not a tap that takes it away). */
+  shifted: boolean;
+  /** Ids of the notes this gesture is moving (they follow the finger, no glide). */
+  holding: string[];
 }
+
+/** The face that pops in a cell: a stone's, or a bead's. */
+const FACE = '.stone-face, .bead-face';
 
 /** Index of the band a coordinate falls in: the boundary between two cells is halfway across their gap. */
 function bandAt(v: number, bands: { a: number; b: number }[]): number {
@@ -117,12 +133,13 @@ function flash(el: HTMLElement, className: string, ms: number) {
   setTimeout(() => s.remove(), ms);
 }
 
-/** The kind of rows a monster's grid has (drums now; the bead lane comes next). */
+/** The kind of rows a monster's grid has: Boom's drums, or a bead lane. */
 function laneFor(monster: MonsterKind): GridLane | null {
-  return monster === 'boom' ? DRUM_LANE : null;
+  if (monster === 'boom') return DRUM_LANE;
+  return hasGridFace(monster) ? BEAD_LANE : null;
 }
 
-/** The grid face for the monster in the spotlight (nothing for a monster without one yet). */
+/** The grid face for the monster in the spotlight (nothing for a monster without one). */
 export function StepGrid({ track }: { track: Track }) {
   const lane = laneFor(track.monster);
   return lane ? <LaneGrid track={track} lane={lane} /> : null;
@@ -159,8 +176,30 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
   if (!sameList(fold.shown, onScreen)) setOnScreen(fold.shown);
   const rows = fold.shown;
   const folded = fold.folded;
-  const grid = useMemo(() => projectGrid(notes, lengthBeats, rows, { sustain: lane.sustain }), [notes, lengthBeats, rows, lane.sustain]);
-  const spare = caps.gridAddRow ? ALL_PADS.slice(0, caps.drumPads).filter((p) => !all.includes(p)) : [];
+  const sustain = lane.sustain(track.monster);
+  const grid = useMemo(() => projectGrid(notes, lengthBeats, rows, { sustain }), [notes, lengthBeats, rows, sustain]);
+  const beads = lane.kind === 'beads';
+
+  // Bead lane: each band's name sticker and spoken name, like the keys (a recording
+  // plays at the child's own pitch, so Mimic with a voice shows no letters).
+  const info = MONSTERS[track.monster];
+  const top = rows.length > 0 ? Math.max(...rows) : BEAD_KEYS - 1;
+  const { names, style: nameStyle } = useKeyNames(Math.max(BEAD_KEYS, top + 1));
+  const recorded = track.monster === 'mimic' && track.sampleId !== null;
+  const showNames = beads && !recorded && nameStyle !== 'off';
+  const labels = useMemo(() => {
+    const out = new Map<number, string>();
+    if (!beads) return out;
+    const seen = new Set<string>();
+    for (const step of [...rows].sort((a, b) => a - b)) {
+      const spoken = names[step]?.spoken;
+      if (recorded || !spoken) out.set(step, `${info.name} note ${step + 1}`);
+      else out.set(step, `${info.name}: ${spoken}${seen.has(spoken) ? ' (higher)' : ''}`);
+      if (spoken) seen.add(spoken);
+    }
+    return out;
+  }, [beads, rows, names, recorded, info.name]);
+  const spare = caps.gridAddRow && lane.kind === 'drums' ? ALL_PADS.slice(0, caps.drumPads).filter((p) => !all.includes(p)) : [];
   const addSlot = spare.length > 0 || folded.length > 0;
   // The '+' tray: closed, or open (from a touch, or from a keyboard: then focus moves in and back out).
   const [picker, setPicker] = useState<false | 'touch' | 'key'>(false);
@@ -172,13 +211,18 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
   const empty = notes.length === 0;
 
   const rootRef = useRef<HTMLDivElement>(null);
+  const inkRef = useRef<SVGSVGElement>(null);
   const cellEls = useRef(new Map<string, HTMLDivElement>());
   const geoRef = useRef<Geo | null>(null);
   const gestures = useRef(new Map<number, Gesture>());
   const nowCol = useRef(-1);
+  /** Beads a finger is moving right now: they follow it (no glide). */
+  const held = useRef(new Set<string>());
+  /** The drag's glissando: the last key heard, and the latest key waiting to be heard. */
+  const gliss = useRef<{ last: number; step: number; timer: ReturnType<typeof setTimeout> | null }>({ last: -Infinity, step: 0, timer: null });
   // What imperative handlers need from the latest render.
-  const view = useRef({ rows, grid, cols, lengthBeats, all: all.length, spare: spare.length });
-  view.current = { rows, grid, cols, lengthBeats, all: all.length, spare: spare.length };
+  const view = useRef({ rows, grid, cols, lengthBeats, notes, sustain, all: all.length, spare: spare.length });
+  view.current = { rows, grid, cols, lengthBeats, notes, sustain, all: all.length, spare: spare.length };
 
   const register = useCallback((step: number, col: number, el: HTMLDivElement | null) => {
     if (el) cellEls.current.set(`${step}:${col}`, el);
@@ -253,6 +297,7 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
   };
 
   const rowDefault = (step: number) => lane.rowDefault(step, MODE_CAPS[getState().settings.ageMode]);
+  const tapTarget = (step: number, col: number) => lane.target(stateNow(step, col), step, MODE_CAPS[getState().settings.ageMode]);
 
   /** "No": the stone wobbles (a full beat, or a full loop). Nothing is taken away. */
   const refuse = (step: number, col: number) => {
@@ -278,6 +323,7 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
       isDrum: t.monster === 'boom',
       columnCap: gridColumnCap(t.monster, s.settings.ageMode),
       dur: info.gridDur,
+      trimPrevious: info.gridMono,
       maxNotes: info.maxClipNotes,
     };
     const probe = writeCell(current ?? { id: '', lengthBeats: L, notes: [] }, w);
@@ -292,6 +338,117 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
     }
   };
 
+  // ── Beads ─────────────────────────────────────────────────────────────────
+
+  /** The notes of one key in one beat, now (a finger is about to move them). */
+  const idsAt = (step: number, col: number) => {
+    const t = getState().project.tracks.find((x) => x.id === track.id);
+    const c = t ? activeClip(t) : null;
+    return (c?.notes ?? NO_NOTES).filter((n) => n.step === step && cellOf(n.beat, c!.lengthBeats).col === col).map((n) => n.id);
+  };
+
+  /** A bead dragged through the keys sounds each new key at once (but not more than every 60 ms; the last key always sounds). */
+  const glissando = (step: number) => {
+    const g = gliss.current;
+    g.step = step;
+    const wait = GLISS_MS - (performance.now() - g.last);
+    if (wait <= 0) {
+      g.last = performance.now();
+      studio.auditionStep(track.id, step, GLISS_VEL);
+      return;
+    }
+    g.timer ??= setTimeout(() => {
+      g.timer = null;
+      g.last = performance.now();
+      studio.auditionStep(track.id, g.step, GLISS_VEL);
+    }, wait);
+  };
+
+  /** Move a gesture's bead in beat `col` from key `from` to key `to` (it keeps its id: one undo step per gesture). */
+  const moveBead = (g: Gesture, col: number, from: number, to: number) => {
+    for (const id of idsAt(from, col)) {
+      held.current.add(id);
+      g.holding.push(id);
+    }
+    const maxStep = view.current.rows[0] ?? BEAD_KEYS - 1;
+    if (!studio.stepEdit(track.id, (p) => moveCellEdit(p, track.id, col, from, to, maxStep), { col, coalesce: g.key, preview: 'none' })) return;
+    g.bead.set(col, to);
+    g.shifted = true;
+    glissando(to);
+  };
+
+  /** The bead under a finger in column `col`: the band's own, or a neighbour's bead that reaches over it. */
+  const beadUnder = (geo: Geo, row: number, col: number, x: number, y: number): number | null => {
+    const lit = (r: number) => r >= 0 && r < geo.rows.length && stateNow(geo.rows[r].step, col) !== 'off';
+    if (lit(row)) return geo.rows[row].step;
+    for (const r of [row - 1, row + 1]) {
+      if (!lit(r)) continue;
+      const b = cellEl(geo.rows[r].step, col)?.querySelector('.bead')?.getBoundingClientRect();
+      if (b && Math.hypot(x - (b.left + b.width / 2), y - (b.top + b.height / 2)) <= b.width * 0.4) return geo.rows[r].step;
+    }
+    return null;
+  };
+
+  /** Drawing a tune: the finger is over key `step` in beat `col` (it re-pitches the bead it drew there, or draws one). */
+  const drawAt = (g: Gesture, step: number, col: number, first = false) => {
+    const had = g.bead.get(col);
+    if (had !== undefined) {
+      // Another bead already has that key in this beat: the drawn one waits below or above it.
+      if (had !== step && stateNow(step, col) === 'off') moveBead(g, col, had, step);
+      return;
+    }
+    if (stateNow(step, col) === 'off') write(step, col, 'one', g.key, first);
+    g.bead.set(col, step);
+  };
+
+  const beadDown = (e: ReactPointerEvent<HTMLDivElement>, geo: Geo, row: number, col: number, key: string) => {
+    const on = beadUnder(geo, row, col, e.clientX, e.clientY);
+    const step = on ?? geo.rows[row].step;
+    const g: Gesture = {
+      key,
+      mode: on === null ? 'draw' : 'drag',
+      start: { step, col },
+      startTarget: on === null ? 'one' : 'off',
+      at: { step: geo.rows[row].step, col },
+      down: [e.clientX, e.clientY],
+      moved: false,
+      el: null,
+      bead: new Map(on === null ? [] : [[col, on]]),
+      shifted: false,
+      holding: [],
+    };
+    gestures.current.set(e.pointerId, g);
+    press(g, step, col, e.clientX, e.clientY);
+    // An empty spot: a bead at once (a bead itself waits: a tap takes it away, a drag moves it).
+    if (on === null) drawAt(g, step, col, true);
+  };
+
+  const beadMove = (e: ReactPointerEvent<HTMLDivElement>, g: Gesture, geo: Geo) => {
+    const bands = geo.rows.map((r) => ({ a: r.t, b: r.b }));
+    const row = stickyBand(e.clientY, bands, geo.rows.findIndex((r) => r.step === g.at.step));
+    const step = geo.rows[row].step;
+    if (g.mode === 'drag') {
+      // A held bead only goes up or down its own beat.
+      g.at = { step, col: g.at.col };
+      const from = g.bead.get(g.at.col);
+      if (from === undefined || step === from || stateNow(step, g.at.col) !== 'off') return;
+      moveBead(g, g.at.col, from, step);
+      press(g, step, g.at.col, e.clientX, e.clientY);
+      return;
+    }
+    const col = stickyBand(e.clientX, geo.cols.map((c) => ({ a: c.l, b: c.r })), g.at.col);
+    if (step === g.at.step && col === g.at.col) return;
+    const prev = g.at;
+    g.at = { step, col };
+    press(g, step, col, e.clientX, e.clientY);
+    // A quick finger skips beats: they get beads on the line between (a drawn tune has no holes).
+    const dir = Math.sign(col - prev.col);
+    for (let c = prev.col + dir; dir !== 0 && c !== col; c += dir) {
+      drawAt(g, Math.round(prev.step + ((step - prev.step) * (c - prev.col)) / (col - prev.col)), c);
+    }
+    drawAt(g, step, col);
+  };
+
   const press = (g: Gesture, step: number, col: number, x: number, y: number) => {
     if (g.el) g.el.dataset.down = 'false';
     const el = cellEl(step, col);
@@ -303,7 +460,7 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
 
   const audition = (step: number) => {
     studio.auditionStep(track.id, step, 0.85);
-    const head = cellEl(step, -1)?.querySelector<HTMLElement>('.row-pad');
+    const head = cellEl(step, -1)?.querySelector<HTMLElement>('.row-pad, .row-key');
     if (head && !isReducedMotion() && typeof head.animate === 'function') {
       head.animate([{ scale: '1' }, { scale: '0.86' }, { scale: '1.08' }, { scale: '1' }], { duration: 260, easing: 'ease-out' });
     }
@@ -350,12 +507,17 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
       audition(step);
       return;
     }
-    const state = stateNow(step, hit.col);
-    const target = nextTarget(state, { states: caps.gridCellStates, rowDefault: rowDefault(step) });
     // Fingers down together (two hands drumming in stones) make one undo step.
     const together = gestures.current.values().next().value as Gesture | undefined;
+    const key = together?.key ?? `grid-${e.pointerId}-${Math.round(e.timeStamp)}`;
+    if (lane.kind === 'beads') {
+      beadDown(e, geo, hit.row, hit.col, key);
+      return;
+    }
+    const state = stateNow(step, hit.col);
+    const target = tapTarget(step, hit.col);
     const g: Gesture = {
-      key: together?.key ?? `grid-${e.pointerId}-${Math.round(e.timeStamp)}`,
+      key,
       mode: state === 'off' ? 'paint' : 'erase',
       start: { step, col: hit.col },
       startTarget: target,
@@ -363,6 +525,9 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
       down: [e.clientX, e.clientY],
       moved: false,
       el: null,
+      bead: new Map(),
+      shifted: false,
+      holding: [],
     };
     gestures.current.set(e.pointerId, g);
     press(g, step, hit.col, e.clientX, e.clientY);
@@ -375,6 +540,11 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
     if (!g || !geo) return;
     // A tap that slides a little is still a tap.
     if (!g.moved && Math.hypot(e.clientX - g.down[0], e.clientY - g.down[1]) < SLOP) return;
+    if (g.mode === 'drag' || g.mode === 'draw') {
+      g.moved = true;
+      beadMove(e, g, geo);
+      return;
+    }
     const curRow = geo.rows.findIndex((r) => r.step === g.at.step);
     const row = stickyBand(e.clientY, geo.rows.map((r) => ({ a: r.t, b: r.b })), curRow);
     const col = stickyBand(e.clientX, geo.cols.map((c) => ({ a: c.l, b: c.r })), g.at.col);
@@ -400,11 +570,16 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
     if (!g) return;
     gestures.current.delete(e.pointerId);
     if (g.el) g.el.dataset.down = 'false';
+    for (const id of g.holding) held.current.delete(id);
+    // A tap on a bead (it never changed key, and the finger stayed near): the bead pops away.
+    if (g.mode === 'drag' && e.type === 'pointerup' && !g.shifted && Math.hypot(e.clientX - g.down[0], e.clientY - g.down[1]) < SLOP * 2) {
+      write(g.start.step, g.start.col, 'off', g.key, true);
+    }
   };
 
   // Keyboards (Chromebooks): arrows move between stones and drum pictures, Enter taps one.
   const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (!(e.target as HTMLElement).closest('.stone, [data-grid-head]')) return;
+    if (!(e.target as HTMLElement).closest('.stone, .bead-spot, [data-grid-head]')) return;
     const v = view.current;
     let r = Math.max(0, v.rows.indexOf(fStep));
     let c = fCol;
@@ -413,7 +588,7 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
       if (e.repeat) return;
       const step = v.rows[r];
       if (c < 0) audition(step);
-      else write(step, c, nextTarget(stateNow(step, c), { states: caps.gridCellStates, rowDefault: rowDefault(step) }), `grid-key-${performance.now()}`, true);
+      else write(step, c, tapTarget(step, c), `grid-key-${performance.now()}`, true);
       return;
     }
     if (e.key === 'ArrowLeft') c = Math.max(-1, c - 1);
@@ -427,7 +602,7 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
   };
 
   const onFocus = (e: ReactFocusEvent<HTMLDivElement>) => {
-    const el = (e.target as HTMLElement).closest<HTMLElement>('.stone, [data-grid-head]');
+    const el = (e.target as HTMLElement).closest<HTMLElement>('.stone, .bead-spot, [data-grid-head]');
     if (!el) return;
     const step = Number(el.dataset.step);
     const col = Number(el.dataset.col);
@@ -492,8 +667,16 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
     return off;
   }, [showBeat]);
 
+  /** The bead lane's ink (tails and the tune's line), from the measured cells. */
+  const paintInk = useCallback(() => {
+    const svg = inkRef.current;
+    const geo = geoRef.current ?? measure();
+    const v = view.current;
+    if (svg && geo && lane.ink) lane.ink(svg, geo, v.grid, v.notes, v.lengthBeats, v.sustain);
+  }, [lane, measure]);
+
   // Sizes change (rotation, rows shown or folded): measure again, see how many rows
-  // fit, and put the beam and the hopper back.
+  // fit, and put the beam, the hopper and the ink back.
   useEffect(() => {
     const root = rootRef.current;
     if (!root || typeof ResizeObserver === 'undefined') return;
@@ -501,20 +684,31 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
       measure();
       refit();
       showBeat(nowCol.current);
+      paintInk();
     });
     ro.observe(root);
     return () => ro.disconnect();
-  }, [measure, refit, showBeat]);
+  }, [measure, refit, showBeat, paintInk]);
 
   const rowKey = rows.join(',');
   useLayoutEffect(() => {
     measure();
     refit();
     showBeat(nowCol.current);
-  }, [rowKey, cols, addSlot, all.length, measure, refit, showBeat]);
+    paintInk();
+  }, [rowKey, cols, addSlot, all.length, measure, refit, showBeat, paintInk]);
 
-  // A stone pops as its note is heard (the stage monster reacts at the same moment).
-  // A drum folded away has no stone: it plays all the same.
+  // Let go of a waiting glissando note when the grid goes away.
+  useEffect(() => {
+    const g = gliss.current;
+    return () => {
+      if (g.timer) clearTimeout(g.timer);
+      g.timer = null;
+    };
+  }, []);
+
+  // A stone (or bead) pops as its note is heard (the stage monster reacts at the same
+  // moment). A drum folded away has no stone: it plays all the same.
   useEffect(
     () =>
       onNote((v) => {
@@ -526,18 +720,21 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
           glow(el, 160);
           return;
         }
-        el.querySelector('.stone-face')?.animate([{ scale: '1' }, { scale: '1.15' }, { scale: '1' }], { duration: 180, easing: 'ease-out' });
+        el.querySelector(FACE)?.animate([{ scale: '1' }, { scale: '1.15' }, { scale: '1' }], { duration: 180, easing: 'ease-out' });
         flash(el, 'stone-ring', 420);
       }),
     [track.id],
   );
 
-  // Wand grooves cascade in from left to right; tidied notes slide to their slots.
-  const before = useRef<{ ids: Set<string>; slot: Map<string, number> } | null>(null);
+  // Wand grooves and tunes cascade in from left to right; tidied notes slide to their
+  // slots; a bead that jumps to another key glides there (a bead under a finger just follows it).
+  const before = useRef<{ ids: Set<string>; slot: Map<string, number>; step: Map<string, number> } | null>(null);
   useLayoutEffect(() => {
+    paintInk();
     const prev = before.current;
     const slot = new Map(notes.map((n) => [n.id, fineSlot(n.beat, lengthBeats)]));
-    before.current = { ids: new Set(notes.map((n) => n.id)), slot };
+    const step = new Map(notes.map((n) => [n.id, n.step]));
+    before.current = { ids: new Set(notes.map((n) => n.id)), slot, step };
     const root = rootRef.current;
     const geo = geoRef.current;
     if (!prev || !root || isReducedMotion()) return;
@@ -549,7 +746,7 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
     if (fresh.length >= 3) {
       const done = new Set<HTMLElement>();
       for (const n of fresh) {
-        const el = stoneOf(n.id)?.querySelector<HTMLElement>('.stone-face');
+        const el = stoneOf(n.id)?.querySelector<HTMLElement>(FACE);
         if (!el || done.has(el) || typeof el.animate !== 'function') continue;
         done.add(el);
         el.animate([{ scale: '0.2', opacity: 0 }, { scale: '1.15', opacity: 1 }, { scale: '1', opacity: 1 }], {
@@ -567,19 +764,27 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
       const c = geo.cols[Math.floor(s / 4)];
       return c ? c.l + ((s % 4) * (c.r - c.l)) / 4 : null;
     };
-    const moved = new Map<HTMLElement, number>();
+    // The middle of a key's band (beads that change key).
+    const yOf = (k: number) => {
+      const r = geo.rows.find((row) => row.step === k);
+      return r ? (r.t + r.b) / 2 : null;
+    };
+    const moved = new Map<HTMLElement, [number, number]>();
     for (const n of notes) {
       const from = prev.slot.get(n.id);
       const to = slot.get(n.id);
-      if (from === undefined || to === undefined || from === to) continue;
+      const k0 = prev.step.get(n.id);
+      if (from === undefined || to === undefined || k0 === undefined || (from === to && k0 === n.step) || held.current.has(n.id)) continue;
       const x0 = xOf(from);
       const x1 = xOf(to);
-      const el = stoneOf(n.id)?.querySelector<HTMLElement>('.stone-face');
-      if (el && x0 !== null && x1 !== null) moved.set(el, x0 - x1);
+      const y0 = yOf(k0);
+      const y1 = yOf(n.step);
+      const el = stoneOf(n.id)?.querySelector<HTMLElement>(FACE);
+      if (el && x0 !== null && x1 !== null && y0 !== null && y1 !== null) moved.set(el, [x0 - x1, y0 - y1]);
     }
     if (moved.size === 0) return;
     root.dataset.flip = 'true';
-    moved.forEach((dx, el) => el.animate?.([{ translate: `${dx}px 0` }, { translate: '0 0' }], { duration: 220, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' }));
+    moved.forEach(([dx, dy], el) => el.animate?.([{ translate: `${dx}px ${dy}px` }, { translate: '0 0' }], { duration: 220, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' }));
     const t = setTimeout(() => root && (root.dataset.flip = 'false'), 240);
     return () => clearTimeout(t);
   }, [notes]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -613,11 +818,13 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
   const tpl = gridTemplate(cols, beatsPerBar);
   const Row = lane.Row;
   return (
-    <div className="surface surface-grid" data-monster={track.monster} data-view="grid">
+    <div className="surface surface-grid" data-monster={track.monster} data-view="grid" data-lane={lane.kind}>
       <SurfaceSide track={track} face="grid" extra={addButton('side')} />
       <div
         ref={rootRef}
         className="step-grid"
+        data-lane={lane.kind}
+        data-names={showNames}
         data-rows={rows.length}
         data-empty={empty}
         data-sleeping={track.sleeping}
@@ -633,7 +840,7 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
         onFocus={onFocus}
       >
         <BeatRuler cols={cols} beatsPerBar={beatsPerBar} numbers={caps.showNames} monster={track.monster} />
-        <div className="grid-rows" role="grid" aria-label={`${MONSTERS[track.monster].name}'s beat grid`} aria-rowcount={rows.length} aria-colcount={cols + 1}>
+        <div className="grid-rows" role="grid" aria-label={`${info.name}'s ${beads ? 'tune' : 'beat'} grid`} aria-rowcount={rows.length} aria-colcount={cols + 1}>
           {rows.map((step, r) => (
             <Row
               key={step}
@@ -645,9 +852,19 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
               focusCol={step === fStep ? fCol : null}
               invite={empty}
               register={register}
+              monster={track.monster}
+              name={showNames ? (names[step] ?? null) : null}
+              nameStyle={nameStyle}
+              label={labels.get(step) ?? ''}
             />
           ))}
         </div>
+        {lane.ink && (
+          <svg ref={inkRef} className="bead-ink" aria-hidden>
+            <g className="bead-tails" />
+            <polyline className="bead-contour" />
+          </svg>
+        )}
         {addButton('head')}
         <span className="grid-beam" aria-hidden />
       </div>

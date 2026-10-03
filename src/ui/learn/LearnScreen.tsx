@@ -350,7 +350,7 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
         </button>
         <div className="lesson-heading">
           <span className="lesson-name">{song.title}</span>
-          <span className="lesson-dots" aria-label={`Part ${Math.min(phrase + 1, song.phrases.length)} of ${song.phrases.length}`}>
+          <span className="lesson-dots" role="img" aria-label={`Part ${Math.min(phrase + 1, song.phrases.length)} of ${song.phrases.length}`}>
             {song.phrases.map((_, i) => (
               <i key={i} data-state={i < phrase || phase === 'done' || (i === phrase && phase === 'cheer') ? 'done' : i === phrase ? 'now' : 'todo'} />
             ))}

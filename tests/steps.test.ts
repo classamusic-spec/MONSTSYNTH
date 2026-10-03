@@ -8,8 +8,11 @@ import {
   fineSlot,
   foldDrumRows,
   gridColumns,
+  hasGridFace,
   isOnGrid,
   isTidy,
+  melodicRows,
+  moveCell,
   nextTarget,
   projectGrid,
   snapNotes,
@@ -262,18 +265,49 @@ describe('writeCell (drums)', () => {
 });
 
 describe('writeCell (bead lane rules)', () => {
-  it('one bead per column: a tap at another height moves it', () => {
-    const c = clipOf([note('a', 2, 3, 0.85, 0.9)]);
-    const out = writeCell(c, bead(5, 2, 'one')).clip;
-    expect(out.notes.map((n) => [n.beat, n.step])).toEqual([[2, 5]]);
-    expect(out.notes[0].dur).toBe(0.9);
+  it('one bead per column: a tap at another height moves it (the same bead, so it glides there)', () => {
+    const c = clipOf([note('a', 2, 3, 0.85, 0.9), note('z', 5, 1, 0.85, 0.9)]);
+    const r = writeCell(c, bead(5, 2, 'one'));
+    expect(r.result).toBe('changed');
+    expect(r.clip.notes.map((n) => [n.id, n.beat, n.step])).toEqual([
+      ['z', 5, 1],
+      ['a', 2, 5],
+    ]);
+    expect(r.clip.notes[1].dur).toBe(0.9);
+    // Tapping the bead's own spot changes nothing.
+    expect(writeCell(r.clip, bead(5, 2, 'one')).clip).toBe(r.clip);
   });
 
-  it('a column cap of 3 lets go of the oldest bead', () => {
+  it('a late bead from live playing jumps onto the beat it shows in', () => {
+    const out = writeCell(clipOf([note('a', 7.97, 3, 0.7, 0.4)]), bead(6, 0, 'one')).clip;
+    expect(out.notes).toEqual([{ id: 'a', beat: 0, step: 6, dur: 0.9, vel: 0.9, tone: 0 }]);
+  });
+
+  it('a column cap of 3 lets go of the oldest bead (it moves to the new key and becomes the newest)', () => {
     const c = clipOf([note('a', 2, 1), note('b', 2, 3), note('c', 2.02, 5)]);
     const out = writeCell(c, bead(7, 2, 'one', { columnCap: 3 })).clip;
-    expect(out.notes.map((n) => n.id).slice(0, 2)).toEqual(['b', 'c']);
-    expect(out.notes[2]).toMatchObject({ beat: 2, step: 7 });
+    expect(out.notes.map((n) => n.id)).toEqual(['b', 'c', 'a']);
+    expect(out.notes[2]).toMatchObject({ id: 'a', beat: 2, step: 7 });
+    // Below the cap a new bead joins the chord with a new id.
+    const two = writeCell(clipOf([note('a', 2, 1)]), bead(4, 2, 'one', { columnCap: 3 })).clip;
+    expect(two.notes.map((n) => [n.beat, n.step])).toEqual([
+      [2, 1],
+      [2, 4],
+    ]);
+    expect(two.notes[1].id).not.toBe('a');
+    // A cap of 2 (Mimic): the third key replaces the oldest.
+    const duet = writeCell(two, bead(6, 2, 'one', { columnCap: 2 })).clip;
+    expect(duet.notes.map((n) => [n.id, n.step])).toEqual([
+      [two.notes[1].id, 4],
+      ['a', 6],
+    ]);
+  });
+
+  it('taking a bead away leaves the rest of the column, and on then off is the original loop', () => {
+    const c = clipOf([note('a', 2, 1), note('b', 2, 3), note('c', 6, 5)]);
+    expect(writeCell(c, bead(3, 2, 'off', { columnCap: 3 })).clip.notes.map((n) => n.id)).toEqual(['a', 'c']);
+    const on = writeCell(c, bead(6, 4, 'one', { columnCap: 3 })).clip;
+    expect(writeCell(on, bead(6, 4, 'off', { columnCap: 3 })).clip).toEqual(c);
   });
 
   it('accents the bar downbeat', () => {
@@ -289,6 +323,107 @@ describe('writeCell (bead lane rules)', () => {
     // A long note from the end of the loop rings round into beat 1: it ends there too.
     const wrapped = writeCell(clipOf([note('w', 7, 2, 0.8, 1.9)]), bead(4, 0, 'one', { trimPrevious: true, dur: 1.9 })).clip;
     expect(wrapped.notes[0]).toMatchObject({ id: 'w', dur: 1 });
+  });
+
+  it('Puff: a new bead also ends where the next one begins (one note at a time), and taking one away re-extends nothing', () => {
+    const c = clipOf([note('n', 3, 2, 0.8, 1.9)]);
+    const out = writeCell(c, bead(4, 2, 'one', { trimPrevious: true, dur: 1.9 })).clip;
+    expect(out.notes.map((n) => [n.beat, n.dur])).toEqual([
+      [3, 1.9],
+      [2, 1],
+    ]);
+    // Round the loop's end: a bead on beat 8 ends where beat 1's begins.
+    const end = writeCell(clipOf([note('f', 0, 1, 0.8, 1.9)]), bead(5, 7, 'one', { trimPrevious: true, dur: 1.9 })).clip;
+    expect(end.notes[1]).toMatchObject({ beat: 7, dur: 1 });
+    const gone = writeCell(out, bead(2, 3, 'off', { trimPrevious: true, dur: 1.9 })).clip;
+    expect(gone.notes).toEqual([out.notes[1]]);
+  });
+
+  it('draws a tune: a finger across the lane leaves one bead per column at its height', () => {
+    // What the lane does: a bead in each column the finger enters (writeCell), and a
+    // move up or down inside a column re-pitches the bead it just drew (moveCell).
+    let c = clipOf([note('old', 3, 6, 0.85, 0.9)]);
+    const path: [col: number, step: number][] = [[0, 2], [1, 3], [1, 4], [2, 5], [3, 4], [4, 2]];
+    const drawn = new Map<number, number>();
+    for (const [col, step] of path) {
+      const was = drawn.get(col);
+      c = was === undefined ? writeCell(c, bead(step, col, 'one')).clip : moveCell(c, col, was, step, 8);
+      drawn.set(col, step);
+    }
+    const shape = [...c.notes].sort((a, b) => a.beat - b.beat).map((n) => [n.beat, n.step]);
+    expect(shape).toEqual([
+      [0, 2],
+      [1, 4],
+      [2, 5],
+      [3, 4],
+      [4, 2],
+    ]);
+    // The bead already on beat 4 (column 3) jumped to the finger's height, keeping its id.
+    expect(c.notes.find((n) => n.beat === 3)?.id).toBe('old');
+    // Puff drawing: each bead ends where the next one starts.
+    let puff = clipOf([]);
+    for (const [col, step] of [[0, 0], [1, 3], [2, 4], [5, 0]] as const) puff = writeCell(puff, bead(step, col, 'one', { trimPrevious: true, dur: 1.9 })).clip;
+    expect(puff.notes.map((n) => [n.beat, n.dur])).toEqual([
+      [0, 1],
+      [1, 1],
+      [2, 1.9],
+      [5, 1.9],
+    ]);
+  });
+});
+
+describe('moveCell (dragging a bead)', () => {
+  const c = clipOf([note('a', 2, 3, 0.85, 0.9), note('b', 2, 6, 0.85, 0.9), note('c', 5, 3, 0.85, 0.9), note('d', 2.24, 1, 0.6, 0.4)]);
+
+  it('moves the bead up or down its column, keeping its id, beat and length', () => {
+    const out = moveCell(c, 2, 3, 5, 8);
+    expect(out.notes.find((n) => n.id === 'a')).toEqual({ ...c.notes[0], step: 5 });
+    // Only that bead: the chord partner, the other column and the off-grid bead stay.
+    expect(out.notes.filter((n) => n.id !== 'a')).toEqual(c.notes.filter((n) => n.id !== 'a'));
+    // An off-grid bead moves too (it stays where it was played).
+    expect(moveCell(c, 2, 1, 0, 8).notes.find((n) => n.id === 'd')).toMatchObject({ beat: 2.24, step: 0, dur: 0.4 });
+  });
+
+  it('keeps steps within 0..7', () => {
+    expect(moveCell(c, 2, 3, 11, 8).notes.find((n) => n.id === 'a')!.step).toBe(7);
+    expect(moveCell(c, 2, 3, -4, 8).notes.find((n) => n.id === 'a')!.step).toBe(0);
+    expect(moveCell(c, 5, 3, 9, 8, 8).notes.find((n) => n.id === 'c')!.step).toBe(8);
+  });
+
+  it('a bead already on the new key gives way (one bead per key per beat)', () => {
+    const out = moveCell(c, 2, 3, 6, 8);
+    expect(out.notes.map((n) => n.id)).toEqual(['a', 'c', 'd']);
+    expect(out.notes[0].step).toBe(6);
+  });
+
+  it('returns the very same clip when nothing moves', () => {
+    expect(moveCell(c, 2, 3, 3, 8)).toBe(c);
+    expect(moveCell(c, 4, 3, 5, 8)).toBe(c);
+    expect(moveCell(c, 2, 2, 5, 8)).toBe(c);
+  });
+});
+
+describe('the bead lane', () => {
+  it('every monster has a grid face', () => {
+    for (const m of ['boom', 'bloop', 'grumble', 'spark', 'puff', 'mimic'] as const) expect(hasGridFace(m)).toBe(true);
+  });
+
+  it('has eight bands, key 0 at the bottom, plus any key the loop plays beyond them', () => {
+    expect(melodicRows()).toEqual([7, 6, 5, 4, 3, 2, 1, 0]);
+    expect(melodicRows([note('a', 0, 3), note('b', 1, 8)])).toEqual([8, 7, 6, 5, 4, 3, 2, 1, 0]);
+  });
+
+  it('projects beads into their bands, and Puff tails across the beats they ring through', () => {
+    const rows = melodicRows();
+    const g = projectGrid([note('a', 0, 0, 0.85, 1.9), note('b', 2, 4, 0.85, 1.9), note('c', 2, 7, 0.85, 0.9), note('d', 4.5, 2, 0.7, 0.4)], 8, rows, { sustain: true });
+    const at = (step: number, col: number) => g.cells[rows.indexOf(step)][col];
+    expect(at(0, 0).state).toBe('one');
+    expect(at(0, 1)).toMatchObject({ state: 'off', held: true });
+    expect(at(4, 2).state).toBe('one');
+    expect(at(7, 2).state).toBe('one');
+    expect(at(4, 3).held).toBe(true);
+    expect(at(2, 4)).toMatchObject({ state: 'custom', subs: [2] });
+    expect(g.noteCell.get('b')).toEqual([rows.indexOf(4), 2]);
   });
 });
 

@@ -9,8 +9,12 @@
 //   under a finger, sliding taps (real touch), two fingers as one undo step, no doubled
 //   hits from the wand while playing, previews after Stop/Play, the face kept across
 //   monsters, keyboard focus (flip, drum pictures, the '+' tray), ruler taps, high
-//   contrast; then target sizes at four screen sizes with up to 8 drums (extra drums
-//   fold behind '+N' and keep playing) and axe on the whole page.
+//   contrast; the melodic monsters' bead lane (bands in the key colours, taps that
+//   add, jump and remove beads, drags that re-pitch, drawn tunes, column caps, Puff's
+//   tails, name stickers on the mini keys, wand tunes and one Undo back, catch-up
+//   that never repeats a note or replays a moved bead's old key); then target sizes
+//   at four screen sizes with up to 8 drums (extra drums fold behind '+N' and keep
+//   playing) and with the bead lane, and axe on the whole page (drums and beads).
 // Usage: node scripts/e2e-steps.mjs [url]
 import { chromium } from 'playwright';
 import { existsSync, readFileSync } from 'node:fs';
@@ -94,12 +98,12 @@ async function openApp(viewport = { width: 1024, height: 768 }, settings = {}, {
     // Live sounds (auditions, drum pictures, the ruler) start voices at once.
     const noteOn = eng.noteOn.bind(eng);
     eng.noteOn = (req) => {
-      T.on.push({ ch: req.channelId, pad: req.pad, at: ac.currentTime });
+      T.on.push({ ch: req.channelId, pad: req.pad, midi: req.midi?.[0], vel: req.vel, at: ac.currentTime });
       return noteOn(req);
     };
     const trigger = eng.trigger.bind(eng);
     eng.trigger = (req, when, dur) => {
-      T.trig.push({ ch: req.channelId, pad: req.pad, when, at: ac.currentTime, beat: st.transport.playing ? st.transport.beatAt(when) : null });
+      T.trig.push({ ch: req.channelId, pad: req.pad, midi: req.midi?.[0], when, at: ac.currentTime, beat: st.transport.playing ? st.transport.beatAt(when) : null });
       return trigger(req, when, dur);
     };
     const schedule = st.schedule.bind(st);
@@ -157,7 +161,7 @@ const { ctx, page } = await openApp();
 await fresh(page, 'little', 'keys');
 await page.evaluate(() => window.__monster.actions.selectTrack(window.__t.track('bloop').id));
 await page.waitForTimeout(150);
-check('no flip button for a melodic monster (its grid comes later)', (await page.locator('.surface-flip').count()) === 0);
+check('a melodic monster has the flip button too (its bead lane)', (await page.locator('.surface-flip').count()) === 1);
 await page.evaluate(() => window.__monster.actions.selectTrack(window.__t.track('boom').id));
 await page.waitForTimeout(150);
 const flipBefore = await page.locator('.surface-flip').getAttribute('aria-pressed');
@@ -957,15 +961,15 @@ const replay = await page.evaluate(async () => {
 });
 check('after Stop and Play, the same early tap is previewed again', replay.a?.beat === 1.25 && replay.b?.beat === 1.25 && replay.b.when > replay.a.when, JSON.stringify(replay));
 
-// ── The face is the child's choice: Boom's grid survives a visit to Bloop ────
+// ── The face is the child's choice: the grid follows the spotlight ──────────
 await fresh(page, 'little', 'grid');
 await page.locator(`.pod[data-track="${await page.evaluate(() => window.__t.track('bloop').id)}"] .pod-hit`).click();
 await page.waitForTimeout(150);
-const onBloop = await page.evaluate(() => ({ grid: !!document.querySelector('.step-grid'), keys: !!document.querySelector('.keys') }));
+const onBloop = await page.evaluate(() => ({ lane: document.querySelector('.step-grid')?.dataset.lane ?? null, keys: !!document.querySelector('.keys') }));
 await page.locator(`.pod[data-track="${await page.evaluate(() => window.__t.track('boom').id)}"] .pod-hit`).click();
 await page.waitForTimeout(150);
-const backOnBoom = await page.evaluate(() => !!document.querySelector('.step-grid'));
-check('grid → tap Bloop (its keys) → tap Boom: Boom\'s grid is back', !onBloop.grid && onBloop.keys && backOnBoom, JSON.stringify({ onBloop, backOnBoom }));
+const backOnBoom = await page.evaluate(() => document.querySelector('.step-grid')?.dataset.lane ?? null);
+check('grid → tap Bloop (its bead lane) → tap Boom: Boom\'s drum grid is back', onBloop.lane === 'beads' && !onBloop.keys && backOnBoom === 'drums', JSON.stringify({ onBloop, backOnBoom }));
 await page.evaluate(() => window.__monster.studio.stop());
 
 // ── Keyboards: ⇧G held flips once, the flip keeps focus, drum pictures and the tray ─
@@ -1068,6 +1072,429 @@ const hc = await page.evaluate(() => {
 });
 await page.evaluate(() => window.__monster.actions.updateSettings({ highContrast: false }));
 check('high contrast: every socket has an outline and lit stones a 2 px white ring', hc.socketRing && hc.litRing, JSON.stringify(hc));
+
+// ── 13. The bead lane (the melodic monsters' grid face) ─────────────────────
+/** A fresh song in `mode` with `monster` in the spotlight (invited onto the stage if needed). */
+async function freshLane(page, mode, monster, face = 'grid', kind = 'blank', settings = {}) {
+  await page.evaluate(
+    async ({ mode, monster, face, kind, settings }) => {
+      const M = window.__monster;
+      const T = window.__t;
+      M.studio.stop();
+      M.actions.updateSettings({ ageMode: mode, noteNames: 'letters', motion: 'full', ...settings });
+      await M.actions.newSong(kind);
+      if (!T.track(monster)) M.setState({ project: T.edits.addMonster(M.getState().project, monster) });
+      M.actions.selectTrack(T.track(monster).id);
+      M.actions.setLabView(face);
+      T.reset();
+    },
+    { mode, monster, face, kind, settings },
+  );
+  await page.waitForTimeout(250);
+}
+const spotAt = (page, step, col) => page.locator(`.step-grid .bead-spot[data-step="${step}"][data-col="${col}"]`);
+const spotCentre = async (page, step, col) => {
+  const b = await spotAt(page, step, col).boundingBox();
+  return [b.x + b.width / 2, b.y + b.height / 2];
+};
+const tapSpot = async (page, step, col) => {
+  const [x, y] = await spotCentre(page, step, col);
+  await page.mouse.click(x, y);
+  await page.waitForTimeout(60);
+};
+const laneNotes = (page, monster) => page.evaluate((m) => window.__t.notes(m).map((n) => [n.beat, n.step]).sort((a, b) => a[0] - b[0] || a[1] - b[1]), monster);
+const laneSig = (page, monster) => page.evaluate((m) => window.__t.sig(window.__t.notes(m)), monster);
+const pastLen = (page) => page.evaluate(() => window.__monster.getState().past.length);
+/** The pitch a monster's key plays in the open song. */
+const midiOf = (page, monster, step) =>
+  page.evaluate(
+    async ({ monster, step }) => {
+      const { noteRequest } = await import('/src/studio/notes.ts');
+      return noteRequest(window.__monster.getState().project, monster, 'x', step, { vel: 1 }).midi[0];
+    },
+    { monster, step },
+  );
+/** Put notes into a monster's loop (no sound) and stop. */
+const setLane = (page, monster, notes) =>
+  page.evaluate(
+    ({ monster, notes }) => {
+      const T = window.__t;
+      const id = T.track(monster).id;
+      window.__monster.studio.stepEdit(id, (p) => T.edits.replaceLoopNotes(p, id, notes), { col: 0, preview: 'none' });
+      window.__monster.studio.stop();
+    },
+    { monster, notes },
+  );
+const bn = (step, beat, id = `b${step}_${beat}`, dur = 0.9) => ({ id, beat, step, dur, vel: 0.85, tone: 0 });
+
+// The flip turns Grumble's keys into its bead lane: the keys turned sideways.
+await freshLane(page, 'little', 'grumble', 'keys');
+const keyNamesOnKeys = await page.$$eval('.keys .key-name', (els) => els.map((e) => e.textContent));
+await page.locator('.surface-flip').click();
+await page.waitForTimeout(200);
+const laneView = await page.evaluate(() => {
+  const bands = [...document.querySelectorAll('.step-grid .bead-band')];
+  return {
+    lane: document.querySelector('.step-grid')?.dataset.lane,
+    keys: document.querySelectorAll('.keys').length,
+    steps: bands.map((b) => Number(b.dataset.step)),
+    spots: bands.map((b) => b.querySelectorAll('.bead-spot').length),
+    colours: bands.map((b) => b.style.getPropertyValue('--k')),
+    heads: bands.map((b) => !!b.querySelector('.bead-head .row-key > .glyph')),
+    names: bands.map((b) => b.querySelector('.bead-head .bead-name')?.textContent ?? null),
+    label: document.querySelector('.bead-band[data-step="0"] .bead-head')?.getAttribute('aria-label'),
+    wand: document.querySelectorAll('.t-surprise').length,
+    rec: document.querySelectorAll('.t-rec').length,
+    hopper: document.querySelector('.hopper')?.dataset.monster,
+  };
+});
+check(
+  "Grumble's flip shows its bead lane: 8 bands, key 1 at the bottom, × 8 beats, and the keys are gone",
+  laneView.lane === 'beads' && laneView.keys === 0 && laneView.steps.join() === '7,6,5,4,3,2,1,0' && laneView.spots.every((n) => n === 8) && laneView.hopper === 'grumble',
+  JSON.stringify(laneView),
+);
+check("each band wears its key's colour, and its head is a mini key with the monster's picture", laneView.colours.every((c, i) => c === `var(--key-${7 - i})`) && laneView.heads.every(Boolean), laneView.colours.join(' '));
+check('the mini keys wear the same name stickers as the keys (bottom to top)', JSON.stringify([...laneView.names].reverse()) === JSON.stringify(keyNamesOnKeys) && laneView.label === 'Play Grumble: C', `${laneView.names.join(',')} vs ${keyNamesOnKeys.join(',')}; ${laneView.label}`);
+check("under the bead lane, Record's place holds the Surprise wand", laneView.wand === 1 && laneView.rec === 0);
+{
+  const b = await page.locator('.bead-band[data-step="4"] .bead-head').boundingBox();
+  await page.evaluate(() => window.__t.reset());
+  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  await page.waitForTimeout(80);
+  const head = await page.evaluate(() => ({ on: window.__t.on.filter((x) => x.ch === window.__t.track('grumble').id).map((x) => x.midi), notes: window.__t.notes('grumble').length }));
+  const want = await midiOf(page, 'grumble', 4);
+  check('a mini key plays its note and writes nothing', head.on.length === 1 && head.on[0] === want && head.notes === 0, JSON.stringify({ head, want }));
+}
+
+// Taps: the first bead starts the loop from its own beat; beads land on exact beats.
+const laneArmed = await page.evaluate(() => window.__monster.studio.debug().gridAutoStart);
+await tapSpot(page, 2, 3);
+const laneStart = await page.evaluate(() => {
+  const d = window.__monster.studio.debug();
+  return { playing: d.playing, beat: d.beat, first: window.__t.sched[0] };
+});
+check(
+  'stopped: the first bead (beat 4) starts the loop from beat 4, and it is the first note heard',
+  laneArmed && laneStart.playing && Math.abs(laneStart.beat - 3) < 0.15 && laneStart.first?.absBeat === 3 && laneStart.first?.step === 2,
+  JSON.stringify(laneStart),
+);
+for (const [step, col] of [
+  [4, 0],
+  [3, 1],
+  [5, 5],
+])
+  await tapSpot(page, step, col);
+await page.waitForTimeout(100);
+const fourBeads = await laneNotes(page, 'grumble');
+const laneRow = await page.evaluate(() => {
+  const t = window.__t.track('grumble');
+  return { row: window.__monster.getState().project.arrangement.rows[t.id].filter((c) => c === t.activeClipId).length, created: window.__t.events.includes('loop-created') };
+});
+check('four taps leave four beads at exact beats on their keys', JSON.stringify(fourBeads) === '[[0,4],[1,3],[3,2],[5,5]]', JSON.stringify(fourBeads));
+check("the first bead fills Grumble's Blocks row and says a loop was made", laneRow.row === 8 && laneRow.created, JSON.stringify(laneRow));
+const poppedBead = await page.evaluate(
+  () =>
+    new Promise((resolve) => {
+      let seen = false;
+      const obs = new MutationObserver(() => {
+        if (document.querySelector('.step-grid .bead-spot > .stone-ring')) seen = true;
+      });
+      obs.observe(document.querySelector('.step-grid'), { subtree: true, childList: true });
+      setTimeout(() => {
+        obs.disconnect();
+        resolve(seen);
+      }, 5200);
+    }),
+);
+check('a bead pops (ring) when its note sounds', poppedBead);
+await page.evaluate(() => window.__monster.studio.stop());
+
+// Drag a bead up three bands: it keeps its id, sounds each new key, and is one undo step.
+{
+  const before = await page.evaluate(() => ({ id: window.__t.notes('grumble').find((n) => n.beat === 1).id, past: window.__monster.getState().past.length }));
+  await page.evaluate(() => window.__t.reset());
+  const [x, y] = await spotCentre(page, 3, 1);
+  const [, y6] = await spotCentre(page, 6, 1);
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 12; i++) await page.mouse.move(x + (i % 3), y + ((y6 - y) * i) / 12, { steps: 2 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const after = await page.evaluate(() => {
+    const T = window.__t;
+    const n = T.notes('grumble').find((x) => x.beat === 1);
+    return { id: n.id, step: n.step, past: window.__monster.getState().past.length, heard: T.on.filter((x) => x.ch === T.track('grumble').id).map((x) => [x.midi, x.vel]) };
+  });
+  const want = await Promise.all([4, 5, 6].map((k) => midiOf(page, 'grumble', k)));
+  const heardMidis = after.heard.map((h) => h[0]);
+  check('dragging a bead up 3 bands moves it to that key, keeping its id, as one undo step', after.id === before.id && after.step === 6 && after.past - before.past === 1, JSON.stringify({ before, after: { ...after, heard: undefined } }));
+  check('…each new key sounds softly as the bead passes (the last one always)', heardMidis.length >= 2 && heardMidis.at(-1) === want[2] && after.heard.every((h) => Math.abs(h[1] - 0.6) < 1e-6) && heardMidis.every((m) => want.includes(m)), JSON.stringify({ heard: after.heard, want }));
+  await page.evaluate(() => window.__monster.studio.undo());
+  await page.waitForTimeout(80);
+  const undone = await page.evaluate(() => window.__t.notes('grumble').find((n) => n.beat === 1));
+  check('one Undo puts the dragged bead back on its key (same bead)', undone.step === 3 && undone.id === before.id, JSON.stringify(undone));
+}
+
+// A tap on a bead pops it away (one undo step); Little Monsters: another height in a full beat makes the bead jump there.
+{
+  const p0 = await pastLen(page);
+  await tapSpot(page, 5, 5);
+  await page.waitForTimeout(60);
+  const gone = await laneNotes(page, 'grumble');
+  const poof = await page.evaluate(() => !!document.querySelector('.bead-spot[data-step="5"][data-col="5"] > .stone-poof'));
+  const p1 = await pastLen(page);
+  check('tapping a bead pops it away (with a poof), one undo step', JSON.stringify(gone) === '[[0,4],[1,3],[3,2]]' && poof && p1 - p0 === 1, JSON.stringify(gone));
+  const id0 = await page.evaluate(() => window.__t.notes('grumble').find((n) => n.beat === 0).id);
+  await tapSpot(page, 1, 0);
+  const jumped = await page.evaluate(() => {
+    const n = window.__t.notes('grumble').find((x) => x.beat === 0);
+    const face = document.querySelector('.bead-spot[data-step="1"][data-col="0"] .bead-face');
+    return { id: n.id, step: n.step, count: window.__t.notes('grumble').filter((x) => x.beat === 0).length, gliding: face?.getAnimations().length ?? 0 };
+  });
+  check('Little Monsters: tapping another height in that beat makes its bead jump there (the same bead, gliding)', jumped.id === id0 && jumped.step === 1 && jumped.count === 1 && jumped.gliding > 0, JSON.stringify(jumped));
+  await page.evaluate(() => window.__monster.actions.updateSettings({ motion: 'reduce' }));
+  await tapSpot(page, 6, 0);
+  const still = await page.evaluate(() => ({ step: window.__t.notes('grumble').find((x) => x.beat === 0).step, gliding: document.querySelector('.bead-spot[data-step="6"][data-col="0"] .bead-face')?.getAnimations().length ?? -1 }));
+  check('…and with reduced motion it simply appears there (no glide)', still.step === 6 && still.gliding === 0, JSON.stringify(still));
+  await page.evaluate(() => window.__monster.actions.updateSettings({ motion: 'full' }));
+}
+
+// Monster Makers: chords up to each monster's cap; a full beat lets its oldest bead go.
+for (const [monster, cap] of [
+  ['bloop', 3],
+  ['mimic', 2],
+  ['grumble', 1],
+]) {
+  await freshLane(page, 'maker', monster);
+  await page.evaluate(() => window.__monster.studio.stop());
+  for (const step of [0, 2, 4, 6]) await tapSpot(page, step, 2);
+  const col = await page.evaluate((m) => window.__t.notes(m).filter((n) => n.beat === 2).map((n) => n.step), monster);
+  const want = [0, 2, 4, 6].slice(4 - cap);
+  check(`Maker: ${monster} holds ${cap} bead${cap > 1 ? 's' : ''} per beat, the oldest letting go`, JSON.stringify(col) === JSON.stringify(want), JSON.stringify(col));
+}
+
+// Draw a tune: a finger dragged sideways from an empty spot leaves a bead in every beat at its height.
+await freshLane(page, 'little', 'bloop');
+await page.evaluate(() => window.__monster.studio.stop());
+{
+  const p0 = await pastLen(page);
+  const [x0, y0] = await spotCentre(page, 1, 0);
+  const [x7, y7] = await spotCentre(page, 6, 7);
+  await page.mouse.move(x0, y0);
+  await page.mouse.down();
+  for (let i = 1; i <= 14; i++) await page.mouse.move(x0 + ((x7 - x0) * i) / 14, y0 + ((y7 - y0) * i) / 14, { steps: 2 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const drawn = await laneNotes(page, 'bloop');
+  const p1 = await pastLen(page);
+  const ink = await page.evaluate(() => (document.querySelector('.bead-contour')?.getAttribute('points') ?? '').trim().split(/\s+/).filter(Boolean).length);
+  const rising = drawn.every((n, i) => i === 0 || n[1] >= drawn[i - 1][1]);
+  check(
+    'drawing sideways leaves one bead per beat at the finger\'s height (a rising tune), and a dotted line joins them',
+    drawn.length === 8 && drawn.every((n, i) => n[0] === i) && rising && drawn[0][1] <= 2 && drawn[7][1] === 6 && ink === 8,
+    `${JSON.stringify(drawn)}; ${ink} points`,
+  );
+  await page.evaluate(() => window.__monster.studio.undo());
+  await page.waitForTimeout(80);
+  check('the whole drawn tune is one undo step', p1 - p0 === 1 && (await laneNotes(page, 'bloop')).length === 0, `${p1 - p0} step(s)`);
+}
+
+// Puff: one long note at a time (a new bead ends the one before), with soft tails.
+await freshLane(page, 'little', 'puff');
+await page.evaluate(() => window.__monster.studio.stop());
+await tapSpot(page, 0, 0);
+await tapSpot(page, 3, 1);
+await tapSpot(page, 4, 4);
+{
+  const puff = await page.evaluate(() => window.__t.notes('puff').map((n) => [n.beat, n.step, n.dur]).sort((a, b) => a[0] - b[0]));
+  const tails = await page.evaluate(() => [...document.querySelectorAll('.bead-tails path')].map((p) => p.getAttribute('d')));
+  check("Puff: a bead ends the long note before it, so Puff sings one note at a time", JSON.stringify(puff) === '[[0,0,1],[1,3,1.9],[4,4,1.9]]', JSON.stringify(puff));
+  check('…and every long note trails a tail as far as it rings', tails.length === 3, tails.join(' | '));
+}
+
+// The wand on Grumble: three taps, three tunes (and the band starts); one Undo back to the child's own.
+await freshLane(page, 'little', 'grumble');
+await page.evaluate(() => window.__monster.studio.stop());
+await tapSpot(page, 3, 0);
+await tapSpot(page, 5, 2);
+await page.evaluate(() => window.__monster.studio.stop());
+{
+  const own = await laneSig(page, 'grumble');
+  const tunes = await page.evaluate(() => {
+    const T = window.__t;
+    return T.grooves.wandTunes('grumble', 'little').map((t) => T.sig(T.grooves.tuneNotes('grumble', t, { beatsPerBar: 4 })));
+  });
+  const stamps = [];
+  for (let i = 0; i < 3; i++) {
+    await page.locator('.t-surprise').click();
+    await page.waitForTimeout(120);
+    stamps.push(await page.evaluate(() => ({ sig: window.__t.sig(window.__t.notes('grumble')), playing: window.__monster.studio.debug().playing })));
+  }
+  const cascade = await page.evaluate(() => [...document.querySelectorAll('.step-grid .bead-face')].some((f) => f.getAnimations().length > 0));
+  await page.evaluate(() => window.__monster.studio.undo());
+  await page.waitForTimeout(100);
+  const back = await laneSig(page, 'grumble');
+  check('each wand tap stamps a different Grumble tune (and starts the band)', new Set([own, ...stamps.map((s) => s.sig)]).size === 4 && stamps.every((s) => tunes.includes(s.sig) && s.playing), stamps.map((s) => s.sig).join(' | '));
+  check('tunes pop in from left to right', cascade);
+  check("one Undo after three wand taps brings back the child's own tune", back === own, `${back} vs ${own}`);
+  await page.evaluate(() => window.__monster.studio.stop());
+}
+
+// Timing while the band plays: catch-up never repeats a note, and a moved bead's old key is never replayed.
+await freshLane(page, 'little', 'bloop');
+await setLane(page, 'bloop', [0, 2, 4, 6].map((b) => bn(2, b)));
+{
+  const res = await page.evaluate(async () => {
+    const T = window.__t;
+    const st = window.__monster.studio;
+    const bloop = T.track('bloop').id;
+    st.play();
+    const cellW = (step, col, target) => ({ step, col, target, lengthBeats: 8, beatsPerBar: 4, isDrum: false, columnCap: 1, dur: 0.9 });
+    const waitLine = async (want) => {
+      for (let i = 0; i < 4000; i++) {
+        const d = st.debug();
+        const line = Math.ceil(d.beat);
+        if (line - d.beat > 0.02 && line < d.scheduledUntil - 0.01 && want(((line % 8) + 8) % 8)) return { line, d };
+        await T.sleep(2);
+      }
+      return null;
+    };
+    // A bead added on a beat already handed out plays in this very pass, once.
+    const a = await waitLine((c) => c % 2 === 1);
+    if (!a) return null;
+    const colA = ((a.line % 8) + 8) % 8;
+    T.reset();
+    st.stepEdit(bloop, (p) => T.edits.setCellEdit(p, bloop, cellW(5, colA, 'one')), { col: colA, preview: 'tap' });
+    await T.sleep(400);
+    const added = T.trig.filter((x) => x.ch === bloop && Math.abs(x.beat - a.line) < 1e-6).map((x) => x.midi);
+    // A bead moved (dragged) on a beat already handed out: its old key plays (it was queued), the new one is not added on top.
+    // (The transport already logged the old key when it handed that beat out.)
+    const m = await waitLine((c) => c % 2 === 0);
+    const colM = ((m.line % 8) + 8) % 8;
+    const queued = T.sched.length;
+    st.stepEdit(bloop, (p) => T.edits.moveCellEdit(p, bloop, colM, 2, 6), { col: colM, preview: 'none' });
+    const injected = T.sched.length - queued;
+    await T.sleep(400);
+    const moved = T.trig.filter((x) => x.ch === bloop && Math.abs(x.beat - m.line) < 1e-6).map((x) => x.midi);
+    // A tap far ahead while playing: a soft preview on the next sixteenth line.
+    const d = st.debug();
+    const colP = [3, 5, 7, 1].map((k) => (Math.floor(d.beat) + k) % 8).find((c) => c % 2 === 1 && !T.notes('bloop').some((n) => n.beat === c));
+    const prev0 = d.lastPreview;
+    st.stepEdit(bloop, (p) => T.edits.setCellEdit(p, bloop, cellW(7, colP, 'one')), { col: colP, preview: 'tap' });
+    const pv = st.debug().lastPreview;
+    st.stop();
+    return { added, lineA: a.line, moved, injected, preview: pv !== prev0 ? pv?.beat : null };
+  });
+  const m2 = await midiOf(page, 'bloop', 2);
+  const m5 = await midiOf(page, 'bloop', 5);
+  check('catch-up: a bead added on a beat already handed out plays in this pass, once', !!res && res.added.length === 1 && res.added[0] === m5, JSON.stringify(res));
+  check("a bead moved on a beat already handed out: nothing is injected, its queued old key plays once, the new key not on top", !!res && res.injected === 0 && res.moved.length === 1 && res.moved[0] === m2, JSON.stringify(res));
+  check('a bead tapped far ahead while playing is previewed on a sixteenth line', !!res && typeof res.preview === 'number' && res.preview % 0.25 === 0, JSON.stringify(res?.preview));
+}
+
+// The wand rewriting a playing tune never plays a note twice.
+await freshLane(page, 'little', 'bloop', 'grid', 'band');
+{
+  const res = await page.evaluate(async () => {
+    const T = window.__t;
+    const st = window.__monster.studio;
+    const bloop = T.track('bloop').id;
+    const skip = () => T.grooves.tuneNotes('bloop', T.grooves.TUNES.bloop[0], { beatsPerBar: 4 });
+    st.stepEdit(bloop, (p) => T.edits.replaceLoopNotes(p, bloop, skip()), { col: 0, preview: 'none' });
+    st.stop();
+    T.reset();
+    st.play();
+    // The same tune stamped again (all new notes) just before beat 1, whose note is already queued: it plays once.
+    let once = null;
+    for (let i = 0; i < 4000 && !once; i++) {
+      const d = st.debug();
+      const next = Math.ceil(d.beat / 8 + 1e-6) * 8;
+      if (next - d.beat > 0.01 && next < d.scheduledUntil - 0.005) {
+        const queued = T.trig.filter((x) => x.ch === bloop && Math.abs(x.beat - next) < 1e-6).length;
+        st.stepEdit(bloop, (p) => T.edits.replaceLoopNotes(p, bloop, skip()), { col: 0, coalesce: `wand:${bloop}`, preview: 'none' });
+        await T.sleep(400);
+        const when = st.transport.timeAt(next);
+        once = { queued, notes: T.trig.filter((x) => x.ch === bloop && Math.abs(x.when - when) < 0.03).length };
+      } else await T.sleep(2);
+    }
+    // Then 20 wand taps at random moments.
+    T.reset();
+    let seed = 11;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 20; i++) {
+      st.gridWand(bloop);
+      await T.sleep(60 + rnd() * 340);
+    }
+    await T.sleep(300);
+    const hits = T.trig.filter((x) => x.ch === bloop).sort((a, b) => a.midi - b.midi || a.when - b.when);
+    let doubles = 0;
+    for (let i = 1; i < hits.length; i++) if (hits[i].midi === hits[i - 1].midi && Math.abs(hits[i].when - hits[i - 1].when) < 0.002) doubles++;
+    st.stop();
+    return { once, hits: hits.length, doubles };
+  });
+  check('a tune stamped again just before its first note (already queued) plays that note once', !!res.once && res.once.queued === 1 && res.once.notes === 1, JSON.stringify(res.once));
+  check('20 wand taps on a playing tune: no note ever sounds twice at once', res.hits >= 4 && res.doubles === 0, JSON.stringify(res));
+}
+
+// Names on the mini keys follow the grown-up's choice, like the keys.
+{
+  const names = {};
+  await freshLane(page, 'little', 'bloop', 'grid', 'blank', { noteNames: 'off' });
+  names.off = await page.locator('.bead-name').count();
+  await freshLane(page, 'little', 'bloop', 'grid', 'blank', { noteNames: 'solfege' });
+  names.solfege = await page.$$eval('.bead-band .bead-name', (els) => els.map((e) => e.textContent).reverse().join(' '));
+  await freshLane(page, 'maker', 'mimic');
+  names.mimic = await page.locator('.bead-name').count();
+  await page.evaluate(() => {
+    const M = window.__monster;
+    const id = window.__t.track('mimic').id;
+    M.setState({ project: { ...M.getState().project, tracks: M.getState().project.tracks.map((t) => (t.id === id ? { ...t, sampleId: 'v-test' } : t)) } });
+  });
+  await page.waitForTimeout(150);
+  names.recorded = await page.locator('.bead-name').count();
+  names.recordedLabel = await page.locator('.bead-band[data-step="0"] .bead-head').getAttribute('aria-label');
+  check('names off: no stickers on the mini keys', names.off === 0);
+  check('do re mi: the mini keys sing do re mi from the bottom', names.solfege === 'do re mi so la do re mi', names.solfege);
+  check('Mimic shows letters without a recording, and none with one (it sings at the child\'s own pitch)', names.mimic === 8 && names.recorded === 0 && names.recordedLabel === 'Play Mimic note 1', JSON.stringify(names));
+}
+
+// Keyboard: arrows move between spots (and the mini keys), Enter puts a bead or takes it away.
+await freshLane(page, 'little', 'spark');
+await page.evaluate(() => window.__monster.studio.stop());
+{
+  const kb = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const first = document.querySelector('.step-grid .bead-spot[tabindex="0"]');
+    first.focus();
+    const key = (k) => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+    key('ArrowUp');
+    await wait(30);
+    key('ArrowUp');
+    await wait(30);
+    key('ArrowRight');
+    await wait(30);
+    const at = document.activeElement;
+    key('Enter');
+    await wait(60);
+    const on = window.__t.notes('spark').map((n) => [n.beat, n.step]);
+    key('Enter');
+    await wait(60);
+    return { first: [first.dataset.step, first.dataset.col], at: [at.dataset.step, at.dataset.col], on, off: window.__t.notes('spark').length, tabbable: document.querySelectorAll('.step-grid [tabindex="0"]').length };
+  });
+  check('keyboard: arrows move between spots (one tab stop), Enter puts a bead and takes it away', kb.first.join() === '0,0' && kb.at.join() === '2,1' && JSON.stringify(kb.on) === '[[1,2]]' && kb.off === 0 && kb.tabbable === 1, JSON.stringify(kb));
+}
+
+// High contrast: the mini keys get a white ring, the pegs and the tune's line are brighter.
+await page.evaluate(() => window.__monster.actions.updateSettings({ highContrast: true }));
+await page.waitForTimeout(100);
+{
+  const hcLane = await page.evaluate(() => {
+    const key = getComputedStyle(document.querySelector('.row-key'));
+    return { ring: key.outlineStyle === 'solid' && key.outlineWidth === '2px' };
+  });
+  check('high contrast: the mini keys wear a white ring', hcLane.ring, JSON.stringify(hcLane));
+}
+await page.evaluate(() => window.__monster.actions.updateSettings({ highContrast: false }));
 
 // ── 14. Sizes: every stone ≥ 44 px, flip ≥ 38 px, no sideways scroll ────────
 const VIEWS = [
@@ -1203,6 +1630,69 @@ for (const v of VIEWS) {
     return { inside: side.top >= surface.top - 1 && side.bottom <= surface.bottom + 1, key: Math.min(...keys), scroll: document.documentElement.scrollWidth - innerWidth };
   });
   check(`${v.name}: keys face: flip and toys fit beside the keys (keys ≥ 44 wide)`, keysFit.inside && keysFit.key >= 44 && keysFit.scroll <= 0, JSON.stringify(keysFit));
+  // The bead lane: a spot's touch area is its whole beat (≥ 44 wide, its share of the gaps
+  // included) by its band (≥ 26 tall); mini keys ≥ 44 wide; beads stay inside the panel.
+  for (const [mode, monster, settings] of [
+    ['little', 'bloop', {}],
+    ['maker', 'puff', {}],
+    ['maker', 'mimic', { noteNames: 'solfege' }],
+    ['maker', 'spark', { noteNames: 'off' }],
+  ]) {
+    await freshLane(app.page, mode, monster, 'grid', 'blank', settings);
+    await app.page.evaluate((m) => {
+      const st = window.__monster.studio;
+      const id = window.__t.track(m).id;
+      for (let i = 0; i < 4; i++) st.gridWand(id);
+      st.stop();
+    }, monster);
+    await app.page.waitForTimeout(200);
+    const geo = await app.page.evaluate(() => {
+      const box = (el) => el.getBoundingClientRect();
+      const bands = [...document.querySelectorAll('.step-grid .bead-band')];
+      const spots = bands.map((b) => [...b.querySelectorAll('.bead-spot')].map(box));
+      let minW = Infinity;
+      let minH = Infinity;
+      spots.forEach((row) =>
+        row.forEach((b, c) => {
+          const left = c > 0 ? (row[c - 1].right + b.left) / 2 : b.left;
+          const right = c < row.length - 1 ? (b.right + row[c + 1].left) / 2 : b.right;
+          minW = Math.min(minW, right - left);
+          minH = Math.min(minH, b.height);
+        }),
+      );
+      const heads = [...document.querySelectorAll('.bead-head')].map(box);
+      const surface = box(document.querySelector('.surface'));
+      const grid = box(document.querySelector('.step-grid'));
+      const beads = [...document.querySelectorAll('.bead')].map(box);
+      const flip = box(document.querySelector('.surface-flip'));
+      return {
+        bands: bands.length,
+        beads: beads.length,
+        minW,
+        minH,
+        head: Math.min(...heads.map((h) => h.width)),
+        flip: Math.min(flip.width, flip.height),
+        scroll: document.documentElement.scrollWidth - innerWidth,
+        inside: grid.left >= surface.left - 1 && grid.right <= surface.right + 1 && grid.bottom <= surface.bottom + 1,
+        beadsIn: beads.every((b) => b.top >= surface.top && b.bottom <= surface.bottom + 1),
+      };
+    });
+    check(
+      `${v.name} ${mode} ${monster}: bead lane spots ≥ 44 wide × ≥ 26 tall (whole beat, whole band), mini keys ≥ 44, flip ≥ 38, beads inside the panel, no sideways scroll`,
+      geo.bands === 8 && geo.beads > 0 && geo.minW >= 44 && geo.minH >= 26 && geo.head >= 44 && geo.flip >= 38 && geo.scroll <= 0 && geo.inside && geo.beadsIn,
+      `${geo.minW.toFixed(0)}×${geo.minH.toFixed(0)}, head ${geo.head.toFixed(0)}, flip ${geo.flip.toFixed(0)}, ${geo.beads} beads, inside ${geo.inside}/${geo.beadsIn}, scroll ${geo.scroll}`,
+    );
+  }
+  // A tap anywhere in a spot (here near its top edge) lands in that band.
+  await freshLane(app.page, 'little', 'grumble');
+  await app.page.evaluate(() => window.__monster.studio.stop());
+  {
+    const b = await spotAt(app.page, 3, 6).boundingBox();
+    await app.page.mouse.click(b.x + 3, b.y + 2);
+    await app.page.waitForTimeout(80);
+    const edge = await laneNotes(app.page, 'grumble');
+    check(`${v.name}: a tap at the very edge of a spot lands in that band and beat`, JSON.stringify(edge) === '[[6,3]]', JSON.stringify(edge));
+  }
   await app.page.evaluate(() => window.__monster.studio.stop());
   await app.ctx.close();
 }
@@ -1224,6 +1714,18 @@ if (existsSync(axePath)) {
       return { open: !!document.querySelector('.grid-picker'), v: r.violations.map((v) => `${v.id}: ${v.nodes.length} (${v.nodes[0]?.target?.join(' ')})`) };
     });
     check(`axe-core ${vp.width}×${vp.height}: no violations on the whole page (grid face, '+' tray open, rail)`, axe.open && axe.v.length === 0, axe.v.join(' | '));
+    // The bead lane, with name stickers and a Puff tune (tails and the tune's line).
+    await freshLane(a.page, 'maker', 'puff', 'grid', 'band');
+    await a.page.evaluate(() => {
+      window.__monster.studio.gridWand(window.__t.track('puff').id);
+      window.__monster.studio.stop();
+    });
+    await a.page.waitForTimeout(200);
+    const beadAxe = await a.page.evaluate(async () => {
+      const r = await window.axe.run(document.body, { resultTypes: ['violations'] });
+      return { lane: document.querySelector('.step-grid')?.dataset.lane, v: r.violations.map((v) => `${v.id}: ${v.nodes.length} (${v.nodes[0]?.target?.join(' ')})`) };
+    });
+    check(`axe-core ${vp.width}×${vp.height}: no violations on the whole page with the bead lane`, beadAxe.lane === 'beads' && beadAxe.v.length === 0, beadAxe.v.join(' | '));
     await a.ctx.close();
   }
 } else {
