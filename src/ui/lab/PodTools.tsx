@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { cycleFx, cyclePreset } from '../../model/edits';
 import { FX_BUDDIES, fxStepIndex, MONSTERS, presetInfo } from '../../model/monsters';
 import type { Track } from '../../model/types';
@@ -10,14 +11,24 @@ import { Icon } from '../icons/Icon';
 // The spotlight monster's toys: a costume (= a new sound) and its effect
 // buddies. Each buddy has three friendly levels: asleep, a little, a lot.
 // Tablets show them in a toolbar along the top of the stage; phones on the left
-// of the keys.
+// of the keys, where the play surface's own buttons (`lead`, `tail`) join them.
 
-export function PodTools({ track, className = 'pod-tools' }: { track: Track; className?: string }) {
+interface PodToolsProps {
+  track: Track;
+  className?: string;
+  /** Buttons before the toys (the grid flip) and after them (the tidy magnet). */
+  lead?: ReactNode;
+  tail?: ReactNode;
+  data?: Record<`data-${string}`, string | number | boolean | undefined>;
+}
+
+export function PodTools({ track, className = 'pod-tools', lead, tail, data }: PodToolsProps) {
   const caps = useCaps();
   const info = MONSTERS[track.monster];
   const preset = presetInfo(track.monster, track.preset);
   return (
-    <div className={className} data-monster={track.monster} role="group" aria-label={`${info.name}'s sound toys`}>
+    <div className={className} data-monster={track.monster} role="group" aria-label={`${info.name}'s sound toys`} {...data}>
+      {lead}
       <button
         className="tool-btn tool-costume"
         aria-label={`Change ${info.name}'s sound. Now: ${preset.name}`}
@@ -51,6 +62,7 @@ export function PodTools({ track, className = 'pod-tools' }: { track: Track; cla
           </button>
         );
       })}
+      {tail}
     </div>
   );
 }

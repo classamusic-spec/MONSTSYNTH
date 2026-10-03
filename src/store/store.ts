@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import type { PlayMode } from '../magic/sequence';
-import { createProject, projectMeta } from '../model/project';
+import { gridColumns, hasGridFace } from '../magic/steps';
+import { activeClip, createProject, projectMeta } from '../model/project';
 import { DEFAULT_SETTINGS } from '../model/schema';
-import type { PaintBrush, Project, ProjectMeta, Settings } from '../model/types';
+import type { PaintBrush, Project, ProjectMeta, Settings, Track } from '../model/types';
 import { scheduleSave } from './persistence';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -13,6 +14,8 @@ import { scheduleSave } from './persistence';
 export type Screen = 'lab' | 'blocks' | 'paint' | 'songs' | 'learn';
 export type Overlay = null | 'parent' | 'tray' | 'magic';
 export type PaintTool = 'brush' | 'stars' | 'eraser';
+/** The Lab's play surface: the big keys, or Beat Hop's grid on their back. */
+export type LabView = 'keys' | 'grid';
 
 export interface TransportFlags {
   playing: boolean;
@@ -35,6 +38,8 @@ export interface AppState {
   songs: ProjectMeta[];
   screen: Screen;
   selectedTrackId: string;
+  /** Which face of the play surface the child flipped to (this session only, never saved). */
+  labView: LabView;
   /** Audio unlocked and monsters awake. */
   awake: boolean;
   /** Play-time limit reached: the monsters sleep until a grown-up continues. */
@@ -58,6 +63,7 @@ export const useApp = create<AppState>(() => ({
   songs: [],
   screen: 'lab',
   selectedTrackId: initialProject.tracks[0].id,
+  labView: 'keys',
   awake: false,
   resting: false,
   transport: { playing: false, recording: false, armed: false, mode: 'loop' },
@@ -69,6 +75,17 @@ export const useApp = create<AppState>(() => ({
 
 export const getState = useApp.getState;
 export const setState = useApp.setState;
+
+/** Can this monster's loop be shown as a grid (a monster with a grid face, a loop of whole beats)? */
+export function canGrid(track: Track | undefined, loopBeats: number): boolean {
+  return !!track && hasGridFace(track.monster) && gridColumns(activeClip(track), loopBeats) !== null;
+}
+
+/** The face the Lab shows now: the grid only when it was flipped to and the spotlight monster has one. */
+export function labFace(s: Pick<AppState, 'labView' | 'project' | 'selectedTrackId'>): LabView {
+  if (s.labView !== 'grid') return 'keys';
+  return canGrid(s.project.tracks.find((t) => t.id === s.selectedTrackId), s.project.loopBeats) ? 'grid' : 'keys';
+}
 
 export interface CommitOptions {
   /** false for edits that are grouped under an earlier checkpoint (e.g. notes while recording). */

@@ -3,8 +3,9 @@ import { paintingNotes, strokeToNotes } from '../src/magic/painting';
 import { songName } from '../src/magic/names';
 import { createProject, projectMeta } from '../src/model/project';
 import { migrateProject, migrateSettings, DEFAULT_SETTINGS } from '../src/model/schema';
-import { MONSTERS, nextFxLevel, nextPreset } from '../src/model/monsters';
-import { recordNote } from '../src/model/edits';
+import { gridColumnCap, MODE_CAPS, MONSTERS, nextFxLevel, nextPreset } from '../src/model/monsters';
+import { recordNote, replaceLoopNotes, setCellEdit } from '../src/model/edits';
+import { GROOVES, grooveNotes } from '../src/magic/grooves';
 import { activeClip } from '../src/model/project';
 import type { Stroke } from '../src/model/types';
 import { PAINT_ROW } from '../src/model/types';
@@ -90,6 +91,28 @@ describe('schema migration', () => {
     expect(ids[ids.length - 1]).toBe('new');
   });
 
+  it('round-trips a grid-built song bit-exactly (doubles, a held Puff note, a wand groove)', () => {
+    let p = createProject({ seed: 12, monsters: ['boom', 'puff', 'bloop'] });
+    const [boom, puff] = p.tracks;
+    p = replaceLoopNotes(p, boom.id, grooveNotes(GROOVES[9], { beatsPerBar: 4 }));
+    p = setCellEdit(p, boom.id, { step: 3, col: 5, target: 'double', lengthBeats: 8, beatsPerBar: 4, isDrum: true, columnCap: Infinity, dur: 0.5 });
+    for (const [step, col] of [
+      [2, 0],
+      [4, 2],
+      [3, 6],
+    ]) {
+      p = setCellEdit(p, puff.id, { step, col, target: 'one', lengthBeats: 8, beatsPerBar: 4, isDrum: false, columnCap: 1, dur: MONSTERS.puff.gridDur, trimPrevious: true });
+    }
+    const loaded = migrateProject(JSON.parse(JSON.stringify(p)))!;
+    for (const i of [0, 1]) {
+      const a = activeClip(p.tracks[i])!.notes;
+      const b = activeClip(loaded.tracks[i])!.notes;
+      expect(b.map((n) => n.beat)).toEqual(a.map((n) => n.beat));
+      expect(b.every((n, k) => Object.is(n.beat, a[k].beat) && n.dur === a[k].dur && n.step === a[k].step)).toBe(true);
+    }
+    expect(loaded.arrangement.rows[boom.id].every((c) => c === p.tracks[0].activeClipId)).toBe(true);
+  });
+
   it('rejects non-objects', () => {
     expect(migrateProject(null)).toBeNull();
     expect(migrateProject('song')).toBeNull();
@@ -107,6 +130,17 @@ describe('schema migration', () => {
 });
 
 describe('monster helpers', () => {
+  it('Beat Hop caps: drum rows, cell states, and notes per column', () => {
+    expect(MODE_CAPS.little.gridDrumRows).toEqual([2, 1, 0]);
+    expect(MODE_CAPS.maker.gridDrumRows).toEqual([2, 3, 1, 0]);
+    expect([MODE_CAPS.little.gridCellStates, MODE_CAPS.maker.gridCellStates]).toEqual([2, 3]);
+    expect(gridColumnCap('boom', 'little')).toBe(Infinity);
+    expect(gridColumnCap('bloop', 'little')).toBe(1);
+    expect(gridColumnCap('bloop', 'maker')).toBe(3);
+    expect(gridColumnCap('mimic', 'maker')).toBe(2);
+    expect(gridColumnCap('puff', 'maker')).toBe(1);
+  });
+
   it('cycles fx levels and presets', () => {
     expect(nextFxLevel(0)).toBe(0.4);
     expect(nextFxLevel(0.4)).toBe(0.8);

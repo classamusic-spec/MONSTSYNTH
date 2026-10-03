@@ -37,7 +37,10 @@ export type IconName =
   | 'pencil'
   | 'rainbow'
   | 'hand'
-  | 'rotate';
+  | 'rotate'
+  | 'grid'
+  | 'keys'
+  | 'magnet';
 
 const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 2.6, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
 const F = { fill: 'currentColor' } as const;
@@ -206,6 +209,30 @@ const ICONS: Record<IconName, ReactElement> = {
     <>
       <rect {...S} x="7" y="3" width="10" height="18" rx="2.5" />
       <path {...S} d="M20.5 9.5a8 8 0 0 1 0 5M3.5 9.5a8 8 0 0 0 0 5" />
+    </>
+  ),
+  // Beat Hop: 3×3 stepping stones (the middle row blinks on the beat).
+  grid: (
+    <>
+      {[4.5, 12, 19.5].map((y) =>
+        [4.5, 12, 19.5].map((x) => <rect key={`${x}-${y}`} {...F} className={y === 12 ? 'icon-beat' : undefined} x={x - 2.7} y={y - 2.7} width="5.4" height="5.4" rx="1.8" />),
+      )}
+    </>
+  ),
+  // Back to the keys: three rainbow keys.
+  keys: (
+    <>
+      <rect x="2.5" y="4" width="5.4" height="16" rx="1.8" fill="#ff4f7e" />
+      <rect x="9.3" y="4" width="5.4" height="16" rx="1.8" fill="#ffcf2e" />
+      <rect x="16.1" y="4" width="5.4" height="16" rx="1.8" fill="#2fd0e8" />
+    </>
+  ),
+  // The tidy magnet: a horseshoe with shiny tips.
+  magnet: (
+    <>
+      <path fill="none" stroke="currentColor" strokeWidth="4.6" d="M7 3.5v8.2a5 5 0 0 0 10 0V3.5" />
+      <rect x="4.7" y="2.5" width="4.6" height="3.6" rx="0.8" fill="var(--icon-tip, #fff)" />
+      <rect x="14.7" y="2.5" width="4.6" height="3.6" rx="0.8" fill="var(--icon-tip, #fff)" />
     </>
   ),
 };

@@ -50,6 +50,10 @@ export interface MonsterInfo {
   defaultFx: FxLevels;
   /** How Sound Painting turns this monster's lines into notes. */
   paintMode: 'sustain' | 'hits';
+  /** Beat Hop: notes one grid column may hold in Monster Maker (Boom: limited per drum instead). */
+  gridColumnCap: number;
+  /** Beat Hop: length of a note placed on the grid, in beats. */
+  gridDur: number;
 }
 
 const fx = (echo = 0, gloop = 0, chomper = 0, wiggle = 0): FxLevels => ({ echo, gloop, chomper, wiggle });
@@ -78,6 +82,8 @@ export const MONSTERS: Record<MonsterKind, MonsterInfo> = {
     ],
     defaultFx: fx(0, 0.35),
     paintMode: 'sustain',
+    gridColumnCap: 3,
+    gridDur: 0.9,
   },
   boom: {
     kind: 'boom',
@@ -101,6 +107,8 @@ export const MONSTERS: Record<MonsterKind, MonsterInfo> = {
     ],
     defaultFx: fx(0, 0.15),
     paintMode: 'hits',
+    gridColumnCap: Infinity,
+    gridDur: 0.5,
   },
   grumble: {
     kind: 'grumble',
@@ -124,6 +132,8 @@ export const MONSTERS: Record<MonsterKind, MonsterInfo> = {
     ],
     defaultFx: fx(0, 0),
     paintMode: 'sustain',
+    gridColumnCap: 1,
+    gridDur: 0.9,
   },
   spark: {
     kind: 'spark',
@@ -147,6 +157,8 @@ export const MONSTERS: Record<MonsterKind, MonsterInfo> = {
     ],
     defaultFx: fx(0.35, 0.3),
     paintMode: 'hits',
+    gridColumnCap: 3,
+    gridDur: 0.5,
   },
   puff: {
     kind: 'puff',
@@ -170,6 +182,8 @@ export const MONSTERS: Record<MonsterKind, MonsterInfo> = {
     ],
     defaultFx: fx(0, 0.5),
     paintMode: 'sustain',
+    gridColumnCap: 1,
+    gridDur: 1.9,
   },
   mimic: {
     kind: 'mimic',
@@ -193,6 +207,8 @@ export const MONSTERS: Record<MonsterKind, MonsterInfo> = {
     ],
     defaultFx: fx(0.2, 0.25),
     paintMode: 'sustain',
+    gridColumnCap: 2,
+    gridDur: 0.9,
   },
 };
 
@@ -250,6 +266,14 @@ export interface ModeCaps {
   /** Boom: hard snap with an on-beat magnet (see snapDrum). */
   drumSnap: DrumSnap;
   rowMuteSolo: boolean;
+  /** Beat Hop: drum rows always on the grid, top to bottom (more appear when a loop uses them). */
+  gridDrumRows: number[];
+  /** Beat Hop: a tap toggles (2: on/off) or cycles (3: one, double, off). */
+  gridCellStates: 2 | 3;
+  /** Beat Hop: melodic columns may hold chords (otherwise one note per beat). */
+  gridChords: boolean;
+  /** Beat Hop: the "+" that adds a drum row. */
+  gridAddRow: boolean;
 }
 
 export const MODE_CAPS: Record<AgeMode, ModeCaps> = {
@@ -265,6 +289,10 @@ export const MODE_CAPS: Record<AgeMode, ModeCaps> = {
     quantizeStrength: 0.9,
     drumSnap: { grid: 0.5, strongGrid: 1, strongWindow: 0.3 },
     rowMuteSolo: false,
+    gridDrumRows: [2, 1, 0],
+    gridCellStates: 2,
+    gridChords: false,
+    gridAddRow: false,
   },
   maker: {
     keys: 8,
@@ -278,6 +306,10 @@ export const MODE_CAPS: Record<AgeMode, ModeCaps> = {
     quantizeStrength: 0.75,
     drumSnap: { grid: 0.25, strongGrid: 0.5, strongWindow: 0.1 },
     rowMuteSolo: true,
+    gridDrumRows: [2, 3, 1, 0],
+    gridCellStates: 3,
+    gridChords: true,
+    gridAddRow: true,
   },
 };
 
@@ -312,6 +344,12 @@ export function nextPreset(kind: MonsterKind, presetId: string): string {
   const list = MONSTERS[kind].presets;
   const idx = list.findIndex((p) => p.id === presetId);
   return list[(idx + 1) % list.length].id;
+}
+
+/** Beat Hop: notes one grid column may hold for a monster in a mode (drums: unlimited, 4 pads per beat). */
+export function gridColumnCap(kind: MonsterKind, mode: AgeMode): number {
+  if (kind === 'boom') return MONSTERS.boom.gridColumnCap;
+  return MODE_CAPS[mode].gridChords ? MONSTERS[kind].gridColumnCap : 1;
 }
 
 /** Number of keys/pads on the play surface for a monster in a mode. */

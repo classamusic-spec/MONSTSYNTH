@@ -6,16 +6,18 @@ import { Transport } from '../audio/transport';
 import type { Voice } from '../audio/voices/base';
 import { TICK_PAD } from '../audio/voices/drums';
 import { audioBufferToWav, blobToAudioBuffer } from '../audio/wav';
+import { wandPattern } from '../magic/grooves';
 import { placeNote } from '../magic/recorder';
 import { audibleTracks, collectEvents, type PlayMode, type SeqEvent } from '../magic/sequence';
-import { gridLinesIn, isBounce, nextLine, snapDuration, wrap } from '../magic/timing';
-import { recordNote, setRecordedDuration, setTrackSample } from '../model/edits';
+import { hasGridFace } from '../magic/steps';
+import { gridLinesIn, isBounce, nextLine, nextOccurrence, snapDuration, wrap } from '../magic/timing';
+import { recordNote, replaceLoopNotes, setRecordedDuration, setTrackSample, tidyLoop } from '../model/edits';
 import { newId } from '../model/ids';
 import { MODE_CAPS, MONSTERS } from '../model/monsters';
-import { projectHasMusic, songBeats, trackHasLoop } from '../model/project';
-import type { MonsterKind, NoteEvent, Project, Settings, Track } from '../model/types';
+import { activeClip, projectHasMusic, songBeats, trackHasLoop } from '../model/project';
+import type { Clip, MonsterKind, NoteEvent, Project, Settings, Track } from '../model/types';
 import { flushSave, loadSample, saveSample } from '../store/persistence';
-import { beginGroup, commit, endGroup, getState, redo, setState, undo, useApp, type TransportFlags } from '../store/store';
+import { beginGroup, commit, endGroup, getState, labFace, redo, setState, undo, useApp, type AppState, type TransportFlags } from '../store/store';
 import { noteRequest, type Expression } from './notes';
 import { emitFrame, emitNote, emitStudioEvent, type NoteVisual } from './visualBus';
 
@@ -129,6 +131,18 @@ const ROLL_LEAD = 0.02;
 const ROLL_HANDOFF_GAP = 0.75;
 /** Stopping the band fades what it queued over this long (seconds); later queued hits are silent. */
 const STOP_FADE = 0.06;
+/**
+ * Beat Hop: the first stone tapped with nothing playing starts the loop *from
+ * that stone's beat*, so the first sound is the child's own stone, on the beat.
+ * (false: start at beat 1 and preview the stone at once instead.)
+ */
+const GRID_START_FROM_TAP = true;
+/** While the loop plays, a new stone due within this many beats needs no preview (the loop answers). */
+const PREVIEW_NEAR = 0.5;
+/** Grid previews while the loop plays wait for the next line of this grid (a sixteenth). */
+const PREVIEW_GRID = 0.25;
+/** With nothing playing, grid previews come at most this often (a swipe is not a machine gun). */
+const QUIET_PREVIEW_MS = 60;
 
 function isClick(e: Scheduled): e is ClickEvent {
   return (e as ClickEvent).click === true;
@@ -149,6 +163,19 @@ function touchLag(at?: number): number {
 
 function setTransport(patch: Partial<TransportFlags>) {
   setState({ transport: { ...getState().transport, ...patch } });
+}
+
+/** The Lab shows Beat Hop's grid (and not the keys). */
+function gridShown(s: AppState): boolean {
+  return s.screen === 'lab' && labFace(s) === 'grid';
+}
+
+/** What a loop plays, ignoring ids and order (to tell two grooves apart). */
+function patternOf(notes: readonly NoteEvent[]): string {
+  return notes
+    .map((n) => `${n.step}@${n.beat}`)
+    .sort()
+    .join(' ');
 }
 
 function trackSignature(t: Track): string {
@@ -184,6 +211,14 @@ class Studio {
   /** What the last idle frame showed; frames rest while nothing changes. */
   private idleKey = '';
   private idleSince = 0;
+  /** Beat Hop: the next stone tapped with nothing playing starts the loop (until Stop, or leaving the grid). */
+  private gridAutoStart = false;
+  /** Beat Hop: the wand's next groove per monster. */
+  private wandIndex = new Map<string, number>();
+  /** Beat Hop: the line each drum was last previewed on (`trackId:step`), so a preview never doubles. */
+  private lastPreviewLine = new Map<string, number>();
+  private lastPreview: { beat: number; when: number } | null = null;
+  private lastQuietPreview = -Infinity;
 
   get ready(): boolean {
     return !!this.engine;
@@ -230,7 +265,10 @@ class Studio {
       if (state.project !== prev.project) this.syncProject(state.project);
       if (state.settings !== prev.settings) this.syncSettings(state.settings);
       if (state.screen !== prev.screen) this.screenChanged(state.screen);
+      const grid = gridShown(state);
+      if (grid !== gridShown(prev)) this.gridFaceChanged(grid);
     });
+    this.gridAutoStart = gridShown(getState());
     ctx.onstatechange = () => {
       if (ctx.state !== 'running' && getState().awake && !document.hidden) {
         this.stop();
@@ -340,6 +378,15 @@ class Studio {
     if (!t.playing) return;
     const wantMode = screen === 'blocks' ? 'song' : 'loop';
     if (this.mode !== wantMode || screen === 'songs' || screen === 'learn') this.stop();
+  }
+
+  /**
+   * Beat Hop's grid appeared or went away. A take never continues under the
+   * grid (it ends as one undo step), and the first stone may start the loop.
+   */
+  private gridFaceChanged(shown: boolean) {
+    if (shown) this.stopRecording();
+    this.gridAutoStart = shown;
   }
 
   // ── Live performance ──────────────────────────────────────────────────────
@@ -584,6 +631,144 @@ class Studio {
     });
   }
 
+  // ── Beat Hop (the step grid) ──────────────────────────────────────────────
+  // Grid edits change the loop like any other edit; the studio makes sure the
+  // child hears them on the beat:
+  //   nothing playing, first stone  → the loop starts from that stone's beat
+  //   nothing playing after Stop     → the stone sounds at once
+  //   loop playing                   → the stone plays in this very pass, and a
+  //                                    soft preview on the next sixteenth when
+  //                                    its turn is more than half a beat away
+
+  /** Apply a grid edit to a monster's loop and make it heard. False when nothing changed. */
+  stepEdit(trackId: string, edit: (p: Project) => Project, o: { col: number; coalesce?: string; preview?: 'tap' | 'none' }): boolean {
+    const before = getState().project.tracks.find((t) => t.id === trackId);
+    if (!before) return false;
+    const was = activeClip(before)?.notes ?? [];
+    const hadLoop = trackHasLoop(before);
+    if (!commit(edit, { coalesce: o.coalesce })) return false;
+    const track = getState().project.tracks.find((t) => t.id === trackId);
+    const clip = track ? activeClip(track) : null;
+    if (!track || !clip) return true;
+    const wasIds = new Set(was.map((n) => n.id));
+    const nowIds = new Set(clip.notes.map((n) => n.id));
+    const added = clip.notes.filter((n) => !wasIds.has(n.id));
+    const removed = was.filter((n) => !nowIds.has(n.id));
+    if (!hadLoop && clip.notes.length > 0) emitStudioEvent({ type: 'loop-created', trackId });
+    this.soundEdit(track, clip, added, removed, o);
+    return true;
+  }
+
+  private soundEdit(track: Track, clip: Clip, added: NoteEvent[], removed: NoteEvent[], o: { col: number; preview?: 'tap' | 'none' }) {
+    const ctx = this.ctx;
+    const transport = this.transport;
+    const engine = this.engine;
+    if (!ctx || !transport || !engine || getState().resting) return;
+    // The stone the finger set: the earliest new note (a double's first hit).
+    const tapped = added.reduce<NoteEvent | null>((a, n) => (!a || n.beat < a.beat ? n : a), null);
+    if (!transport.playing) {
+      if (added.length > 0 && this.gridAutoStart) {
+        this.gridAutoStart = false;
+        this.startTransport('loop', GRID_START_FROM_TAP ? o.col : 0);
+        if (GRID_START_FROM_TAP || o.preview === 'none' || !tapped) return;
+      }
+      if (o.preview === 'none') return;
+      const now = performance.now();
+      if (now - this.lastQuietPreview < QUIET_PREVIEW_MS) return;
+      this.lastQuietPreview = now;
+      // Taking a stone away makes only a soft blip, so it never sounds like an add.
+      if (tapped) this.hit(track.id, tapped.step, { vel: 0.8 }, { record: false });
+      else if (removed.length > 0) this.hit(track.id, removed[0].step, { vel: 0.3 }, { record: false });
+      return;
+    }
+    if (this.mode !== 'loop' || added.length === 0) return;
+    const L = clip.lengthBeats;
+    const nowBeat = transport.beatAt(ctx.currentTime);
+    const heard = audibleTracks(getState().project).some((t) => t.id === track.id);
+    // Catch up: the transport has already handed out the next ~120 ms, so a note
+    // due inside it would be skipped for a whole loop. Schedule it once now, unless
+    // that drum is already queued for this moment (the old groove's same hit after a
+    // wand tap, a stone taken away and put back, a partly lit stone rewritten onto
+    // the beat): one hit, not two.
+    for (const n of added) {
+      const occ = nextOccurrence(n.beat, L, nowBeat);
+      if (!heard || occ >= transport.scheduledUntil - 1e-9) continue;
+      const when = transport.timeAt(occ);
+      if (track.monster === 'boom' && this.seqHitNear(track.id, n.step, when)) continue;
+      this.schedule({ absBeat: occ, channelId: track.id, trackId: track.id, monster: track.monster, note: n, source: 'clip' }, when);
+    }
+    if (!tapped || o.preview === 'none' || !heard) return;
+    if (nextOccurrence(tapped.beat, L, nowBeat) - nowBeat <= PREVIEW_NEAR) return;
+    // A soft taste of the new stone on the next sixteenth (never off the grid).
+    const line = nextLine(nowBeat + 0.05, PREVIEW_GRID);
+    // The loop already plays this drum on that line: that hit is the preview.
+    if (clip.notes.some((n) => n.step === tapped.step && Math.abs(wrap(n.beat, L) - wrap(line, L)) < 1e-6)) return;
+    const key = `${track.id}:${tapped.step}`;
+    if (this.lastPreviewLine.get(key) === line) return;
+    const when = transport.timeAt(line);
+    const drum = track.monster === 'boom';
+    // That drum is already queued for that moment (an old pattern's hit): it is the preview.
+    if (drum && this.seqHitNear(track.id, tapped.step, when)) return;
+    this.lastPreviewLine.set(key, line);
+    // Remembered like a loop hit, so a stone put on that very line next is not doubled.
+    if (drum) this.noteSeqHit(track.id, tapped.step, when);
+    const p = getState().project;
+    const vel = tapped.vel * 0.6;
+    const durSec = Math.max(0.05, tapped.dur * (60 / p.tempo));
+    engine.trigger(noteRequest(p, track.monster, track.id, tapped.step, { vel, tone: 0 }), when, durSec);
+    this.queueVisual(when, { trackId: track.id, monster: track.monster, step: tapped.step, vel, dur: durSec, source: 'live' });
+    this.lastPreview = { beat: line, when };
+  }
+
+  /** A row head on the grid: the drum (or note) sounds at once, and nothing is recorded. */
+  auditionStep(trackId: string, step: number, vel = 0.8) {
+    this.hit(trackId, step, { vel }, { record: false });
+  }
+
+  /** Waiting for the first stone to start the loop (for the Coach's Play hint). */
+  get gridWaiting(): boolean {
+    return this.gridAutoStart;
+  }
+
+  /**
+   * The wand ("Surprise"): the monster's loop becomes the next ready-made groove.
+   * A burst of taps is one undo step back to the child's own pattern. If nothing
+   * plays, the loop starts from beat 1.
+   */
+  gridWand(trackId: string) {
+    const s = getState();
+    const track = s.project.tracks.find((t) => t.id === trackId);
+    if (!track || !hasGridFace(track.monster) || s.resting) return;
+    const mode = s.settings.ageMode;
+    const o = { beatsPerBar: s.project.beatsPerBar };
+    let idx = this.wandIndex.get(trackId) ?? 0;
+    let notes = wandPattern(mode, idx, o);
+    // Every tap must change something: skip the groove the loop already plays.
+    if (patternOf(notes) === patternOf(activeClip(track)?.notes ?? [])) notes = wandPattern(mode, ++idx, o);
+    this.wandIndex.set(trackId, idx + 1);
+    this.stepEdit(trackId, (p) => replaceLoopNotes(p, trackId, notes), { col: 0, coalesce: `wand:${trackId}`, preview: 'none' });
+    if (!this.transport?.playing) {
+      this.gridAutoStart = false;
+      this.startTransport('loop', 0);
+    }
+  }
+
+  /**
+   * The magnet: every note of the monster's loop slides exactly onto the beat
+   * grid (one undo step), and the monster plays a little twinkle.
+   */
+  tidy(trackId: string): boolean {
+    this.stopRecording();
+    const s = getState();
+    const track = s.project.tracks.find((t) => t.id === trackId);
+    if (!track) return false;
+    const caps = MODE_CAPS[s.settings.ageMode];
+    const grid = track.monster === 'boom' ? caps.drumSnap.grid : caps.quantizeGrid;
+    if (!commit((p) => tidyLoop(p, trackId, grid))) return false;
+    this.preview(trackId);
+    return true;
+  }
+
   // ── Recording ─────────────────────────────────────────────────────────────
 
   private protectedIds(abs: number, loopBeats: number): Set<string> {
@@ -710,7 +895,8 @@ class Studio {
     const transport = this.transport;
     if (!ctx || !transport) return;
     const s = getState();
-    if (s.screen !== 'lab' || s.resting) return;
+    // Nothing records while the grid is showing (its stones are the way to write).
+    if (s.screen !== 'lab' || s.resting || gridShown(s)) return;
     this.session = {
       token: beginGroup('record'),
       recent: new Map(),
@@ -797,6 +983,8 @@ class Studio {
     // Mode and guards are set *before* start(): the transport schedules its first window immediately.
     this.mode = mode;
     this.skipBefore.clear();
+    // Every run counts its beats from the start again: old preview lines mean nothing now.
+    this.lastPreviewLine.clear();
     setTransport({ playing: true, mode });
     transport.start({ atTime: atTime ?? ctx.currentTime + 0.04, fromBeat, endBeat: mode === 'song' ? songBeats(p) : null });
     this.rehomeRolls();
@@ -804,6 +992,8 @@ class Studio {
 
   stop() {
     this.stopRecording();
+    // After Stop, a stone sounds at once instead of starting the band (until the grid is opened again).
+    this.gridAutoStart = false;
     const wasPlaying = !!this.transport?.playing;
     this.transport?.stop();
     this.engine?.stopSequenced(STOP_FADE);
@@ -872,8 +1062,10 @@ class Studio {
       },
     });
     const n = events.length;
-    // A soft woodblock tick on every beat of a take that began without a drum loop.
-    if (s.transport.recording && this.session?.click) {
+    // A soft woodblock tick on every beat of a take that began without a drum loop,
+    // and under Beat Hop's grid while no drum loop can be heard (stones need a beat to sit on).
+    const gridPulse = this.mode === 'loop' && gridShown(s) && !audibleTracks(p).some((t) => t.monster === 'boom' && trackHasLoop(t));
+    if ((s.transport.recording && this.session?.click) || gridPulse) {
       for (let b = Math.ceil(from - 1e-9); b < to - 1e-9; b++) {
         events.push({ absBeat: b, click: true, accent: b % p.beatsPerBar === 0 });
       }
@@ -1156,6 +1348,10 @@ class Studio {
       scheduledUntil: this.transport?.scheduledUntil ?? 0,
       rolls: this.rolls.size,
       soloRoll: this.rollTransport?.playing ?? false,
+      /** Beat Hop: the first stone will start the loop. */
+      gridAutoStart: this.gridAutoStart,
+      /** Beat Hop: the last preview played while the loop ran (its beat is always on a sixteenth). */
+      lastPreview: this.lastPreview,
     };
   }
 }

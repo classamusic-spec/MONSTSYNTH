@@ -8,6 +8,9 @@ import { SongPortrait } from './SongPortrait';
 // MY SONGS — a shelf of song pictures. No filenames, no save dialogs, nothing to
 // delete by accident (deleting lives in Parent Space).
 
+/** The "Make a beat" picture: a little Beat Hop grid (cymbal, snare, big drum × 4 beats), lit by row colour. */
+const BEAT_STONES: (string | null)[] = ['hat', 'hat', 'hat', 'hat', null, 'snare', null, 'snare', 'kick', null, 'kick', null];
+
 export function SongsScreen() {
   const songs = useApp((s) => s.songs);
   const currentId = useApp((s) => s.project.id);
@@ -41,6 +44,23 @@ export function SongsScreen() {
             <span className="starter-ribbon">Starter</span>
           </div>
           <span className="song-name">Start a band</span>
+        </button>
+        <button className="song-card song-beat" aria-label="Make a beat with Boom" onClick={() => void newSong('beat')}>
+          <div className="portrait beat-portrait">
+            <div className="portrait-sky" />
+            <div className="portrait-cluster" data-count={1}>
+              <div className="portrait-monster" data-awake="true">
+                <MonsterArt kind="boom" />
+              </div>
+            </div>
+            <span className="beat-stones" aria-hidden>
+              {BEAT_STONES.map((on, i) => (
+                <i key={i} data-on={on || undefined} />
+              ))}
+            </span>
+            <span className="starter-ribbon">Starter</span>
+          </div>
+          <span className="song-name">Make a beat</span>
         </button>
         <button className="song-card song-learn" aria-label="Learn a song with the monsters" onClick={() => setScreen('learn')}>
           <div className="portrait learn-portrait">

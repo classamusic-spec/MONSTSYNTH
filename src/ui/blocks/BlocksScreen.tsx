@@ -5,8 +5,8 @@ import { MONSTERS } from '../../model/monsters';
 import { activeClip, trackHasLoop } from '../../model/project';
 import type { MonsterKind, Project } from '../../model/types';
 import { PAINT_ROW } from '../../model/types';
-import { selectTrack, setScreen } from '../../store/actions';
-import { commit, getState, useApp } from '../../store/store';
+import { selectTrack, setLabView, setScreen } from '../../store/actions';
+import { canGrid, commit, getState, useApp } from '../../store/store';
 import { studio } from '../../studio/studio';
 import { onFrame } from '../../studio/visualBus';
 import { isReducedMotion, useCaps } from '../hooks/useCaps';
@@ -137,7 +137,14 @@ export function BlocksScreen() {
     const row = rowFor(hit.rowId);
     if (!row) return;
     if (!row.clipId) {
-      say({ text: `Record a loop for ${row.label} first!`, icon: 'record', monster: row.monster === 'paint' ? 'bloop' : row.monster });
+      // A monster with a beat grid can make its loop right here (tap its picture); others record one.
+      const track = getState().project.tracks.find((t) => t.id === row.id);
+      const grid = canGrid(track, getState().project.loopBeats);
+      say({
+        text: grid ? `Tap ${row.label} to make a beat!` : `Record a loop for ${row.label} first!`,
+        icon: grid ? 'wand' : 'record',
+        monster: row.monster === 'paint' ? 'bloop' : row.monster,
+      });
       return;
     }
     const filled = !!getState().project.arrangement.rows[hit.rowId]?.[hit.col];
@@ -216,12 +223,16 @@ export function BlocksScreen() {
                   aria-label={
                     row.clipId
                       ? `${row.label}: ${row.sleeping ? 'sleeping, tap to wake' : 'awake, tap to let it sleep'}`
-                      : `${row.label} has no loop yet. Tap to go and record one.`
+                      : track && canGrid(track, project.loopBeats)
+                        ? `${row.label} has no loop yet. Tap to make one right here.`
+                        : `${row.label} has no loop yet. Tap to go and record one.`
                   }
                   onClick={() => {
                     if (!row.clipId && track) {
                       selectTrack(track.id);
                       setScreen('lab');
+                      // Boom's empty row opens straight onto its beat grid.
+                      if (canGrid(track, project.loopBeats)) setLabView('grid');
                       return;
                     }
                     if (row.kind === 'paint') commit((p) => togglePaintSleep(p));

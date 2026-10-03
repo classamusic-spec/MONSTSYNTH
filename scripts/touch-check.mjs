@@ -1,6 +1,7 @@
 // Real touch events (no autoplay bypass): first tap unlocks audio, touch keys,
 // glissando, monster squish drag, multi-finger chord, hold-to-roll, performance
-// under CPU throttle.
+// under CPU throttle, and Beat Hop's stones (rapid multi-finger taps and a paint
+// swipe under CPU throttle).
 import { chromium } from 'playwright';
 
 const url = process.argv[2] || 'http://127.0.0.1:5173/';
@@ -159,6 +160,66 @@ await page.waitForTimeout(400);
 const end = await dbg();
 check('voice count stays bounded while looping', Math.max(...counts) <= 30, `max ${Math.max(...counts)}`);
 check('stopping silences every scheduled voice', end.voices === 0, `${end.voices} left`);
+
+// 8. Beat Hop under a 4× slower CPU: rapid two-finger stone taps and a paint swipe
+//    while the band plays. Nothing sticks, every gesture lands, the playhead moves on.
+await page.evaluate(async () => {
+  const m = window.__monster;
+  await m.actions.newSong('band');
+  m.actions.selectTrack(m.getState().project.tracks.find((t) => t.monster === 'boom').id);
+  m.actions.setLabView('grid');
+});
+await page.waitForTimeout(400);
+const stone = async (pad, col) => {
+  const b = await page.locator(`.step-grid .stone[data-pad="${pad}"][data-col="${col}"]`).boundingBox();
+  return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+};
+const boomSig = () =>
+  page.evaluate(() => {
+    const t = window.__monster.getState().project.tracks.find((x) => x.monster === 'boom');
+    return t.clips.find((c) => c.id === t.activeClipId).notes.map((n) => `${n.step}@${n.beat}`).sort().join(' ');
+  });
+await page.evaluate(() => window.__monster.studio.play());
+await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+const beat0 = (await dbg()).beat;
+const sig0 = await boomSig();
+// Two fingers at once on different stones, again and again (each tap toggles its stone).
+for (let i = 0; i < 6; i++) {
+  const a = await stone(1, i % 8);
+  const b = await stone(0, (i + 3) % 8);
+  await touch('touchStart', [{ x: a.x, y: a.y, id: 1 }, { x: b.x, y: b.y, id: 2 }]);
+  await page.waitForTimeout(30);
+  await touch('touchEnd', []);
+  await page.waitForTimeout(20);
+}
+const sigTaps = await boomSig();
+// A paint swipe along the clap row: starting on an unlit stone lights every stone it crosses
+// (the band's clap on the last "and" becomes a clap on the beat).
+const past0 = await page.evaluate(() => window.__monster.getState().past.length);
+const s0 = await stone(3, 0);
+const s7 = await stone(3, 7);
+await touch('touchStart', [{ x: s0.x, y: s0.y, id: 1 }]);
+for (let i = 1; i <= 14; i++) {
+  await touch('touchMove', [{ x: s0.x + ((s7.x - s0.x) * i) / 14, y: s0.y, id: 1 }]);
+  await page.waitForTimeout(15);
+}
+await touch('touchEnd', []);
+await page.waitForTimeout(300);
+const painted = await page.evaluate(() => {
+  const t = window.__monster.getState().project.tracks.find((x) => x.monster === 'boom');
+  return t.clips.find((c) => c.id === t.activeClipId).notes.filter((n) => n.step === 3).map((n) => n.beat).sort((a, b) => a - b);
+});
+const past1 = await page.evaluate(() => window.__monster.getState().past.length);
+const beat1 = (await dbg()).beat;
+await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+await page.evaluate(() => window.__monster.studio.stop());
+await page.waitForTimeout(500);
+const gridEnd = await dbg();
+const downLeft = await page.$$eval('.step-grid .stone[data-down="true"]', (els) => els.length);
+check('Beat Hop: rapid two-finger stone taps all land under a 4× slower CPU', sigTaps !== sig0, `${sig0.split(' ').length} → ${sigTaps.split(' ').length} hits`);
+check('Beat Hop: a paint swipe lights the whole clap row as one undo step', painted.join(',') === '0,1,2,3,4,5,6,7' && past1 - past0 === 1, `${painted.join(',')}; ${past1 - past0} step(s)`);
+check('Beat Hop: the playhead keeps moving while stones are tapped', beat1 - beat0 > 2, `${beat0.toFixed(2)} → ${beat1.toFixed(2)}`);
+check('Beat Hop: no stuck voices, notes or pressed stones afterwards', gridEnd.held === 0 && gridEnd.live === 0 && downLeft === 0, `${gridEnd.held} held, ${gridEnd.live} live, ${downLeft} pressed`);
 check('no page errors', errors.length === 0, errors.join(' | '));
 await browser.close();
 const failed = results.filter((r) => !r.ok).length;

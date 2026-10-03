@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { magicArrange } from '../../magic/arrange';
 import { setOverlay } from '../../store/actions';
-import { commit, getState, useApp } from '../../store/store';
+import { activeClip } from '../../model/project';
+import { commit, getState, labFace, useApp } from '../../store/store';
 import { studio } from '../../studio/studio';
 import { onFrame } from '../../studio/visualBus';
 import { useCaps } from '../hooks/useCaps';
@@ -10,7 +11,8 @@ import { hush, say } from './bubbles';
 
 // Big, always-in-the-same-place controls: Play, Record, Undo (+ Redo and the
 // Monster Magic panel for Monster Makers). On Monster Blocks, Record becomes the
-// magic wand that turns loops into a song.
+// magic wand that turns loops into a song; under Beat Hop's grid it becomes the
+// "Surprise" wand that stamps a ready-made groove.
 
 const R = 46;
 const C = 2 * Math.PI * R;
@@ -59,6 +61,13 @@ export function TransportRail() {
   const screen = useApp((s) => s.screen);
   const t = useApp((s) => s.transport);
   const canRedo = useApp((s) => s.future.length > 0);
+  const face = useApp(labFace);
+  const selectedId = useApp((s) => s.selectedTrackId);
+  // The wand sparkles while the grid is still empty (an invitation, like the shimmering stones).
+  const emptyGrid = useApp((s) => {
+    const t = s.project.tracks.find((x) => x.id === s.selectedTrackId);
+    return !t || (activeClip(t)?.notes.length ?? 0) === 0;
+  });
   const caps = useCaps();
   const [bump, setBump] = useState<string | null>(null);
   // "Play something!" goes as soon as the take starts (or is called off), so it
@@ -98,7 +107,25 @@ export function TransportRail() {
         <span className="t-label">{t.playing ? 'Stop' : 'Play'}</span>
       </button>
 
-      {screen === 'lab' && (
+      {screen === 'lab' && face === 'grid' && (
+        <button
+          className="t-btn t-wand t-magic t-surprise"
+          data-bump={bump === 'surprise'}
+          data-invite={emptyGrid}
+          aria-label="Surprise beat"
+          onClick={() => {
+            studio.gridWand(selectedId);
+            flash('surprise');
+          }}
+        >
+          <span className="t-face">
+            <Icon name="wand" />
+          </span>
+          <span className="t-label">Surprise</span>
+        </button>
+      )}
+
+      {screen === 'lab' && face === 'keys' && (
         <button
           className="t-btn t-rec"
           data-state={recState}

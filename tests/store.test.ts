@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/store/persistence', () => ({ scheduleSave: () => {} }));
 
-import { cycleFx, recordNote, setTempo } from '../src/model/edits';
-import { createProject } from '../src/model/project';
+import { GROOVES, grooveNotes } from '../src/magic/grooves';
+import type { CellWrite } from '../src/magic/steps';
+import { cycleFx, recordNote, replaceLoopNotes, setCellEdit, setTempo, tidyLoop } from '../src/model/edits';
+import { activeClip, createProject } from '../src/model/project';
 import type { NoteEvent, Project } from '../src/model/types';
-import { beginGroup, commit, endGroup, getState, redo, setProject, undo } from '../src/store/store';
+import { beginGroup, commit, endGroup, getState, labFace, redo, setProject, setState, undo } from '../src/store/store';
 
 const note = (id: string, beat: number): NoteEvent => ({ id, beat, step: 2, dur: 0.5, vel: 0.8, tone: 0 });
 const opts = { grid: 0.5, isDrum: false, protectedIds: new Set<string>() };
@@ -85,5 +87,51 @@ describe('coalescing', () => {
   it('ignores edits that change nothing', () => {
     expect(commit((p) => setTempo(p, 100))).toBe(false);
     expect(getState().past).toHaveLength(0);
+  });
+});
+
+describe('Beat Hop history', () => {
+  const boom = () => getState().project.tracks.find((t) => t.monster === 'boom')!.id;
+  const boomNotes = () => activeClip(getState().project.tracks.find((t) => t.monster === 'boom')!)?.notes ?? [];
+  const cell = (step: number, col: number): CellWrite => ({ step, col, target: 'one', lengthBeats: 8, beatsPerBar: 4, isDrum: true, columnCap: Infinity, dur: 0.5 });
+
+  it('a swipe (one coalesce key) is one undo step; separate taps are separate steps', () => {
+    for (let c = 0; c < 8; c++) commit((p) => setCellEdit(p, boom(), cell(2, c)), { coalesce: 'grid-1-100' });
+    expect(boomNotes()).toHaveLength(8);
+    expect(getState().past).toHaveLength(1);
+    undo();
+    expect(boomNotes()).toHaveLength(0);
+    commit((p) => setCellEdit(p, boom(), cell(0, 0)), { coalesce: 'grid-1-200' });
+    commit((p) => setCellEdit(p, boom(), cell(0, 4)), { coalesce: 'grid-1-300' });
+    expect(getState().past).toHaveLength(2);
+  });
+
+  it('a burst of wand taps is one step back to the child\'s own beat', () => {
+    commit((p) => setCellEdit(p, boom(), cell(0, 2)));
+    const own = boomNotes();
+    for (const g of GROOVES.slice(0, 3)) commit((p) => replaceLoopNotes(p, boom(), grooveNotes(g, { beatsPerBar: 4 })), { coalesce: `wand:${boom()}` });
+    expect(getState().past).toHaveLength(2);
+    undo();
+    expect(boomNotes()).toEqual(own);
+  });
+
+  it('tidying is one step, and tidying a tidy loop records nothing', () => {
+    const t = getState().project.tracks[0].id;
+    commit((p) => recordNote(p, t, note('a', 0.96), opts));
+    commit((p) => tidyLoop(p, t, 0.5));
+    expect(getState().past).toHaveLength(2);
+    expect(commit((p) => tidyLoop(p, t, 0.5))).toBe(false);
+    undo();
+    expect(activeClip(getState().project.tracks[0])!.notes[0].beat).toBe(0.96);
+  });
+
+  it('shows the grid face only for a monster that has one', () => {
+    const s = getState();
+    setState({ labView: 'grid', selectedTrackId: boom() });
+    expect(labFace(getState())).toBe('grid');
+    setState({ selectedTrackId: s.project.tracks[0].id });
+    expect(labFace(getState())).toBe('keys');
+    setState({ labView: 'keys', selectedTrackId: boom() });
+    expect(labFace(getState())).toBe('keys');
   });
 });

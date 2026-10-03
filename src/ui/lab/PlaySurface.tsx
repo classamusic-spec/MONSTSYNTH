@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { DRUM_PADS, MONSTERS, surfaceSize } from '../../model/monsters';
 import type { Track } from '../../model/types';
-import { useApp } from '../../store/store';
+import { getState, useApp } from '../../store/store';
 import { studio } from '../../studio/studio';
-import { onNote } from '../../studio/visualBus';
+import { onFrame, onNote } from '../../studio/visualBus';
 import { glow } from '../common/glow';
 import { isReducedMotion } from '../hooks/useCaps';
 import { useKeyNames } from '../hooks/useKeyNames';
 import { DRUM_COLORS, DrumIcon, KeyGlyph, KeyName } from './glyphs';
 import { getSize } from './expression';
-import { PodTools } from './PodTools';
+import { SurfaceSide } from './SurfaceSide';
 import { VoiceButton } from './VoiceButton';
 
 // The eight big keys (or drum pads) for the monster in the spotlight.
@@ -49,6 +49,19 @@ function burst(el: HTMLElement, x: number, y: number) {
   setTimeout(() => b.remove(), BURST_MS);
 }
 
+/**
+ * The beat you can see: the key panel breathes with every beat the band plays,
+ * a little more on each bar's first beat. A soft light and a tiny lift
+ * (compositor-only properties); none with reduced motion.
+ */
+function pulse(surface: HTMLElement, beat: number) {
+  const light = surface.querySelector<HTMLElement>('.beat-light');
+  if (!light || typeof light.animate !== 'function') return;
+  const bar = beat % getState().project.beatsPerBar === 0;
+  light.animate([{ opacity: 0 }, { opacity: bar ? 1 : 0.55 }, { opacity: 0 }], { duration: bar ? 260 : 180, easing: 'ease-out' });
+  if (bar) surface.querySelector('.keys')?.animate([{ translate: '0 0' }, { translate: '0 -2px' }, { translate: '0 0' }], { duration: 200, easing: 'ease-out' });
+}
+
 interface Finger {
   key: number;
   liveId: number;
@@ -74,6 +87,7 @@ export function PlaySurface({ track }: { track: Track }) {
     });
   }, [names, info.name]);
   const keysRef = useRef<HTMLDivElement>(null);
+  const surfaceRef = useRef<HTMLDivElement>(null);
   const keyEls = useRef<(HTMLDivElement | null)[]>([]);
   const fingers = useRef(new Map<number, Finger>());
   const rect = useRef<DOMRect | null>(null);
@@ -149,9 +163,20 @@ export function PlaySurface({ track }: { track: Track }) {
     [track.id],
   );
 
+  useEffect(() => {
+    let last = -1;
+    return onFrame((p) => {
+      const beat = p.playing && p.beat >= 0 ? Math.floor(p.beat) : -1;
+      if (beat === last) return;
+      last = beat;
+      if (beat >= 0 && surfaceRef.current && !isReducedMotion()) pulse(surfaceRef.current, beat);
+    });
+  }, []);
+
   return (
-    <div className="surface" data-monster={track.monster}>
-      <PodTools track={track} className="pod-tools surface-tools" />
+    <div ref={surfaceRef} className="surface" data-monster={track.monster} data-view="keys">
+      <span className="beat-light" aria-hidden />
+      <SurfaceSide track={track} face="keys" />
       {track.monster === 'mimic' && <VoiceButton track={track} />}
       <div
         ref={keysRef}

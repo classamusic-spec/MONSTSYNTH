@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { processSamples } from '../src/audio/mic';
-import { addMonster, addStroke, clearLoop, cycleFx, recordNote, removeMonster, setRecordedDuration } from '../src/model/edits';
+import { GROOVES, grooveNotes } from '../src/magic/grooves';
+import type { CellWrite } from '../src/magic/steps';
+import {
+  addMonster,
+  addStroke,
+  clearLoop,
+  cycleFx,
+  editActiveClip,
+  recordNote,
+  removeMonster,
+  replaceLoopNotes,
+  setCellEdit,
+  setRecordedDuration,
+  tidyLoop,
+} from '../src/model/edits';
 import { activeClip, createProject } from '../src/model/project';
 import { migrateProject } from '../src/model/schema';
 import type { NoteEvent, Stroke } from '../src/model/types';
@@ -60,6 +74,89 @@ describe('recording into a project', () => {
       levels.push(p.tracks[0].fx.echo);
     }
     expect(levels).toEqual([0.4, 0.8, 0]);
+  });
+});
+
+describe('Beat Hop edits', () => {
+  const kick = (col: number, target: CellWrite['target'] = 'one'): CellWrite => ({
+    step: 0,
+    col,
+    target,
+    lengthBeats: 8,
+    beatsPerBar: 4,
+    isDrum: true,
+    columnCap: Infinity,
+    dur: 0.5,
+  });
+  const boomOf = (p: ReturnType<typeof createProject>) => p.tracks.find((t) => t.monster === 'boom')!;
+
+  it('the first stone creates the loop and fills the empty Blocks row', () => {
+    const p = createProject({ seed: 21 });
+    const id = boomOf(p).id;
+    const next = setCellEdit(p, id, kick(0));
+    const boom = boomOf(next);
+    const clip = activeClip(boom)!;
+    expect(boom.activeClipId).toBe(clip.id);
+    expect(clip.notes.map((n) => [n.beat, n.step])).toEqual([[0, 0]]);
+    expect(next.arrangement.rows[id].every((c) => c === clip.id)).toBe(true);
+  });
+
+  it('never refills a row the child emptied on purpose', () => {
+    const p0 = createProject({ seed: 22 });
+    const id = boomOf(p0).id;
+    let p = setCellEdit(p0, id, kick(0));
+    p = { ...p, arrangement: { ...p.arrangement, rows: { ...p.arrangement.rows, [id]: new Array(8).fill(null) } } };
+    p = setCellEdit(p, id, kick(2));
+    expect(p.arrangement.rows[id].every((c) => c === null)).toBe(true);
+  });
+
+  it('wakes a sleeping monster and joins it to the solo group', () => {
+    let p = createProject({ seed: 23 });
+    const id = boomOf(p).id;
+    p = { ...p, tracks: p.tracks.map((t) => (t.id === id ? { ...t, sleeping: true } : t.monster === 'bloop' ? { ...t, solo: true } : t)) };
+    p = setCellEdit(p, id, kick(4));
+    expect(boomOf(p).sleeping).toBe(false);
+    expect(boomOf(p).solo).toBe(true);
+  });
+
+  it('an edit that changes nothing returns the same project', () => {
+    const p0 = createProject({ seed: 24 });
+    const id = boomOf(p0).id;
+    const p = setCellEdit(p0, id, kick(1));
+    expect(setCellEdit(p, id, kick(1))).toBe(p);
+    expect(setCellEdit(p, id, kick(5, 'off'))).toBe(p);
+    expect(editActiveClip(p, id, (c) => c)).toBe(p);
+    // Nothing is created for a no-op on a monster with no loop yet.
+    const fresh = createProject({ seed: 25 });
+    expect(setCellEdit(fresh, boomOf(fresh).id, kick(3, 'off'))).toBe(fresh);
+    expect(editActiveClip(fresh, 'nobody', (c) => ({ ...c }))).toBe(fresh);
+  });
+
+  it('a wand groove replaces the loop', () => {
+    const p0 = createProject({ seed: 26 });
+    const id = boomOf(p0).id;
+    let p = setCellEdit(p0, id, kick(3));
+    const groove = grooveNotes(GROOVES[1], { beatsPerBar: 4 });
+    p = replaceLoopNotes(p, id, groove);
+    expect(activeClip(boomOf(p))!.notes).toEqual(groove);
+    expect(boomOf(p).clips).toHaveLength(1);
+  });
+
+  it('tidies only the active loop of that monster, and is a no-op when tidy', () => {
+    let p = createProject({ seed: 27 });
+    const bloop = p.tracks[0].id;
+    p = recordNote(p, bloop, note('a', 0.97), opts);
+    p = recordNote(p, bloop, note('b', 7.9, 4), opts);
+    const before = p;
+    const t = tidyLoop(p, bloop, 0.5);
+    expect(activeClip(t.tracks[0])!.notes.map((n) => [n.id, n.beat])).toEqual([
+      ['a', 1],
+      ['b', 0],
+    ]);
+    expect(t.tracks.slice(1)).toEqual(before.tracks.slice(1));
+    expect(t.arrangement).toBe(before.arrangement);
+    expect(tidyLoop(t, bloop, 0.5)).toBe(t);
+    expect(tidyLoop(t, boomOf(t).id, 0.5)).toBe(t);
   });
 });
 

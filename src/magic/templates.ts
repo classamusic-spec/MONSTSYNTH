@@ -2,6 +2,7 @@ import { newId } from '../model/ids';
 import { createClip, createProject } from '../model/project';
 import type { MonsterKind, NoteEvent, Project } from '../model/types';
 import { magicArrange } from './arrange';
+import { GROOVES, grooveNotes } from './grooves';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Starter songs. "Monster Band" gives very young children a finished groove to
@@ -12,13 +13,8 @@ type N = [beat: number, step: number, dur?: number, vel?: number];
 
 const n = ([beat, step, dur = 0.5, vel = 0.85]: N): NoteEvent => ({ id: newId('n'), beat, step, dur, vel, tone: 0 });
 
-const BAND: Partial<Record<MonsterKind, N[]>> = {
-  boom: [
-    [0, 0], [1.5, 0, 0.5, 0.7], [2, 0], [4, 0], [5.5, 0, 0.5, 0.7], [6, 0],
-    [1, 1], [3, 1], [5, 1], [7, 1],
-    [0.5, 2, 0.5, 0.55], [1.5, 2, 0.5, 0.5], [2.5, 2, 0.5, 0.55], [3.5, 2, 0.5, 0.5],
-    [4.5, 2, 0.5, 0.55], [5.5, 2, 0.5, 0.5], [6.5, 2, 0.5, 0.55], [7.5, 3, 0.5, 0.6],
-  ],
+// Boom plays the wand's first groove ("stomp"), so there is one source of beats.
+const BAND: Partial<Record<Exclude<MonsterKind, 'boom'>, N[]>> = {
   grumble: [
     [0, 0, 1], [1.5, 0, 0.5, 0.7], [2, 3, 1], [3.5, 2, 0.5, 0.7],
     [4, 4, 1], [5.5, 4, 0.5, 0.7], [6, 3, 1], [7, 2, 1],
@@ -36,10 +32,10 @@ const BAND: Partial<Record<MonsterKind, N[]>> = {
 export function monsterBandProject(seed = Math.floor(Math.random() * 1e9)): Project {
   const project = createProject({ seed });
   project.tracks = project.tracks.map((t) => {
-    const pattern = BAND[t.monster];
-    if (!pattern) return t;
+    const notes = t.monster === 'boom' ? grooveNotes(GROOVES[0], { beatsPerBar: project.beatsPerBar }) : BAND[t.monster]?.map(n).sort((a, b) => a.beat - b.beat);
+    if (!notes) return t;
     const clip = createClip(project.loopBeats);
-    clip.notes = pattern.map(n).sort((a, b) => a.beat - b.beat);
+    clip.notes = notes;
     return { ...t, clips: [clip], activeClipId: clip.id };
   });
   project.arrangement = magicArrange(project, 0);

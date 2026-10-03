@@ -16,7 +16,7 @@ import {
   saveSettings,
 } from './persistence';
 import { idbDelete, idbKeys, requestPersistentStorage } from './idb';
-import { commit, getState, setProject, setState, type Overlay, type PaintTool, type Screen } from './store';
+import { canGrid, commit, getState, labFace, setProject, setState, type LabView, type Overlay, type PaintTool, type Screen } from './store';
 import type { PaintBrush } from '../model/types';
 
 // App-level actions: booting, switching songs, settings, navigation.
@@ -83,7 +83,18 @@ export function setScreen(screen: Screen) {
 }
 
 export function selectTrack(trackId: string) {
-  if (getState().selectedTrackId !== trackId) setState({ selectedTrackId: trackId });
+  const s = getState();
+  if (s.selectedTrackId === trackId) return;
+  // The grid stays flipped only from one grid face to another; a monster without
+  // one (or a grid left behind while the keys showed) comes up on its keys.
+  const track = s.project.tracks.find((t) => t.id === trackId);
+  const keepGrid = labFace(s) === 'grid' && canGrid(track, s.project.loopBeats);
+  setState(s.labView === 'grid' && !keepGrid ? { selectedTrackId: trackId, labView: 'keys' } : { selectedTrackId: trackId });
+}
+
+/** Flip the Lab's play surface between the keys and Beat Hop's grid. */
+export function setLabView(labView: LabView) {
+  if (getState().labView !== labView) setState({ labView });
 }
 
 export function setOverlay(overlay: Overlay) {
@@ -102,7 +113,7 @@ async function switchTo(project: Project) {
   await flushSave();
   setProject(project);
   updateSettings({ lastProjectId: project.id });
-  setState({ screen: 'lab', overlay: null, selectedTrackId: project.tracks[0].id });
+  setState({ screen: 'lab', overlay: null, selectedTrackId: project.tracks[0].id, labView: 'keys' });
 }
 
 export async function openSong(id: string) {
@@ -114,10 +125,13 @@ export async function openSong(id: string) {
   if (p) await switchTo(p);
 }
 
-export async function newSong(kind: 'blank' | 'band' = 'blank') {
+/** A new song: blank, the Monster Band, or "Make a beat" (opens straight onto Boom's grid). */
+export async function newSong(kind: 'blank' | 'band' | 'beat' = 'blank') {
   const p = kind === 'band' ? monsterBandProject() : createProject();
   await saveProjectNow(p);
   await switchTo(p);
+  const boom = p.tracks.find((t) => t.monster === 'boom');
+  if (kind === 'beat' && boom) setState({ selectedTrackId: boom.id, labView: 'grid' });
 }
 
 /** A learned song becomes a real song: saved, opened, shown in Monster Blocks. */

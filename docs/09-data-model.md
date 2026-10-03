@@ -45,6 +45,10 @@ NoteEvent {
 Stroke { id; brush: MonsterKind | 'rainbow'; kind: 'line' | 'stars'; points: number[] /* x0,y0,x1,y1… 0..1 */; weight: 0..1 }
 ```
 
+### Beat Hop is a view, not data
+
+The step grid (Beat Hop) stores nothing of its own: its stones are ordinary `NoteEvent`s in the spotlight monster's **active clip**, the same clip loop mode plays and Monster Blocks fills its row from. A stone on beat 3 is `{ beat: 2, step: <pad>, dur: 0.5, vel: stepVelocity(…), tone: 0 }`; a double adds `beat: 2.5`. So there is **no schema change**: `PROJECT_SCHEMA_VERSION` stays 1, grid beats are exact binary fractions that round-trip bit-exactly (the sanitiser only wraps out-of-range beats), and undo, autosave, Blocks, export and Learn songs need nothing new. The grid is derived in render (`projectGrid`); which face the Lab shows (`labView: 'keys' | 'grid'`) is transient app state, never saved (it survives screen changes; opening a song shows the keys, *Make a beat* shows Boom's grid). Edits go through `editActiveClip` (`src/model/edits.ts`), which `recordNote` uses too: it creates the clip and `activeClipId` when needed, wakes a sleeping monster (or joins it to a solo group), fills an empty Blocks row on the loop's first notes (never one the child emptied), and returns the same project when nothing changed. A kept Learn song has one clip per phrase; the grid edits only the active one.
+
 ### Why notes store scale steps
 
 Pitches are resolved at play time from `(step, monster register, key, scale)`. A child's loop therefore survives any change of mood or key and can never become out of tune; the same loop can be played by a different monster later (Build-a-Monster) without conversion.
@@ -108,4 +112,4 @@ To add v2: bump `PROJECT_SCHEMA_VERSION`, add `PROJECT_MIGRATIONS[1]`, extend `s
 
 ## Undo history
 
-The store keeps up to 80 previous project snapshots (immutable data shares unchanged structure). Consecutive slider or swipe edits coalesce into one step (1.5 s window, same key); a recording pass is one step. History is per session and per song (opening another song starts fresh).
+The store keeps up to 80 previous project snapshots (immutable data shares unchanged structure). Consecutive slider or swipe edits coalesce into one step (1.5 s window, same key): a Beat Hop gesture (`grid-<pointer>-<time>`) and a burst of wand taps (`wand:<trackId>`) are one step each; a recording pass is one step; tidying is one step. History is per session and per song (opening another song starts fresh).

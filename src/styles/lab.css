@@ -407,9 +407,44 @@
   }
 }
 
+/* The surface's side column (both faces): on phones it is the toys' column,
+   with the flip button as a pill on top and the tidy magnet after the toys.
+   Little Monsters' single column becomes two when the flip or the magnet
+   joins it on the keys (four rows would not fit a phone's keys). */
+@media (max-height: 559px) {
+  .surface-side[data-wide='true'] {
+    grid-template-columns: repeat(2, var(--tool));
+  }
+}
+
+.surface-side > .surface-flip {
+  grid-column: 1 / -1;
+  aspect-ratio: auto;
+  height: var(--tool);
+  border-radius: 999px;
+}
+
+/* Tall screens keep the toys in the stage toolbar: the side column holds only
+   the flip and the magnet (and takes no room at all when neither is needed). */
 @media (min-height: 560px) {
-  .surface > .surface-tools {
+  .surface > .surface-side {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--gap);
+    padding-left: 0;
+  }
+  .surface-side > .tool-btn:not(.surface-flip, .surface-tidy) {
     display: none;
+  }
+  .surface-side[data-buttons='0'] {
+    display: none;
+  }
+  .surface-side > .surface-flip,
+  .surface-side > .surface-tidy {
+    width: clamp(52px, 7.6vmin, 64px);
+    height: auto;
+    aspect-ratio: 1;
   }
 }
 
@@ -523,6 +558,29 @@
 }
 
 /* ── Play surface ─────────────────────────────────────────────────────────── */
+
+/* Beat Hop's grid needs more height than the keys: the stage gives some up
+   (the band still dances in it). Five or more drum rows take a little more. */
+.lab[data-view='grid'] {
+  grid-template-rows: minmax(96px, 0.55fr) minmax(0, 1fr);
+}
+
+@media (max-height: 559px) {
+  .lab[data-view='grid']:has(.step-grid[data-rows='5'], .step-grid[data-rows='6'], .step-grid[data-rows='7'], .step-grid[data-rows='8']) {
+    grid-template-rows: 96px minmax(0, 1fr);
+  }
+}
+
+/* The beat you can see: a soft light that breathes on every beat (PlaySurface). */
+.beat-light {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(110% 80% at 50% 0%, rgba(255, 236, 170, 0.16), rgba(255, 236, 170, 0) 65%);
+  box-shadow: inset 0 0 0 2px rgba(255, 236, 170, 0.28);
+}
 
 .surface {
   position: relative;
@@ -775,5 +833,12 @@
 @media (orientation: portrait) {
   .lab {
     grid-template-rows: minmax(0, 1fr) minmax(0, 0.8fr);
+  }
+}
+
+/* Tall screens: the grid takes a little more than half. */
+@media (min-height: 560px) {
+  .lab[data-view='grid'] {
+    grid-template-rows: minmax(0, 0.75fr) minmax(0, 1fr);
   }
 }

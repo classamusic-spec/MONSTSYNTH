@@ -1,0 +1,693 @@
+/* ── Beat Hop: the back of the keys ──────────────────────────────────────────
+   The keys folded into stepping stones: the same panel, the same key colours,
+   gradient and lip. A row per drum (its picture on its pad colour at the
+   head), a column per beat, a wider gap between the two bars, and a ruler on
+   top that matches the dots around Play. Loaded after lab.css and keys.css. */
+
+.surface-grid {
+  /* The grid face is a .surface too; its side column and grid sit in a row. */
+  align-items: stretch;
+}
+
+.step-grid {
+  --head: clamp(46px, 9.5vmin, 80px);
+  --ruler: clamp(22px, 4.4vmin, 34px);
+  --cg: clamp(3px, 0.9vmin, 9px);
+  --rg: clamp(3px, 0.9vmin, 9px);
+  --bar-gap: clamp(4px, 1.4vmin, 14px);
+  --add-h: 0px;
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: var(--ruler) minmax(0, 1fr) var(--add-h);
+  row-gap: var(--rg);
+  touch-action: none;
+  /* The hopper may lean a little out of the ruler; nothing else spills. */
+  overflow: visible;
+}
+
+.grid-rows {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: repeat(var(--rows), minmax(0, 1fr));
+  row-gap: var(--rg);
+}
+
+.grid-ruler,
+.drum-row {
+  display: grid;
+  grid-template-columns: var(--tpl);
+  column-gap: var(--cg);
+  min-height: 0;
+}
+
+/* ── The ruler ──────────────────────────────────────────────────────────── */
+
+.ruler-slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  color: var(--ink-3);
+}
+
+.ruler-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(212, 215, 255, 0.4);
+  transition:
+    transform 120ms var(--ease-pop),
+    background 120ms;
+}
+
+.ruler-slot[data-strong='true'] .ruler-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.ruler-star {
+  width: clamp(11px, 2.6vmin, 16px);
+  height: auto;
+  fill: var(--moon);
+  filter: drop-shadow(0 0 3px rgba(255, 224, 138, 0.45));
+  transition: transform 120ms var(--ease-pop);
+}
+
+.ruler-num {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink-3);
+}
+
+.ruler-slot[data-now='true'] .ruler-dot,
+.ruler-slot[data-now='true'] .ruler-star {
+  transform: scale(1.6);
+  background: #fff;
+}
+
+.ruler-slot[data-now='true'] .ruler-num {
+  color: #fff;
+}
+
+/* The hopper: a mini copy of the monster that hops from dot to dot on the beat. */
+.hopper {
+  --hop: calc(var(--ruler) + 6px);
+  position: absolute;
+  left: 0;
+  top: calc((var(--ruler) - var(--hop)) / 2 - 2px);
+  width: var(--hop);
+  height: var(--hop);
+  z-index: 4;
+  pointer-events: none;
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 2px 2px rgba(4, 5, 30, 0.45));
+}
+
+.hopper > .monster-svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Row heads: the drum's picture on its pad colour ─────────────────────── */
+
+.drum-head {
+  position: relative;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+
+.row-pad {
+  width: 100%;
+  height: 100%;
+  max-height: 96px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-s);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--k) 78%, white) 0%, var(--k) 45%, color-mix(in srgb, var(--k) 85%, black) 100%);
+  box-shadow:
+    0 3px 0 color-mix(in srgb, var(--k) 55%, black),
+    inset 0 2px 0 rgba(255, 255, 255, 0.4);
+}
+
+.row-pad > .glyph {
+  width: 64%;
+  max-width: 52px;
+  height: auto;
+  filter: drop-shadow(0 2px 0 color-mix(in srgb, var(--k) 50%, black));
+}
+
+/* ── Stones ─────────────────────────────────────────────────────────────── */
+
+.stone {
+  --in: calc((1 - (0.62 + var(--v, 1) * 0.38)) * 50%);
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--radius-s);
+  outline-offset: 2px;
+}
+
+/* A dark socket with the drum's silhouette. Beats 1 and 3 of each bar are a
+   touch lighter, so the bar's shape shows without numbers. */
+.stone-socket {
+  position: absolute;
+  inset: 0 0 3px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--k) 14%, var(--sky-0));
+  box-shadow:
+    inset 0 3px 7px rgba(3, 4, 26, 0.55),
+    inset 0 0 0 1.5px color-mix(in srgb, var(--k) 26%, transparent);
+  transition:
+    translate 70ms var(--ease-out),
+    filter 120ms;
+}
+
+.stone[data-strong='true'] .stone-socket {
+  background: color-mix(in srgb, var(--k) 20%, #151a5a);
+}
+
+.stone-socket > .glyph {
+  width: 46%;
+  max-width: 46px;
+  height: auto;
+  opacity: 0.25;
+}
+
+/* Lit stones (and partly lit ones) live on a face that pops on the beat. */
+.stone-face {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.stone-lit {
+  position: absolute;
+  top: var(--in);
+  left: var(--in);
+  right: var(--in);
+  bottom: calc(var(--in) + 4px);
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-s);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--k) 78%, white) 0%, var(--k) 40%, color-mix(in srgb, var(--k) 88%, black) 100%);
+  box-shadow:
+    0 4px 0 color-mix(in srgb, var(--k) 55%, black),
+    0 8px 14px rgba(4, 5, 30, 0.45),
+    inset 0 2px 0 rgba(255, 255, 255, 0.5);
+  transform: scale(0.2);
+  opacity: 0;
+  transition:
+    transform 170ms var(--ease-pop),
+    opacity 110ms linear,
+    translate 70ms var(--ease-out),
+    box-shadow 70ms var(--ease-out);
+}
+
+.stone[data-state='one'] .stone-lit,
+.stone[data-state='double'] .stone-lit {
+  transform: none;
+  opacity: 1;
+}
+
+.stone-lit > .glyph {
+  width: 54%;
+  max-width: 50px;
+  height: auto;
+  opacity: 0.95;
+  filter: drop-shadow(0 2px 0 color-mix(in srgb, var(--k) 50%, black));
+}
+
+/* One pip for a hit, two for a double (tss-tss), like the effect buddies. */
+.stone-pips {
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  translate: -50% 0;
+  display: flex;
+  gap: 4px;
+}
+
+.stone-pips > i {
+  width: clamp(5px, 1.3vmin, 8px);
+  height: clamp(5px, 1.3vmin, 8px);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Partly lit: small stones exactly where the hits are inside the beat (an
+   "and", sixteenths, a triplet). A tap makes it a whole stone. */
+.stone-subs > i {
+  position: absolute;
+  left: calc(12.5% + var(--s) * 25%);
+  top: 46%;
+  width: clamp(10px, 34%, 22px);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--k) 60%, white), var(--k) 60%, color-mix(in srgb, var(--k) 80%, black));
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.9),
+    0 3px 6px rgba(4, 5, 30, 0.5);
+}
+
+/* Pressed: the stone sinks (the key's lip collapses). */
+.stone[data-down='true'] .stone-lit {
+  translate: 0 4px;
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--k) 55%, black),
+    0 3px 6px rgba(4, 5, 30, 0.4),
+    inset 0 2px 0 rgba(255, 255, 255, 0.5);
+}
+
+.stone[data-down='true'] .stone-socket {
+  translate: 0 4px;
+  filter: brightness(1.35);
+}
+
+.stone[data-glow='true'] .stone-lit,
+.stone[data-glow='true'] .stone-subs > i {
+  filter: brightness(1.3);
+}
+
+/* A full beat (or loop) says "no": a wobble, and in reduced motion a red edge. */
+.stone[data-full='true'] .stone-socket {
+  box-shadow:
+    inset 0 3px 7px rgba(3, 4, 26, 0.55),
+    inset 0 0 0 3px var(--rec);
+}
+
+/* The pop ring when a stone sounds, and the poof when one is taken away. */
+.stone-ring,
+.stone-poof {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  width: 70%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.stone-ring {
+  border: 3px solid color-mix(in srgb, var(--k) 40%, white);
+  animation: stone-ring 420ms var(--ease-out) forwards;
+}
+
+.stone-poof {
+  border: 3px dashed rgba(255, 255, 255, 0.7);
+  animation: stone-poof 380ms var(--ease-out) forwards;
+}
+
+@keyframes stone-ring {
+  from {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+@keyframes stone-poof {
+  from {
+    transform: scale(0.9) rotate(0deg);
+    opacity: 0.8;
+  }
+  to {
+    transform: scale(0.2) rotate(90deg);
+    opacity: 0;
+  }
+}
+
+/* An empty grid invites: the big drum's bar-start stones shimmer. */
+.step-grid[data-empty='true'] .stone[data-invite='true'] .stone-socket {
+  animation: stone-invite 2.2s ease-in-out infinite;
+}
+
+@keyframes stone-invite {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 3px 7px rgba(3, 4, 26, 0.55),
+      inset 0 0 0 1.5px color-mix(in srgb, var(--k) 26%, transparent),
+      0 0 0 0 color-mix(in srgb, var(--k) 0%, transparent);
+  }
+  50% {
+    box-shadow:
+      inset 0 3px 7px rgba(3, 4, 26, 0.3),
+      inset 0 0 0 2.5px color-mix(in srgb, var(--k) 90%, white),
+      0 0 16px 2px color-mix(in srgb, var(--k) 55%, transparent);
+  }
+}
+
+.step-grid[data-empty='true'] .stone[data-invite='true'] .stone-socket > .glyph {
+  animation: stone-invite-glyph 2.2s ease-in-out infinite;
+}
+
+@keyframes stone-invite-glyph {
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* The playhead: a soft beam of light over the beat that is playing. */
+.grid-beam {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  z-index: 3;
+  border-radius: var(--radius-s);
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 240, 190, 0.3), rgba(255, 240, 190, 0.1) 45%, rgba(255, 240, 190, 0.02));
+  box-shadow: 0 0 18px rgba(255, 240, 190, 0.12);
+  opacity: 0;
+  transition:
+    transform 90ms var(--ease-out),
+    opacity 200ms;
+}
+
+.step-grid:not([data-now='-1']) .grid-beam {
+  opacity: 1;
+}
+
+/* A sleeping monster's grid dozes too (the first stone wakes it). */
+.step-grid[data-sleeping='true'] .grid-rows {
+  opacity: 0.55;
+}
+
+/* ── Monster Makers' "+": more drums ─────────────────────────────────────── */
+
+.grid-add {
+  display: grid;
+  place-items: center;
+  color: var(--ink-2);
+}
+
+.grid-add > svg {
+  width: 58%;
+  height: 58%;
+}
+
+.grid-add-head {
+  grid-column: 1;
+  width: var(--head);
+  border-radius: var(--radius-s);
+  border: 2.5px dashed rgba(200, 206, 255, 0.4);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.grid-add-head > svg {
+  width: 26px;
+  height: 26px;
+}
+
+.grid-add[aria-expanded='true'] {
+  color: #fff;
+  border-color: #fff;
+}
+
+/* Phones have no room under the heads: the "+" joins the toys' column. Tall
+   screens keep it under the drum pictures. */
+.surface-side > .grid-add-head,
+.step-grid > .grid-add-side {
+  display: none;
+}
+
+@media (max-height: 559px) {
+  .step-grid > .grid-add-head {
+    display: none;
+  }
+}
+
+@media (min-height: 560px) {
+  .surface-side > .grid-add-side {
+    display: none;
+  }
+  .step-grid[data-add='true'] {
+    --add-h: clamp(40px, 6vmin, 52px);
+  }
+  /* The beam lights the beat's stones, not the "+" under the drum pictures. */
+  .step-grid[data-add='true'] .grid-beam {
+    bottom: calc(var(--add-h) + var(--rg));
+  }
+}
+
+.grid-picker {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  bottom: var(--gap);
+  translate: -50% 0;
+  display: flex;
+  gap: var(--gap-s);
+  padding: var(--gap-s);
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 2px solid var(--edge-strong);
+  box-shadow: var(--shadow);
+  animation: picker-in 220ms var(--ease-pop);
+}
+
+@keyframes picker-in {
+  from {
+    transform: translateY(12px) scale(0.9);
+    opacity: 0;
+  }
+}
+
+.picker-pad,
+.picker-close {
+  width: clamp(44px, 10vmin, 64px);
+  height: clamp(44px, 10vmin, 64px);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.picker-pad {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--k) 78%, white) 0%, var(--k) 45%, color-mix(in srgb, var(--k) 85%, black) 100%);
+  box-shadow:
+    0 3px 0 color-mix(in srgb, var(--k) 55%, black),
+    inset 0 2px 0 rgba(255, 255, 255, 0.4);
+  transition: transform var(--t-fast) var(--ease-out);
+}
+
+.picker-pad:active,
+.picker-close:active {
+  transform: scale(0.9);
+}
+
+.picker-pad > .glyph {
+  width: 64%;
+  height: auto;
+}
+
+.picker-close {
+  color: var(--ink-2);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 22px;
+}
+
+/* ── The side column's own buttons (both faces) ──────────────────────────── */
+
+/* The flip: the keys turn over. Stones (3×3) on the keys face, keys on the grid face. */
+.surface-flip {
+  color: #fff;
+  background: radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--c) 72%, white) 0%, var(--c-dark) 80%);
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--c-dark) 70%, black);
+}
+
+.surface-flip > svg {
+  width: 60%;
+  height: 60%;
+  max-width: 30px;
+  overflow: visible;
+}
+
+.surface-flip .icon-beat {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.surface-flip[data-face='grid'] {
+  background: var(--panel-2);
+  border-color: var(--edge-strong);
+}
+
+/* The first time Boom is on the keys, the flip button calls (three slow pulses). */
+.surface-flip[data-invite='true'] {
+  animation: flip-invite 1.2s ease-in-out 3;
+}
+
+@keyframes flip-invite {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 3px 0 color-mix(in srgb, var(--c-dark) 70%, black),
+      0 0 0 0 color-mix(in srgb, var(--c) 70%, transparent);
+  }
+  50% {
+    transform: scale(1.1);
+    box-shadow:
+      0 3px 0 color-mix(in srgb, var(--c-dark) 70%, black),
+      0 0 0 10px color-mix(in srgb, var(--c) 0%, transparent);
+  }
+}
+
+/* The tidy magnet: a red horseshoe that bounces in once when it appears. */
+.surface-tidy {
+  color: #ff5a6e;
+  background: radial-gradient(circle at 35% 28%, #3a3f9e 0%, #23276f 75%);
+  border-color: rgba(255, 140, 155, 0.75);
+  animation: tidy-in 650ms var(--ease-pop) both;
+}
+
+.surface-tidy > svg {
+  width: 62%;
+  height: 62%;
+  max-width: 32px;
+}
+
+@keyframes tidy-in {
+  0% {
+    transform: translateY(-14px) scale(0.4);
+    opacity: 0;
+  }
+  55% {
+    transform: translateY(2px) scale(1.08);
+    opacity: 1;
+  }
+  75% {
+    transform: translateY(-3px) scale(0.98);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+/* The Surprise wand sparkles while the grid is empty. */
+.t-surprise[data-invite='true'] .t-face {
+  animation: wand-sparkle 1.8s ease-in-out infinite;
+}
+
+@keyframes wand-sparkle {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(183, 123, 255, 0),
+      var(--shadow);
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow:
+      0 0 0 8px rgba(183, 123, 255, 0.28),
+      0 0 22px rgba(255, 246, 199, 0.45);
+    filter: brightness(1.18);
+  }
+}
+
+/* ── Short phones: tighter ruler and heads ───────────────────────────────── */
+
+@media (max-height: 559px) {
+  .step-grid {
+    --head: clamp(44px, 12vmin, 52px);
+    --ruler: 20px;
+    --cg: 3px;
+    --rg: 3px;
+    --bar-gap: 5px;
+  }
+  .ruler-num {
+    font-size: 10px;
+  }
+  .stone-pips {
+    bottom: 3px;
+  }
+}
+
+/* ── Reduced motion: lit states and the column light only ─────────────────── */
+
+.app[data-motion='reduce'] .hopper {
+  display: none;
+}
+
+.app[data-motion='reduce'] .ruler-slot[data-now='true']::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  border: 2px solid #fff;
+}
+
+.app[data-motion='reduce'] .stone-lit,
+.app[data-motion='reduce'] .grid-beam,
+.app[data-motion='reduce'] .ruler-dot,
+.app[data-motion='reduce'] .ruler-star {
+  transition: none;
+}
+
+.app[data-motion='reduce'] .step-grid .stone[data-invite='true'] .stone-socket,
+.app[data-motion='reduce'] .step-grid .stone[data-invite='true'] .stone-socket > .glyph,
+.app[data-motion='reduce'] .surface-flip,
+.app[data-motion='reduce'] .surface-tidy,
+.app[data-motion='reduce'] .t-surprise .t-face,
+.app[data-motion='reduce'] .grid-picker {
+  animation: none;
+}
+
+/* Still an invitation without motion: a steady ring on the stones to tap first. */
+.app[data-motion='reduce'] .step-grid[data-empty='true'] .stone[data-invite='true'] .stone-socket {
+  box-shadow:
+    inset 0 3px 7px rgba(3, 4, 26, 0.4),
+    inset 0 0 0 2.5px color-mix(in srgb, var(--k) 90%, white);
+}
+
+/* ── High contrast: outlined sockets, ringed stones ───────────────────────── */
+
+.app[data-contrast='high'] .stone-socket {
+  box-shadow:
+    inset 0 3px 7px rgba(3, 4, 26, 0.55),
+    inset 0 0 0 2px var(--edge-strong);
+}
+
+.app[data-contrast='high'] .stone-socket > .glyph {
+  opacity: 0.45;
+}
+
+.app[data-contrast='high'] .stone-lit {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+}
+
+.app[data-contrast='high'] .ruler-dot {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.app[data-contrast='high'] .row-pad {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: -2px;
+}
+
+.app[data-contrast='high'] .stone:focus-visible {
+  outline: 4px solid var(--focus);
+  outline-offset: 3px;
+}

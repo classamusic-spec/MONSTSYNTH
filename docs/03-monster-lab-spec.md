@@ -74,6 +74,39 @@ All touch targets ≥ 44 px; primary actions ≥ 52 px; keys are the largest tar
 * Monster Magic (Maker) shows each mood's notes under its name ("C E♭ F G B♭" for Mystery) when names are on.
 * Pen pressure (Apple Pencil) sets loudness; fingers use a friendly fixed velocity.
 
+## Beat Hop: the back of the keys
+
+The keys flip over into a grid of stepping stones for the monster in the spotlight. One column is one beat: the same 8 beats as the 8 dots around Play and one block in Monster Blocks, with a wider gap between the two bars. There is no new screen; the stage stays (smaller, still dancing) and the transport rail stays. In this release the grid face is Boom's; melodic monsters get theirs (the bead lane) next, so the flip button shows only while Boom is on the keys.
+
+* **Getting there (no words):** the flip button (3×3 stones) at the top of the surface's side column, which pulses once the first time Boom is selected in a session and whose middle stones blink on every beat while the band plays; ⇧G on a keyboard; the **Make a beat** card on the Songs shelf (a new song that opens on Boom's grid, big drum stones on 1 and 5 shimmering, the wand sparkling); Boom's empty row picture in Monster Blocks; and the Coach's hand on the flip button after 8 Boom hits with no Record. On the grid face the button shows three rainbow keys and flips back.
+* **Rows (Boom):** one per drum, high sounds on top: tiny cymbal, (clap), snappy drum, big drum, matching Boom's head/belly/feet. Little Monsters see cymbal, snare and kick; Monster Makers also the clap, plus a **+** under the drum pictures (in the toys' column on phones) for bongos, crash, cowbell and boing. Any drum a loop already plays always gets a row, in both modes. Each row head is the drum's picture on its pad colour; touching it plays the drum (nothing is written).
+* **Stones:** a dark stone is a socket with the drum's silhouette (beats 1 and 3 of each bar a little lighter); a lit stone is a little key (same gradient and lip) that grows with its loudness, with one pip for a hit and two for a double. Hits off the beat (live playing, wand grooves) show as small stones exactly where they are inside the beat.
+* **Touch:** one handler for the whole grid, with hit-testing by maths over the measured stones (gaps are never dead zones), every finger its own gesture:
+
+| Gesture | Little Monster | Monster Maker |
+|---|---|---|
+| tap a dark stone | lights it (the tiny cymbal lights as a double: tss-tss) | lights it (one hit) |
+| tap a lit stone | off | one → double → off |
+| tap a partly lit stone | becomes the row's default | becomes the row's default |
+| swipe | starting on a dark stone lights every stone crossed (2D, across rows); starting on a lit stone erases | same |
+
+  Every gesture is one undo step. A beat holds at most 4 different drums and a loop 160 Boom notes: a full beat wobbles "no" and nothing is taken away. Pressed stones sink and ripple; a stone taken away shrinks with a poof.
+* **Sound:** with nothing playing, the first stone starts the loop *from that stone's beat*, so the first thing heard is the child's own stone, on the beat. After Stop, a stone sounds at once (a soft blip when one is taken away). While the band plays, a new stone plays in this very pass and, when its turn is more than half a beat away, a soft preview sounds on the next sixteenth. See Monster Magic §9.
+* **What moves:** a soft beam of light over the beat that is playing, the ruler dot growing, and a mini copy of the monster hopping from dot to dot, landing with a squash exactly on each beat. Each stone pops (with a ring) when its note is heard, at the same moment as the monster on the stage. Wand grooves pop in from left to right; tidied notes slide into their slots. All of it is imperative (no React state per frame or note). Reduced motion keeps only lit states, the beam and a ring on the current dot; high contrast outlines the sockets and rings the lit stones.
+* **Ruler:** one dot per beat, a star on each bar's first beat, bigger dots on beats 1 and 3, and beat numbers 1–8 for Monster Makers.
+* **Recording is off under the grid.** Record's place on the rail holds the **Surprise** wand: each tap stamps the next ready-made groove (6 for Little Monsters on the first four drums, 4 more for Monster Makers; the first is the Monster Band's own beat), starting the loop from beat 1 if it was stopped. A burst of taps is one undo step back to the child's own beat. Flipping to the grid mid-take ends the take (one undo step); R does nothing there. Flipping back brings Record back.
+* **A beat to sit on:** under the grid, while no drum loop can be heard, the band's soft woodblock tick plays on every beat.
+* **Keyboard:** the grid is an ARIA grid with one tab stop; arrows move between stones (they never switch monsters there), Enter taps the focused stone, Space still plays/stops, A–K still play live.
+* **Sizes:** stones are at least 44 × 44 px (with their share of the gaps) on 844×390 and 667×375 phones, iPad 1024×768 and 820×1180 portrait; on phones the stage shrinks to about 0.55 of the keys' share (96 px with five or more drum rows) so the grid gets the height.
+
+### The surface's side column (both faces)
+
+The flip button, then the toys (phones only; tall screens keep them in the stage toolbar), then the **tidy magnet**: it appears (with a little bounce) whenever the spotlight monster's loop has notes off the grid, on the keys face and the grid face alike. One tap pulls every note onto the beat grid, one undo step, with a short twinkle. Little Monsters' single column of toys becomes two on the keys face when the flip or the magnet joins it.
+
+### The beat you can see (keys face)
+
+While the band plays, the key panel breathes on every beat: a soft light, a little stronger with a small lift on each bar's first beat (imperative WAAPI; none with reduced motion). The stage's beat dance is in *Monster behaviour on stage*.
+
 ## Transport rail
 
 | Control | Behaviour |
@@ -81,16 +114,17 @@ All touch targets ≥ 44 px; primary actions ≥ 52 px; keys are the largest tar
 | ▶ / ■ | Lab & Paint: loop playback. Blocks: plays the song once, then the finale. A ring around the button shows loop (or song) position with one dot per beat (or per block); red while recording. |
 | ● Record | idle → armed (empty & stopped: first note starts the loop) or recording (plays immediately if there is music). Tap again to stop; stops by itself after two quiet loops. Undo removes a whole take. |
 | ✨ Magic (Blocks) | Auto-arrange the song (replaces Record on Blocks). |
+| ✨ Surprise (Beat Hop) | Stamps the next ready-made groove into the spotlight monster's loop (replaces Record under the grid). |
 | ↶ Undo | Always present; says "Nothing to undo" instead of being disabled. |
 | ↷ Redo, ✨ Monster Magic (Maker) | Redo; speed (turtle ↔ rabbit) and mood (Happy, Mystery, Sunny, Moody, Bluesy, Wild). |
 
 ## Keyboard (Chromebooks, desktops)
 
-`A S D F G H J K` play the keys · `1–6` pick a monster · `← →` previous/next monster · `Space` play/stop · `R` record · `Ctrl/⌘+Z` undo · `Ctrl/⌘+Y` or `⇧⌘Z` redo · `Esc` closes panels. Focus rings are thick and yellow.
+`A S D F G H J K` play the keys · `1–6` pick a monster · `← →` previous/next monster · `⇧G` flips the keys to Beat Hop's grid and back · in the grid, arrows move between stones and `Enter` taps one · `Space` play/stop · `R` record (not under the grid) · `Ctrl/⌘+Z` undo · `Ctrl/⌘+Y` or `⇧⌘Z` redo · `Esc` closes panels. Focus rings are thick and yellow.
 
 ## Wordless coaching
 
-A pointing hand (and a glowing ring) appears only when a child seems stuck: no sound after 3 s → a key; lots of playing but no recording → Record; first loop made → another monster; three loops → Blocks. Each hint shows once per session and can be switched off in Parent Space.
+A pointing hand (and a glowing ring) appears only when a child seems stuck: no sound after 3 s → a key (on Beat Hop, the first big-drum stone); lots of playing but no recording → Record; 8 Boom hits and no recording → the flip button; 4 stones placed after Stop → Play; first loop made → another monster; three loops → Blocks. Each hint shows once per session and can be switched off in Parent Space. Stone previews never count as playing.
 
 ## Speech bubbles
 

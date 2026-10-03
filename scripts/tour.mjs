@@ -39,6 +39,18 @@ for (const v of VIEWS) {
   await shot('2-lab-band-playing');
   await page.locator('.t-play').click();
 
+  // Beat Hop: Boom's grid (Little Monster), playing.
+  await page.locator('.pod[data-monster="boom"] .pod-hit').click();
+  await page.waitForTimeout(300);
+  await page.locator('.surface-flip').click();
+  await page.waitForTimeout(300);
+  await page.locator('.t-play').click();
+  await page.waitForTimeout(1300);
+  await shot('2b-grid-little-playing');
+  await page.locator('.t-play').click();
+  await page.locator('.surface-flip').click();
+  await page.waitForTimeout(200);
+
   // Blocks
   await page.locator('.dock-btn[data-screen="blocks"]').click();
   await page.waitForTimeout(300);
@@ -78,6 +90,17 @@ for (const v of VIEWS) {
   await page.evaluate(() => window.__monster.actions.updateSettings({ ageMode: 'maker' }));
   await page.waitForTimeout(300);
   await shot('6-lab-maker');
+  // Beat Hop in Monster Maker: beat numbers, the "+" for more drums, a wand groove.
+  await page.locator('.pod[data-monster="boom"] .pod-hit').click();
+  await page.waitForTimeout(300);
+  await page.locator('.surface-flip').click();
+  await page.waitForTimeout(300);
+  await page.locator('.t-surprise').click();
+  await page.waitForTimeout(1200);
+  await shot('6b-grid-maker-wand');
+  await page.locator('.t-play').click();
+  await page.locator('.surface-flip').click();
+  await page.waitForTimeout(200);
   await page.locator('.t-magic').click();
   await page.waitForTimeout(400);
   await shot('7-magic-panel');
@@ -88,6 +111,13 @@ for (const v of VIEWS) {
   await page.waitForTimeout(400);
   await shot('8-parent');
   await page.keyboard.press('Escape');
+
+  // Make a beat: a new song that opens on Boom's empty grid (the first stones shimmer).
+  await page.locator('.dock-btn[data-screen="songs"]').click();
+  await page.waitForTimeout(300);
+  await page.locator('.song-beat').click();
+  await page.waitForTimeout(700);
+  await shot('8b-make-a-beat');
 
   // Songs shelf with songs: each saved song wears a picture from its name
   // (and a song kept from Learn keeps its Learn picture).

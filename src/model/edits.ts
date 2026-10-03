@@ -1,9 +1,10 @@
 import { ensureRows, fillRow, rowIsEmpty } from '../magic/arrange';
 import { insertRecordedNote, setNoteDuration, type InsertOptions } from '../magic/recorder';
+import { isTidy, snapNotes, writeCell, type CellWrite } from '../magic/steps';
 import { newId } from './ids';
 import { FX_STEPS, nextFxLevel, nextPreset } from './monsters';
 import { activeClip, createClip, createTrack } from './project';
-import type { FxKind, MonsterKind, NoteEvent, Project, ScaleId, Stroke, Track } from './types';
+import type { Clip, FxKind, MonsterKind, NoteEvent, Project, ScaleId, Stroke, Track } from './types';
 import { PAINT_ROW } from './types';
 
 // Pure, immutable project edits. The store wraps each one in an undoable commit.
@@ -71,33 +72,59 @@ export const renameProject = (p: Project, name: string) =>
   p.name === name || !name.trim() ? p : { ...p, name: name.trim().slice(0, 60) };
 
 /**
+ * Change a monster's loop (its active clip), creating the loop if needed. Any
+ * change wakes a sleeping monster (and joins it to a solo group), because you
+ * always hear what you make. A loop's first notes also fill that monster's row
+ * in Monster Blocks, unless the child emptied the row on purpose. When `fn`
+ * returns the clip unchanged, the project is returned unchanged.
+ */
+export function editActiveClip(p: Project, trackId: string, fn: (clip: Clip) => Clip): Project {
+  const track = p.tracks.find((t) => t.id === trackId);
+  if (!track) return p;
+  const existing = activeClip(track);
+  const clip = existing ?? createClip(p.loopBeats);
+  const updated = fn(clip);
+  if (updated === clip) return p;
+  const wasEmpty = !existing || existing.notes.length === 0;
+  const silencedBySolo = p.tracks.some((t) => t.solo) && !track.solo;
+  let next = updateTrack(p, trackId, (t) => ({
+    ...t,
+    sleeping: false,
+    solo: t.solo || silencedBySolo,
+    clips: existing ? t.clips.map((c) => (c.id === existing.id ? updated : c)) : [...t.clips, updated],
+    activeClipId: updated.id,
+  }));
+  if (wasEmpty && updated.notes.length > 0 && rowIsEmpty(next.arrangement, trackId)) {
+    next = { ...next, arrangement: fillRow(ensureRows(next), trackId, updated.id) };
+  }
+  return next;
+}
+
+/**
  * Drop a freshly played note into a monster's loop (creating the loop if needed).
  * The first note of a loop also fills that monster's row in Monster Blocks, so the
  * song immediately contains what the child made.
  */
 export function recordNote(p: Project, trackId: string, note: NoteEvent, opts: InsertOptions): Project {
-  const track = p.tracks.find((t) => t.id === trackId);
-  if (!track) return p;
-  let clip = activeClip(track);
-  const wasEmpty = !clip || clip.notes.length === 0;
-  let next = p;
-  // You always hear what you record: recording wakes a sleeping monster, and
-  // joins it to the soloed group if someone else is soloed.
-  const silencedBySolo = p.tracks.some((t) => t.solo) && !track.solo;
-  if (track.sleeping || silencedBySolo) {
-    next = updateTrack(next, trackId, (t) => ({ ...t, sleeping: false, solo: t.solo || silencedBySolo }));
-  }
-  if (!clip) {
-    clip = createClip(p.loopBeats);
-    const created = clip;
-    next = updateTrack(next, trackId, (t) => ({ ...t, clips: [...t.clips, created], activeClipId: created.id }));
-  }
-  const updated = insertRecordedNote(clip, note, opts);
-  next = updateTrack(next, trackId, (t) => ({ ...t, clips: t.clips.map((c) => (c.id === updated.id ? updated : c)) }));
-  if (wasEmpty && rowIsEmpty(next.arrangement, trackId)) {
-    next = { ...next, arrangement: fillRow(ensureRows(next), trackId, updated.id) };
-  }
-  return next;
+  return editActiveClip(p, trackId, (clip) => insertRecordedNote(clip, note, opts));
+}
+
+// ── Beat Hop (the step grid): the same loop, edited a cell at a time ────────
+
+/** Set one grid cell of a monster's loop (see writeCell: a full cell or loop changes nothing). */
+export const setCellEdit = (p: Project, trackId: string, w: CellWrite) => editActiveClip(p, trackId, (c) => writeCell(c, w).clip);
+
+/** Replace a loop's notes (a wand groove). */
+export const replaceLoopNotes = (p: Project, trackId: string, notes: NoteEvent[]) => editActiveClip(p, trackId, (c) => ({ ...c, notes }));
+
+/** The magnet: pull every note of a monster's loop exactly onto `grid`. The same project when already tidy. */
+export function tidyLoop(p: Project, trackId: string, grid: number): Project {
+  return updateTrack(p, trackId, (t) => {
+    const clip = activeClip(t);
+    if (!clip || isTidy(clip.notes, grid)) return t;
+    const notes = snapNotes(clip.notes, grid, clip.lengthBeats, { isDrum: t.monster === 'boom' });
+    return { ...t, clips: t.clips.map((c) => (c.id === clip.id ? { ...c, notes } : c)) };
+  });
 }
 
 export function setRecordedDuration(p: Project, trackId: string, noteId: string, dur: number): Project {

@@ -40,6 +40,8 @@ Monster Synth is a React + TypeScript single-page PWA built with Vite. The code 
 | `src/magic/timing.ts` | wrap, soft quantize, drum snap + bounce test, grid slots, note-end snapping, grid lines / next occurrence |
 | `src/magic/recorder.ts` | Looper placement and "replace, don't pile up" insertion rules |
 | `src/magic/sequence.ts` | `collectEvents(project, from, to, mode)` — the sequencer's brain |
+| `src/magic/steps.ts` | Beat Hop: cells of a loop (`projectGrid`, wrap-aware `cellOf`), drum rows, `writeCell` (exact beats, per-beat and per-loop caps), tap cycles, groove velocities, and Tidy (`isTidy`, `snapNotes`) |
+| `src/magic/grooves.ts` | The wand's ready-made drum grooves (the first is the Monster Band beat) |
 | `src/magic/arrange.ts` | Monster Blocks operations and Magic auto-arrangement |
 | `src/magic/painting.ts` | Strokes → notes |
 | `src/magic/templates.ts`, `names.ts` | Starter band song, playful song names |
@@ -58,7 +60,7 @@ Monster Synth is a React + TypeScript single-page PWA built with Vite. The code 
 | `src/store/actions.ts` | Boot, songs (open/new/copy/rename/delete), settings, navigation |
 | `src/store/persistence.ts`, `idb.ts` | Debounced autosave, IndexedDB with in-memory fallback |
 | `src/ui/shell/*` | AppShell, NavDock, TransportRail (+LoopRing), WakeOverlay, ParentGate, BubbleLayer, Coach, Finale, RotateHint, Sky, Logo |
-| `src/ui/lab/*` | LabScreen, StageScene, MonsterPod (squish gestures), PodTools, PlaySurface (keys), VoiceButton, MonsterTray, MagicPanel, glyphs, eye tracking |
+| `src/ui/lab/*` | LabScreen, StageScene, MonsterPod (squish gestures), PodTools, PlaySurface (keys), StepGrid + DrumRows + BeatRuler (Beat Hop, the grid face of the keys), SurfaceSide (flip button, tidy magnet), VoiceButton, MonsterTray, MagicPanel, glyphs, eye tracking |
 | `src/ui/monsters/*` | `MonsterArt` (SVG cast), accessories (costumes), `FxBuddy`, note reactions (WAAPI), shape helpers |
 | `src/ui/blocks/*` | BlocksScreen, note thumbnails |
 | `src/ui/paint/*` | PaintScreen (canvas, tools, palette) |

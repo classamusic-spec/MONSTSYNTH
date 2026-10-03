@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react';
 import { audibleTracks } from '../../magic/sequence';
 import { surfaceSize } from '../../model/monsters';
 import { trackHasLoop } from '../../model/project';
-import { selectTrack, setOverlay } from '../../store/actions';
-import { getState, useApp } from '../../store/store';
+import { selectTrack, setLabView, setOverlay } from '../../store/actions';
+import { canGrid, getState, labFace, useApp } from '../../store/store';
 import { studio } from '../../studio/studio';
 import { onFrame } from '../../studio/visualBus';
 import { isReducedMotion } from '../hooks/useCaps';
@@ -12,10 +12,12 @@ import { MonsterPod } from './MonsterPod';
 import { PlaySurface } from './PlaySurface';
 import { PodTools } from './PodTools';
 import { StageScene } from './StageScene';
+import { StepGrid } from './StepGrid';
 import { useLookAt } from './useLookAt';
 
 // THE MONSTER LAB — every monster on stage at once (tap one to put it on the
-// keys), and eight big keys for the monster in the spotlight.
+// keys), and eight big keys for the monster in the spotlight. The keys flip
+// over into Beat Hop, a grid of stepping stones for the same loop.
 
 const KEY_ROW = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k'];
 
@@ -40,6 +42,7 @@ function beatDance(stage: HTMLElement, beat: number) {
 export function LabScreen() {
   const tracks = useApp((s) => s.project.tracks);
   const selectedId = useApp((s) => s.selectedTrackId);
+  const face = useApp(labFace);
   const selected = tracks.find((t) => t.id === selectedId) ?? tracks[0];
   const stageRef = useRef<HTMLDivElement>(null);
   useLookAt(stageRef);
@@ -69,8 +72,13 @@ export function LabScreen() {
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
       const key = e.key.toLowerCase();
-      const idx = KEY_ROW.indexOf(key);
       const track = s.project.tracks.find((t) => t.id === s.selectedTrackId) ?? s.project.tracks[0];
+      // ⇧G flips the keys over to Beat Hop's grid and back (plain G is a key).
+      if (e.key === 'G' && e.shiftKey) {
+        if (canGrid(track, s.project.loopBeats)) setLabView(labFace(s) === 'grid' ? 'keys' : 'grid');
+        return;
+      }
+      const idx = KEY_ROW.indexOf(key);
       // Only the keys on screen play (Little mode shows six drums: J and K rest).
       if (idx >= 0 && idx < surfaceSize(track.monster, s.settings.ageMode)) {
         e.preventDefault();
@@ -84,7 +92,8 @@ export function LabScreen() {
         selectTrack(s.project.tracks[n - 1].id);
         return;
       }
-      if (key === 'arrowright' || key === 'arrowleft') {
+      // Inside the grid the arrows move between stones, not between monsters.
+      if ((key === 'arrowright' || key === 'arrowleft') && !target?.closest?.('.step-grid')) {
         const i = s.project.tracks.findIndex((t) => t.id === track.id);
         const next = s.project.tracks[(i + (key === 'arrowright' ? 1 : -1) + s.project.tracks.length) % s.project.tracks.length];
         selectTrack(next.id);
@@ -115,7 +124,7 @@ export function LabScreen() {
   }, []);
 
   return (
-    <section className="lab" aria-label="Monster Lab">
+    <section className="lab" data-view={face} aria-label="Monster Lab">
       <div className="stage" ref={stageRef}>
         <StageScene />
         {tracks.map((t) => (
@@ -126,7 +135,7 @@ export function LabScreen() {
           <Icon name="plus" />
         </button>
       </div>
-      <PlaySurface track={selected} />
+      {face === 'grid' ? <StepGrid key={selected.id} track={selected} /> : <PlaySurface track={selected} />}
     </section>
   );
 }

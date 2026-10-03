@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { setOverlay } from '../../store/actions';
-import { getState, useApp } from '../../store/store';
+import { getState, labFace, useApp } from '../../store/store';
 import { studio } from '../../studio/studio';
 import { BlocksScreen } from '../blocks/BlocksScreen';
 import { useReducedMotion } from '../hooks/useCaps';
@@ -29,9 +29,10 @@ export function AppShell() {
   const awake = useApp((s) => s.awake);
   const recording = useApp((s) => s.transport.recording || s.transport.armed);
   const overlay = useApp((s) => s.overlay);
+  const face = useApp(labFace);
   const reduced = useReducedMotion();
 
-  // Global shortcuts: Space play/stop · R record · Z undo · Y / ⇧Z redo · Esc close.
+  // Global shortcuts: Space play/stop · R record (not under the grid) · Z undo · Y / ⇧Z redo · Esc close.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = getState();
@@ -47,7 +48,7 @@ export function AppShell() {
       if (key === ' ' && target?.tagName !== 'BUTTON') {
         e.preventDefault();
         studio.togglePlay();
-      } else if (key === 'r' && !e.metaKey && !e.ctrlKey && s.screen === 'lab') {
+      } else if (key === 'r' && !e.metaKey && !e.ctrlKey && s.screen === 'lab' && labFace(s) === 'keys') {
         studio.toggleRecord();
       } else if ((key === 'z' && (e.metaKey || e.ctrlKey) && e.shiftKey) || (key === 'y' && (e.metaKey || e.ctrlKey))) {
         e.preventDefault();
@@ -68,6 +69,7 @@ export function AppShell() {
       data-mode={mode}
       data-awake={awake}
       data-rec={recording}
+      data-labview={screen === 'lab' ? face : undefined}
       data-motion={reduced ? 'reduce' : 'full'}
       data-contrast={contrast ? 'high' : 'normal'}
       onContextMenu={(e) => e.preventDefault()}

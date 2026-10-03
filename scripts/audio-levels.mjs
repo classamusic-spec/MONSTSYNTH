@@ -1,5 +1,7 @@
 // Render every preset offline in a real browser and report peak / RMS levels,
-// so gain staging stays even across monsters. Usage: node scripts/audio-levels.mjs [url]
+// so gain staging stays even across monsters. Also renders Beat Hop's densest
+// drum grids and every wand groove, which must stay inside the master gate.
+// Usage: node scripts/audio-levels.mjs [url]
 import { chromium } from 'playwright';
 
 const url = process.argv[2] || 'http://127.0.0.1:5173/';
@@ -65,10 +67,50 @@ const report = await page.evaluate(async () => {
   const loud = monsterBandProject(4);
   loud.tracks = loud.tracks.map((t) => ({ ...t, fx: { echo: 0.8, gloop: 0.8, chomper: 0.8, wiggle: 0.8 }, volume: 1 }));
   const w = measure(await renderSong(loud));
-  return { rows, click, band: { peakDb: db(b.peak), rmsDb: db(b.rms), seconds: band.duration.toFixed(1) }, worst: { peakDb: db(w.peak), rmsDb: db(w.rms) } };
+
+  // Beat Hop: Boom alone (no blocks, so the loop plays four times), as dense as a child can make it.
+  const { createProject } = await import('/src/model/project.ts');
+  const { writeCell } = await import('/src/magic/steps.ts');
+  const { GROOVES, grooveNotes } = await import('/src/magic/grooves.ts');
+  const boomOnly = (notes) => {
+    const p = createProject({ seed: 5, monsters: ['boom'] });
+    const clip = { id: 'c', lengthBeats: 8, notes };
+    p.tracks = p.tracks.map((t) => ({ ...t, clips: [clip], activeClipId: 'c' }));
+    return p;
+  };
+  const cells = (list) => {
+    let clip = { id: 'c', lengthBeats: 8, notes: [] };
+    for (const [step, col, target] of list) {
+      clip = writeCell(clip, { step, col, target, lengthBeats: 8, beatsPerBar: 4, isDrum: true, columnCap: Infinity, dur: 0.5, maxNotes: 160 }).clip;
+    }
+    return clip.notes;
+  };
+  const grids = [];
+  // Every Little stone lit: tiny cymbal doubles, snappy drum and big drum on every beat.
+  const littleAll = [];
+  for (let c = 0; c < 8; c++) littleAll.push([2, c, 'double'], [1, c, 'one'], [0, c, 'one']);
+  grids.push(['Little grid, every stone lit', cells(littleAll)]);
+  // Monster Maker at the cap: four drums in every beat, all doubles, rotating through the eight pads.
+  const makerFull = [];
+  for (let c = 0; c < 8; c++) for (let k = 0; k < 4; k++) makerFull.push([(c + k * 2) % 8, c, 'double']);
+  grids.push(['Maker grid, 4 drums × doubles in every beat', cells(makerFull)]);
+  for (const g of GROOVES) grids.push([`wand: ${g.id}${g.maker ? ' (Maker)' : ''}`, grooveNotes(g, { beatsPerBar: 4 })]);
+  const gridRows = [];
+  for (const [name, notes] of grids) {
+    const m = measure(await renderSong(boomOnly(notes)));
+    gridRows.push({ grid: name, notes: notes.length, peakDb: db(m.peak), rmsDb: db(m.rms), peak: m.peak });
+  }
+  return { rows, click, band: { peakDb: db(b.peak), rmsDb: db(b.rms), seconds: band.duration.toFixed(1) }, worst: { peakDb: db(w.peak), rmsDb: db(w.rms), peak: w.peak }, gridRows };
 });
 console.table(report.rows);
 console.log('Metronome tick (accent) vs kick:', report.click);
 console.log('Monster Band song:', report.band);
-console.log('Worst case (all fx max):', report.worst);
+console.log('Worst case (all fx max):', { peakDb: report.worst.peakDb, rmsDb: report.worst.rmsDb });
+console.table(report.gridRows.map(({ peak, ...r }) => r));
+// The master gate: the limiter and soft clip keep everything under −1 dBFS.
+const GATE_DB = -1;
+const over = report.gridRows.filter((r) => 20 * Math.log10(r.peak) > GATE_DB);
+if (20 * Math.log10(report.worst.peak) > GATE_DB) over.push({ grid: 'worst case' });
+console.log(over.length ? `FAIL  over the ${GATE_DB} dBFS master gate: ${over.map((r) => r.grid).join(', ')}` : `PASS  every grid and wand groove stays under the ${GATE_DB} dBFS master gate`);
 await browser.close();
+process.exit(over.length ? 1 : 0);

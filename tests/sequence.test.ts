@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { GROOVES, grooveNotes } from '../src/magic/grooves';
 import { collectEvents } from '../src/magic/sequence';
+import { writeCell } from '../src/magic/steps';
+import { seededRandom } from '../src/model/ids';
 import { createClip, createProject, songBeats } from '../src/model/project';
 import type { NoteEvent, Project } from '../src/model/types';
 import { PAINT_ROW } from '../src/model/types';
@@ -105,5 +108,43 @@ describe('collectEvents · song mode', () => {
     expect(ev[0].absBeat).toBe(12);
     expect(ev[0].source).toBe('paint');
     expect(ev[0].channelId).toBe(p.tracks[0].id);
+  });
+});
+
+describe('collectEvents · Beat Hop grids', () => {
+  // A grid-built Boom loop: random stones (ones and doubles) plus a wand groove.
+  const rnd = seededRandom(11);
+  let clip = { ...createClip(8), notes: grooveNotes(GROOVES[8], { beatsPerBar: 4 }) };
+  for (let i = 0; i < 24; i++) {
+    const w = {
+      step: Math.floor(rnd() * 8),
+      col: Math.floor(rnd() * 8),
+      target: rnd() < 0.5 ? ('one' as const) : ('double' as const),
+      lengthBeats: 8,
+      beatsPerBar: 4,
+      isDrum: true,
+      columnCap: Infinity,
+      dur: 0.5,
+    };
+    clip = writeCell(clip, w).clip;
+  }
+  const p0 = createProject({ seed: 9 });
+  const project: Project = { ...p0, tracks: p0.tracks.map((t) => (t.monster === 'boom' ? { ...t, clips: [clip], activeClipId: clip.id } : t)) };
+
+  it('over 400 random contiguous windows plays every stone exactly on an eighth, never missed or doubled', () => {
+    const seen: string[] = [];
+    let from = 0;
+    for (let i = 0; i < 400; i++) {
+      const to = from + 0.02 + rnd() * 0.25;
+      for (const e of collectEvents(project, from, to, { mode: 'loop' })) {
+        expect(Number.isInteger(e.absBeat * 2)).toBe(true);
+        seen.push(`${e.note.id}@${e.absBeat}`);
+      }
+      from = to;
+    }
+    const expected: string[] = [];
+    for (let k = 0; k * 8 < from; k++) for (const n of clip.notes) if (k * 8 + n.beat < from) expected.push(`${n.id}@${k * 8 + n.beat}`);
+    expect(seen.length).toBe(expected.length);
+    expect(new Set(seen)).toEqual(new Set(expected));
   });
 });
