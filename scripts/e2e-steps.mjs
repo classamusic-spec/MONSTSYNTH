@@ -103,9 +103,15 @@ async function openApp(viewport = { width: 1024, height: 768 }, settings = {}, {
     };
     const trigger = eng.trigger.bind(eng);
     eng.trigger = (req, when, dur) => {
-      T.trig.push({ ch: req.channelId, pad: req.pad, midi: req.midi?.[0], when, at: ac.currentTime, beat: st.transport.playing ? st.transport.beatAt(when) : null });
-      return trigger(req, when, dur);
+      const rec = { ch: req.channelId, pad: req.pad, midi: req.midi?.[0], when, at: ac.currentTime, beat: st.transport.playing ? st.transport.beatAt(when) : null };
+      const voice = trigger(req, when, dur);
+      // The voice, to tell a note silenced before it started (not in JSON).
+      Object.defineProperty(rec, 'voice', { value: voice });
+      T.trig.push(rec);
+      return voice;
     };
+    /** A triggered note that will actually be heard (not killed before it began). */
+    T.sounds = (x) => !x.voice || x.voice.endTime > x.voice.startTime + 0.02;
     const schedule = st.schedule.bind(st);
     st.schedule = (e, when) => {
       if (e.note) T.sched.push({ absBeat: e.absBeat, id: e.note.id, step: e.note.step, ch: e.channelId, at: ac.currentTime });
@@ -1223,23 +1229,50 @@ await page.evaluate(() => window.__monster.studio.stop());
   const after = await page.evaluate(() => {
     const T = window.__t;
     const n = T.notes('grumble').find((x) => x.beat === 1);
-    return { id: n.id, step: n.step, past: window.__monster.getState().past.length, heard: T.on.filter((x) => x.ch === T.track('grumble').id).map((x) => [x.midi, x.vel]) };
+    const on = T.on.filter((x) => x.ch === T.track('grumble').id);
+    return { id: n.id, step: n.step, past: window.__monster.getState().past.length, heard: on.map((x) => [x.midi, x.vel]), gaps: on.slice(1).map((x, i) => Math.round((x.at - on[i].at) * 1000)) };
   });
   const want = await Promise.all([4, 5, 6].map((k) => midiOf(page, 'grumble', k)));
   const heardMidis = after.heard.map((h) => h[0]);
   check('dragging a bead up 3 bands moves it to that key, keeping its id, as one undo step', after.id === before.id && after.step === 6 && after.past - before.past === 1, JSON.stringify({ before, after: { ...after, heard: undefined } }));
   check('…each new key sounds softly as the bead passes (the last one always)', heardMidis.length >= 2 && heardMidis.at(-1) === want[2] && after.heard.every((h) => Math.abs(h[1] - 0.6) < 1e-6) && heardMidis.every((m) => want.includes(m)), JSON.stringify({ heard: after.heard, want }));
+  // (Audio clock times: one render quantum of slack under the 60 ms.)
+  check('…never more often than every 60 ms, and never the same key twice in a row', after.gaps.every((g) => g >= 54) && heardMidis.every((m, i) => i === 0 || m !== heardMidis[i - 1]), JSON.stringify({ gaps: after.gaps, heardMidis }));
   await page.evaluate(() => window.__monster.studio.undo());
   await page.waitForTimeout(80);
   const undone = await page.evaluate(() => window.__t.notes('grumble').find((n) => n.beat === 1));
   check('one Undo puts the dragged bead back on its key (same bead)', undone.step === 3 && undone.id === before.id, JSON.stringify(undone));
+  // A drag that stops to listen (longer than the 1.5 s an undo step stays open) is still one Undo.
+  const p0 = await pastLen(page);
+  const [, y4] = await spotCentre(page, 4, 1);
+  const [, y5] = await spotCentre(page, 5, 1);
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y4, { steps: 4 });
+  await page.waitForTimeout(1900);
+  await page.mouse.move(x, y5, { steps: 4 });
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+  const paused = await page.evaluate(() => window.__t.notes('grumble').find((n) => n.beat === 1).step);
+  const p1 = await pastLen(page);
+  await page.evaluate(() => window.__monster.studio.undo());
+  await page.waitForTimeout(80);
+  const back = await page.evaluate(() => window.__t.notes('grumble').find((n) => n.beat === 1).step);
+  check('a drag that pauses for 2 s on the way is still one undo step', paused === 5 && p1 - p0 === 1 && back === 3, JSON.stringify({ paused, steps: p1 - p0, back }));
 }
 
 // A tap on a bead pops it away (one undo step); Little Monsters: another height in a full beat makes the bead jump there.
 {
   const p0 = await pastLen(page);
+  await page.evaluate(() => window.__t.reset());
   await tapSpot(page, 5, 5);
   await page.waitForTimeout(60);
+  const blip = await page.evaluate(() => {
+    const T = window.__t;
+    const ch = T.track('grumble').id;
+    return { on: T.on.filter((x) => x.ch === ch).map((x) => x.vel), trig: T.trig.filter((x) => x.ch === ch).length, playing: window.__monster.studio.debug().playing };
+  });
+  check('stopped: taking a bead away makes one soft blip (never an add-loud note), and the band stays stopped', blip.on.length === 1 && Math.abs(blip.on[0] - 0.3) < 1e-6 && blip.trig === 0 && !blip.playing, JSON.stringify(blip));
   const gone = await laneNotes(page, 'grumble');
   const poof = await page.evaluate(() => !!document.querySelector('.bead-spot[data-step="5"][data-col="5"] > .stone-poof'));
   const p1 = await pastLen(page);
@@ -1262,15 +1295,51 @@ await page.evaluate(() => window.__monster.studio.stop());
 // Monster Makers: chords up to each monster's cap; a full beat lets its oldest bead go.
 for (const [monster, cap] of [
   ['bloop', 3],
+  ['spark', 3],
   ['mimic', 2],
   ['grumble', 1],
+  ['puff', 1],
 ]) {
   await freshLane(page, 'maker', monster);
   await page.evaluate(() => window.__monster.studio.stop());
-  for (const step of [0, 2, 4, 6]) await tapSpot(page, step, 2);
+  // (Puff: a long note in the beat before, which the beat-3 bead must keep ending.)
+  if (monster === 'puff') await tapSpot(page, 1, 1);
+  await tapSpot(page, 0, 2);
+  const first = await page.evaluate((m) => window.__t.notes(m).find((n) => n.beat === 2)?.id, monster);
+  for (const step of [2, 4, 6]) await tapSpot(page, step, 2);
   const col = await page.evaluate((m) => window.__t.notes(m).filter((n) => n.beat === 2).map((n) => n.step), monster);
   const want = [0, 2, 4, 6].slice(4 - cap);
   check(`Maker: ${monster} holds ${cap} bead${cap > 1 ? 's' : ''} per beat, the oldest letting go`, JSON.stringify(col) === JSON.stringify(want), JSON.stringify(col));
+  if (monster === 'puff') {
+    const puff = await page.evaluate(() => window.__t.notes('puff').map((n) => ({ id: n.id, beat: n.beat, step: n.step, dur: n.dur })).sort((a, b) => a.beat - b.beat));
+    check('Maker Puff: another key in a full beat moves its bead (same bead), and the long note before still ends where it begins', puff.length === 2 && puff[1].id === first && puff[1].step === 6 && puff[0].beat + puff[0].dur === 2, JSON.stringify(puff));
+  }
+}
+
+// Monster Makers drawing a tune: a full beat lets its oldest bead go; a finger moving up inside the beat it just drew re-pitches that bead.
+await freshLane(page, 'maker', 'bloop');
+await page.evaluate(() => window.__monster.studio.stop());
+{
+  for (const step of [0, 2, 4]) await tapSpot(page, step, 3);
+  const [x2, y2] = await spotCentre(page, 6, 2);
+  const [x4] = await spotCentre(page, 6, 4);
+  await page.mouse.move(x2, y2);
+  await page.mouse.down();
+  for (let i = 1; i <= 8; i++) await page.mouse.move(x2 + ((x4 - x2) * i) / 8, y2, { steps: 2 });
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+  const full = await page.evaluate(() => window.__t.notes('bloop').filter((n) => n.beat === 3).map((n) => n.step));
+  check('Maker: a tune drawn through a full beat (3 beads) lets its oldest go and keeps the cap', JSON.stringify(full) === '[2,4,6]', JSON.stringify(full));
+  const [x6, y6] = await spotCentre(page, 1, 6);
+  const [, y6up] = await spotCentre(page, 5, 6);
+  const p0 = await pastLen(page);
+  await page.mouse.move(x6, y6);
+  await page.mouse.down();
+  for (let i = 1; i <= 8; i++) await page.mouse.move(x6 + (i % 2), y6 + ((y6up - y6) * i) / 8, { steps: 2 });
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+  const up = await page.evaluate(() => window.__t.notes('bloop').filter((n) => n.beat === 6).map((n) => n.step));
+  check('drawing: moving up inside the beat just drawn re-pitches that bead (no second bead), one undo step', JSON.stringify(up) === '[5]' && (await pastLen(page)) - p0 === 1, JSON.stringify(up));
 }
 
 // Draw a tune: a finger dragged sideways from an empty spot leaves a bead in every beat at its height.
@@ -1376,19 +1445,36 @@ await setLane(page, 'bloop', [0, 2, 4, 6].map((b) => bn(2, b)));
     const injected = T.sched.length - queued;
     await T.sleep(400);
     const moved = T.trig.filter((x) => x.ch === bloop && Math.abs(x.beat - m.line) < 1e-6).map((x) => x.midi);
+    // A bead drawn on a beat already handed out (caught up) and re-pitched at once: only its final key is heard.
+    const r = await waitLine((c) => c % 2 === 1 && !T.notes('bloop').some((n) => n.beat === c));
+    const colR = ((r.line % 8) + 8) % 8;
+    st.stepEdit(bloop, (p) => T.edits.setCellEdit(p, bloop, cellW(4, colR, 'one')), { col: colR, coalesce: 'draw-x', preview: 'tap' });
+    st.stepEdit(bloop, (p) => T.edits.moveCellEdit(p, bloop, colR, 4, 6), { col: colR, coalesce: 'draw-x', preview: 'none' });
+    await T.sleep(400);
+    const redrawn = T.trig.filter((x) => x.ch === bloop && Math.abs(x.beat - r.line) < 1e-6 && T.sounds(x)).map((x) => x.midi);
+    // Taking a bead away while the band plays makes no sound of its own (the loop simply stops playing it).
+    const gone = T.notes('bloop').find((n) => n.beat === colR);
+    const on0 = T.on.length;
+    const trig0 = T.trig.length;
+    st.stepEdit(bloop, (p) => T.edits.setCellEdit(p, bloop, cellW(gone.step, colR, 'off')), { col: colR, preview: 'tap' });
+    const removal = { on: T.on.length - on0, trig: T.trig.length - trig0 };
     // A tap far ahead while playing: a soft preview on the next sixteenth line.
     const d = st.debug();
-    const colP = [3, 5, 7, 1].map((k) => (Math.floor(d.beat) + k) % 8).find((c) => c % 2 === 1 && !T.notes('bloop').some((n) => n.beat === c));
+    const colP = [2, 3, 4, 5, 6, 7].map((k) => (Math.floor(d.beat) + k) % 8).find((c) => c % 2 === 1 && !T.notes('bloop').some((n) => n.beat === c));
     const prev0 = d.lastPreview;
     st.stepEdit(bloop, (p) => T.edits.setCellEdit(p, bloop, cellW(7, colP, 'one')), { col: colP, preview: 'tap' });
     const pv = st.debug().lastPreview;
     st.stop();
-    return { added, lineA: a.line, moved, injected, preview: pv !== prev0 ? pv?.beat : null };
+    return { added, lineA: a.line, moved, injected, redrawn, removal, preview: pv !== prev0 ? pv?.beat : null };
   });
   const m2 = await midiOf(page, 'bloop', 2);
   const m5 = await midiOf(page, 'bloop', 5);
   check('catch-up: a bead added on a beat already handed out plays in this pass, once', !!res && res.added.length === 1 && res.added[0] === m5, JSON.stringify(res));
   check("a bead moved on a beat already handed out: nothing is injected, its queued old key plays once, the new key not on top", !!res && res.injected === 0 && res.moved.length === 1 && res.moved[0] === m2, JSON.stringify(res));
+  const m4 = await midiOf(page, 'bloop', 4);
+  const m6 = await midiOf(page, 'bloop', 6);
+  check("a bead drawn on a beat already handed out and re-pitched at once: only its final key is heard (never the drawn one)", !!res && JSON.stringify(res.redrawn) === JSON.stringify([m6]) && m4 !== m6, JSON.stringify(res?.redrawn));
+  check('playing: taking a bead away adds no sound of its own', !!res && res.removal.on === 0 && res.removal.trig === 0, JSON.stringify(res?.removal));
   check('a bead tapped far ahead while playing is previewed on a sixteenth line', !!res && typeof res.preview === 'number' && res.preview % 0.25 === 0, JSON.stringify(res?.preview));
 }
 
@@ -1665,7 +1751,11 @@ for (const v of VIEWS) {
       const grid = box(document.querySelector('.step-grid'));
       const beads = [...document.querySelectorAll('.bead')].map(box);
       const flip = box(document.querySelector('.surface-flip'));
+      const shown = (sel) => [...document.querySelectorAll(sel)].filter((el) => el.getBoundingClientRect().width > 0).length;
       return {
+        glyphs: shown('.bead-head .row-key > .glyph'),
+        stickers: shown('.bead-head .bead-name'),
+        names: document.querySelector('.bead-head .row-key')?.dataset.names === 'true',
         bands: bands.length,
         beads: beads.length,
         minW,
@@ -1682,6 +1772,13 @@ for (const v of VIEWS) {
       geo.bands === 8 && geo.beads > 0 && geo.minW >= 44 && geo.minH >= 26 && geo.head >= 44 && geo.flip >= 38 && geo.scroll <= 0 && geo.inside && geo.beadsIn,
       `${geo.minW.toFixed(0)}×${geo.minH.toFixed(0)}, head ${geo.head.toFixed(0)}, flip ${geo.flip.toFixed(0)}, ${geo.beads} beads, inside ${geo.inside}/${geo.beadsIn}, scroll ${geo.scroll}`,
     );
+    // The mini keys wear the monster's picture; on phones a key with a name sticker shows the sticker only (docs/03).
+    const wantGlyphs = phone && geo.names ? 0 : 8;
+    check(
+      `${v.name} ${mode} ${monster}: mini keys show ${wantGlyphs ? "the monster's picture" : 'their name stickers in place of the picture'}${geo.names ? ' and name stickers' : ''}`,
+      geo.glyphs === wantGlyphs && geo.stickers === (geo.names ? 8 : 0),
+      JSON.stringify({ glyphs: geo.glyphs, stickers: geo.stickers, names: geo.names }),
+    );
   }
   // A tap anywhere in a spot (here near its top edge) lands in that band.
   await freshLane(app.page, 'little', 'grumble');
@@ -1692,6 +1789,12 @@ for (const v of VIEWS) {
     await app.page.waitForTimeout(80);
     const edge = await laneNotes(app.page, 'grumble');
     check(`${v.name}: a tap at the very edge of a spot lands in that band and beat`, JSON.stringify(edge) === '[[6,3]]', JSON.stringify(edge));
+    // A small finger a little off: a tap just over the bead's band edge (0.2 band into the empty band above) still takes the bead away.
+    const off = b.y - 0.2 * b.height;
+    await app.page.mouse.click(b.x + b.width / 2, off);
+    await app.page.waitForTimeout(80);
+    const slop = await laneNotes(app.page, 'grumble');
+    check(`${v.name}: a tap just above a bead (in the empty band over it) still takes that bead away`, slop.length === 0, JSON.stringify(slop));
   }
   await app.page.evaluate(() => window.__monster.studio.stop());
   await app.ctx.close();

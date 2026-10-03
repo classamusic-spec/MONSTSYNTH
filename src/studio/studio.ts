@@ -274,6 +274,12 @@ class Studio {
   /** Beat Hop: the line each drum was last previewed on (`trackId:step`), so a preview never doubles. */
   private lastPreviewLine = new Map<string, number>();
   private lastPreview: { beat: number; when: number } | null = null;
+  /**
+   * Beat Hop: notes a grid edit scheduled itself (catch-up) that have not sounded
+   * yet, by note id. A bead drawn and then dragged to another key before its
+   * turn is re-voiced: its first key is never heard.
+   */
+  private gridInjected = new Map<string, { voice: Voice | null; when: number; occ: number; step: number }>();
   private lastQuietPreview = -Infinity;
   /** This run of the song had something to hear when it started (an empty song never gets a finale). */
   private songHadSound = false;
@@ -752,6 +758,9 @@ class Studio {
       else if (removed.length > 0) this.hit(track.id, removed[0].step, { vel: 0.3 }, { record: false });
       return;
     }
+    // A bead caught up by an edit just now (a drawn one) that moved key before its
+    // turn: its first key is silenced and the new one takes its place.
+    const revoiced = this.revoiceGridNotes(track, moved);
     if (this.mode !== 'loop' || (added.length === 0 && !tapped)) return;
     const L = clip.lengthBeats;
     const nowBeat = transport.beatAt(ctx.currentTime);
@@ -767,9 +776,9 @@ class Studio {
       if (!heard || occ >= transport.scheduledUntil - 1e-9) continue;
       const when = transport.timeAt(occ);
       if (this.seqHitNear(track.id, n.step, when)) continue;
-      this.schedule({ absBeat: occ, channelId: track.id, trackId: track.id, monster: track.monster, note: n, source: 'clip' }, when);
+      this.injectGridNote(track, n, occ, when);
     }
-    if (!tapped || o.preview === 'none' || !heard) return;
+    if (!tapped || o.preview === 'none' || !heard || revoiced.has(tapped.id)) return;
     const occ = nextOccurrence(tapped.beat, L, nowBeat);
     // A bead that jumped inside the handed-out window: its old key plays this time
     // round, and the new one is previewed just after it (never on top of it).
@@ -793,6 +802,47 @@ class Studio {
     engine.trigger(noteRequest(p, track.monster, track.id, tapped.step, { vel, tone: 0 }), when, durSec);
     this.queueVisual(when, { trackId: track.id, monster: track.monster, step: tapped.step, vel, dur: durSec, source: 'live' });
     this.lastPreview = { beat: line, when };
+  }
+
+  /** Schedule a grid note the transport has already passed by (catch-up); a bead's voice is kept until it sounds. */
+  private injectGridNote(track: Track, n: NoteEvent, occ: number, when: number) {
+    const engine = this.engine;
+    if (!engine) return;
+    const e: Scheduled = { absBeat: occ, channelId: track.id, trackId: track.id, monster: track.monster, note: n, source: 'clip' };
+    if (track.monster === 'boom' || !engine.hasChannel(track.id)) {
+      this.schedule(e, when);
+      return;
+    }
+    // As schedule() plays a loop note, keeping the voice (a bead may still move before it sounds).
+    const p = getState().project;
+    this.noteSeqHit(track.id, n.step, when);
+    const durSec = Math.max(0.05, n.dur * (60 / p.tempo));
+    const voice = engine.trigger(noteRequest(p, track.monster, track.id, n.step, { vel: n.vel, tone: n.tone }), when, durSec);
+    this.queueVisual(when, { trackId: track.id, monster: track.monster, step: n.step, vel: n.vel, dur: durSec, source: 'loop', noteId: n.id });
+    this.gridInjected.set(n.id, { voice, when, occ, step: n.step });
+  }
+
+  /** Re-voice caught-up beads that moved before they sounded. Returns their ids. */
+  private revoiceGridNotes(track: Track, moved: NoteEvent[]): Set<string> {
+    const out = new Set<string>();
+    const ctx = this.ctx;
+    const transport = this.transport;
+    if (!ctx || !transport) return out;
+    const now = ctx.currentTime;
+    for (const [id, inj] of this.gridInjected) if (inj.when <= now) this.gridInjected.delete(id);
+    for (const n of moved) {
+      const inj = this.gridInjected.get(n.id);
+      // Already sounding, or from an earlier run of the transport: leave it be.
+      if (!inj || inj.when <= now + 0.003 || Math.abs(transport.timeAt(inj.occ) - inj.when) > 1e-3) continue;
+      this.gridInjected.delete(n.id);
+      inj.voice?.kill(now, 0.005);
+      this.visuals = this.visuals.filter((q) => !(q.v.noteId === n.id && q.time === inj.when));
+      const old = `${track.id}:${inj.step}`;
+      this.seqHits.set(old, (this.seqHits.get(old) ?? []).filter((t) => t !== inj.when));
+      out.add(n.id);
+      if (!this.seqHitNear(track.id, n.step, inj.when)) this.injectGridNote(track, n, inj.occ, inj.when);
+    }
+    return out;
   }
 
   /** A row head on the grid: the drum (or note) sounds at once, and nothing is recorded. */

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { MODE_CAPS } from '../../model/monsters';
 import { activeClip, trackHasLoop } from '../../model/project';
 import { getState, labFace, useApp, type AppState } from '../../store/store';
 import { studio } from '../../studio/studio';
@@ -13,7 +14,7 @@ import { say } from './bubbles';
 //   lots of drumming on Boom   → points at the flip button (Beat Hop)
 //   stones placed after Stop   → points at Play
 //   first loop made (a take, or stones on the grid) → points at another monster (add a layer)
-//   second loop made           → points at "make it a song" (Little) or Monster Blocks (Maker)
+//   a second monster has a loop → points at "make it a song" (Little) or Monster Blocks (Maker)
 // Hints never block anything and can be switched off in Parent Space.
 // Play (or Magic) with nothing to hear is answered every time, not once: the
 // monster has already said "huh?", a bubble shows what to do, and the hand
@@ -34,7 +35,10 @@ function wayToMusic(s: AppState): Way {
     // Loops wait for blocks; sleeping monsters wait to be woken; otherwise make a loop first.
     if (awake) return { selector: '.block-row[data-empty="false"][data-sleeping="false"] .block[data-on="false"]', text: 'Tap a block!', icon: 'blocks' };
     if (looped.length) return { selector: '.block-row[data-sleeping="true"] .row-avatar', text: 'Wake a monster!', icon: 'zzz' };
-    return { selector: '.dock-btn[data-screen="lab"]', text: 'Make a loop in the Lab first!', icon: 'lab' };
+    // The screen's own big "Go to the Lab" (the dock's Lab button when it is not there):
+    // closer to the finger, and never under the bubble in portrait.
+    const go = document.querySelector('.blocks-empty .btn-primary') ? '.blocks-empty .btn-primary' : '.dock-btn[data-screen="lab"]';
+    return { selector: go, text: 'Make a loop in the Lab first!', icon: 'lab' };
   }
   if (s.screen === 'paint') return { selector: '.paint-canvas', text: 'Draw your music!', icon: 'brush' };
   if (looped.length && !awake) return { selector: '.loop-badge[data-sleeping="true"]', text: 'Wake a monster!', icon: 'zzz' };
@@ -60,7 +64,7 @@ export function Coach() {
   const handRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
   const done = useRef(new Set<string>());
-  /** While the hand answers a "nothing to play", the once-a-session hints wait (they can come later). */
+  /** While the hand answers a "nothing to play", the once-a-session hints wait (and come right after). */
   const answering = useRef(0);
 
   useEffect(() => {
@@ -70,13 +74,19 @@ export function Coach() {
     let boomHits = 0;
     let stones = 0;
     let recorded = false;
-    let loops = 0;
-    const gridLoops = new Set<string>(); // monsters whose first loop was made on the grid
     const timers: ReturnType<typeof setTimeout>[] = [];
     const show = (id: string, selector: string, ms: number) => {
-      if (done.current.has(id) || performance.now() < answering.current) return;
+      if (done.current.has(id)) return;
+      const now = performance.now();
+      // A "nothing to play" answer is on screen: this hint comes right after it.
+      if (now < answering.current) {
+        timers.push(setTimeout(() => show(id, selector, ms), answering.current - now + 200));
+        return;
+      }
+      // A hint whose target is gone (the child moved on) is not used up: it can come later.
+      if (!document.querySelector(selector)) return;
       done.current.add(id);
-      setTarget({ selector, until: performance.now() + ms });
+      setTarget({ selector, until: now + ms });
     };
     const hide = () => setTarget(null);
 
@@ -110,13 +120,18 @@ export function Coach() {
       if (s.screen !== 'lab' || labFace(s) !== 'grid' || s.transport.playing || studio.gridWaiting) return;
       if (spotlightNotes(s) > spotlightNotes(prev) && ++stones === 4) show('play-glow', '.t-play', 4000);
     });
+    // Counted in monsters with loops, not takes: a re-take on the same monster is
+    // still one loop. Read once the store has the new loop (after the delay).
+    const looped = () => getState().project.tracks.filter(trackHasLoop).length;
     const countLoop = (delay: number) => {
-      loops++;
-      if (loops === 1) timers.push(setTimeout(() => show('add-layer', '.pod:not([data-selected="true"]) .pod-hit', 5000), delay));
-      // Two loops make a song: Little Monsters have a button for it, Monster Makers go to Blocks.
-      if (loops === 2) {
-        timers.push(setTimeout(() => show('make-song', document.querySelector('.t-song') ? '.t-song' : '.dock-btn[data-screen="blocks"]', 5000), delay));
-      }
+      timers.push(
+        setTimeout(() => {
+          const n = looped();
+          if (n === 1) show('add-layer', '.pod:not([data-selected="true"]) .pod-hit', 5000);
+          // Two monsters with loops make a song: Little Monsters have a button for it, Monster Makers go to Blocks.
+          if (n >= 2) show('make-song', !MODE_CAPS[getState().settings.ageMode].magicPanel ? '.t-song' : '.dock-btn[data-screen="blocks"]', 5000);
+        }, delay),
+      );
     };
     const offEvent = onStudioEvent((e) => {
       if (e.type === 'record-start') {
@@ -124,12 +139,9 @@ export function Coach() {
         hide();
       }
       if (e.type === 'record-stop' && e.notes > 0) countLoop(1200);
-      // A loop made on the grid (or by the wand) counts once per monster; a take
-      // counts when it ends (above). Grid hints wait a little: the child is still placing stones.
-      if (e.type === 'loop-created' && !getState().transport.recording && !gridLoops.has(e.trackId)) {
-        gridLoops.add(e.trackId);
-        countLoop(4000);
-      }
+      // A loop made on the grid (or by the wand); a take counts when it ends (above).
+      // Grid hints wait a little: the child is still placing stones.
+      if (e.type === 'loop-created' && !getState().transport.recording) countLoop(4000);
     });
     return () => {
       offNote();

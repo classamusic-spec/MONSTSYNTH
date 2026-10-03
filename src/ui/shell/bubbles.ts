@@ -11,7 +11,11 @@ export interface BubbleMsg {
   icon?: IconName;
   /** Who speaks (and chirps); the monster on the keys when left out. */
   monster?: MonsterKind;
-  /** Its voice: "yay" for good news (a check), "huh?" otherwise. Null when the sound was already made. */
+  /**
+   * Its voice: "yay" for good news (a check), "huh?" otherwise, so "huh?" always
+   * means something is missing. A bubble that is not a dead end ("Play
+   * something!") passes its own kind, or null for none (also when the sound was already made).
+   */
   chirp?: ChirpKind | null;
   id?: number;
 }

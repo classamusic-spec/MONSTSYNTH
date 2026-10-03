@@ -110,7 +110,12 @@ interface Drag {
   lastCol: number;
   /** The loop the last filled spot got (heard when the finger lifts). */
   filled: string | null;
+  /** A held block starts its preview; a quick tap only pops (no cut-off fragment first). */
+  listenTimer: ReturnType<typeof setTimeout> | null;
 }
+
+/** How long a finger rests on a block before it is heard. */
+const LISTEN_HOLD_MS = 120;
 
 export function BlocksScreen() {
   const project = useApp((s) => s.project);
@@ -205,10 +210,11 @@ export function BlocksScreen() {
       gesture,
       lastCol: hit.col,
       filled: null,
+      listenTimer: null,
     };
     drag.current = d;
-    // Pressing a block lets you hear it (lifting without moving then takes it away).
-    if (cell) listen(row, cell, hit.col);
+    // Holding a block lets you hear it; a tap (lifting without moving) takes it away with a pop.
+    if (cell) d.listenTimer = setTimeout(() => drag.current === d && listen(row, cell, hit.col), LISTEN_HOLD_MS);
     else d.filled = fill(hit.rowId, hit.col, gesture);
   };
 
@@ -238,6 +244,7 @@ export function BlocksScreen() {
     const d = drag.current;
     if (!d || d.pointerId !== e.pointerId) return;
     drag.current = null;
+    if (d.listenTimer) clearTimeout(d.listenTimer);
     if (d.mode === 'pending') {
       clear(d.rowId, d.startCol);
     } else if (d.mode === 'move') {
@@ -295,6 +302,8 @@ export function BlocksScreen() {
   };
 
   const draggingRow = dragging ? rows.find((r) => r.id === dragging.rowId) : null;
+  // No loops yet: the blocks sit under the empty card, so Tab goes straight to its buttons.
+  const noLoops = rows.every((r) => !r.clipId);
   // A song with no loops yet can start straight on Boom's beat grid.
   const beatTrack = project.tracks.find((t) => t.monster === 'boom' && canGrid(t, project.loopBeats));
 
@@ -378,7 +387,7 @@ export function BlocksScreen() {
                     data-col={c}
                     data-on={on}
                     data-dragged={isDragged}
-                    tabIndex={row.id === tabRow && c === tabCol ? 0 : -1}
+                    tabIndex={!noLoops && row.id === tabRow && c === tabCol ? 0 : -1}
                     aria-label={`${row.label}, block ${c + 1}: ${on ? 'playing' : 'empty'}`}
                     onFocus={() => (focus?.rowId !== row.id || focus.col !== c) && setFocus({ rowId: row.id, col: c })}
                     onKeyDown={(e) => onCellKey(e, row.id, c)}
@@ -409,7 +418,7 @@ export function BlocksScreen() {
           <span />
         </div>
       )}
-      {rows.every((r) => !r.clipId) && (
+      {noLoops && (
         <div className="blocks-empty">
           <MonsterArt kind="bloop" />
           <p>Make a loop in the Lab first — then build your song here!</p>

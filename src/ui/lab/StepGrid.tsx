@@ -15,8 +15,8 @@ import { wrap } from '../../magic/timing';
 import { moveCellEdit, setCellEdit } from '../../model/edits';
 import { gridColumnCap, MODE_CAPS, MONSTERS } from '../../model/monsters';
 import { activeClip } from '../../model/project';
-import type { MonsterKind, NoteEvent, Track } from '../../model/types';
-import { getState, useApp } from '../../store/store';
+import type { MonsterKind, NoteEvent, Project, Track } from '../../model/types';
+import { beginGroup, endGroup, getState, useApp } from '../../store/store';
 import { studio } from '../../studio/studio';
 import { onFrame, onNote } from '../../studio/visualBus';
 import { glow } from '../common/glow';
@@ -66,6 +66,8 @@ const STICK = 6;
 const GLISS_MS = 60;
 /** A bead's drag audition is soft (the child is looking for a note, as on the keys). */
 const GLISS_VEL = 0.6;
+/** A tap this far (in bands, from a bead's centre) into an empty neighbouring band still lands on that bead. */
+const BEAD_SLOP = 0.8;
 
 type Geo = GridGeometry;
 
@@ -220,6 +222,12 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
   const held = useRef(new Set<string>());
   /** The drag's glissando: the last key heard, and the latest key waiting to be heard. */
   const gliss = useRef<{ last: number; step: number; timer: ReturnType<typeof setTimeout> | null }>({ last: -Infinity, step: 0, timer: null });
+  /**
+   * The undo step of the gesture(s) under the fingers: opened at touch-down and
+   * closed when the last finger of that gesture lifts, so a drag that pauses to
+   * listen (longer than the store's coalesce window) is still one Undo.
+   */
+  const undoStep = useRef<{ key: string; token: Project } | null>(null);
   // What imperative handlers need from the latest render.
   const view = useRef({ rows, grid, cols, lengthBeats, notes, sustain, all: all.length, spare: spare.length });
   view.current = { rows, grid, cols, lengthBeats, notes, sustain, all: all.length, spare: spare.length };
@@ -353,6 +361,9 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
     g.step = step;
     const wait = GLISS_MS - (performance.now() - g.last);
     if (wait <= 0) {
+      // A late timer must not sound this key a second time.
+      if (g.timer) clearTimeout(g.timer);
+      g.timer = null;
       g.last = performance.now();
       studio.auditionStep(track.id, step, GLISS_VEL);
       return;
@@ -377,16 +388,29 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
     glissando(to);
   };
 
-  /** The bead under a finger in column `col`: the band's own, or a neighbour's bead that reaches over it. */
+  /**
+   * The bead under a finger in column `col`: the band's own, or a neighbour's
+   * bead when the finger is just over its edge (bands are short on phones: a
+   * small finger a little off still takes the bead it aimed at) or under its
+   * tail's head.
+   */
   const beadUnder = (geo: Geo, row: number, col: number, x: number, y: number): number | null => {
     const lit = (r: number) => r >= 0 && r < geo.rows.length && stateNow(geo.rows[r].step, col) !== 'off';
     if (lit(row)) return geo.rows[row].step;
+    let best: number | null = null;
+    let bestD = Infinity;
     for (const r of [row - 1, row + 1]) {
       if (!lit(r)) continue;
-      const b = cellEl(geo.rows[r].step, col)?.querySelector('.bead')?.getBoundingClientRect();
-      if (b && Math.hypot(x - (b.left + b.width / 2), y - (b.top + b.height / 2)) <= b.width * 0.4) return geo.rows[r].step;
+      const band = geo.rows[r];
+      const dy = Math.abs(y - (band.t + band.b) / 2) / Math.max(1, band.b - band.t);
+      const b = cellEl(band.step, col)?.querySelector('.bead')?.getBoundingClientRect();
+      const onBead = !!b && Math.hypot(x - (b.left + b.width / 2), y - (b.top + b.height / 2)) <= b.width * 0.4;
+      if ((dy <= BEAD_SLOP || onBead) && dy < bestD) {
+        best = band.step;
+        bestD = dy;
+      }
     }
-    return null;
+    return best;
   };
 
   /** Drawing a tune: the finger is over key `step` in beat `col` (it re-pitches the bead it drew there, or draws one). */
@@ -510,6 +534,8 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
     // Fingers down together (two hands drumming in stones) make one undo step.
     const together = gestures.current.values().next().value as Gesture | undefined;
     const key = together?.key ?? `grid-${e.pointerId}-${Math.round(e.timeStamp)}`;
+    // (A take being recorded is already one undo step.)
+    if (!undoStep.current && !getState().transport.recording) undoStep.current = { key, token: beginGroup(key) };
     if (lane.kind === 'beads') {
       beadDown(e, geo, hit.row, hit.col, key);
       return;
@@ -575,6 +601,15 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
     if (g.mode === 'drag' && e.type === 'pointerup' && !g.shifted && Math.hypot(e.clientX - g.down[0], e.clientY - g.down[1]) < SLOP * 2) {
       write(g.start.step, g.start.col, 'off', g.key, true);
     }
+    closeUndoStep();
+  };
+
+  /** The last finger of the gesture is up: its undo step closes (an empty one, a refused tap, is dropped). */
+  const closeUndoStep = () => {
+    const u = undoStep.current;
+    if (!u || [...gestures.current.values()].some((g) => g.key === u.key)) return;
+    undoStep.current = null;
+    endGroup(u.token);
   };
 
   // Keyboards (Chromebooks): arrows move between stones and drum pictures, Enter taps one.
@@ -698,12 +733,15 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
     paintInk();
   }, [rowKey, cols, addSlot, all.length, measure, refit, showBeat, paintInk]);
 
-  // Let go of a waiting glissando note when the grid goes away.
+  // Let go of a waiting glissando note (and close a gesture's undo step) when the grid goes away.
   useEffect(() => {
     const g = gliss.current;
+    const u = undoStep;
     return () => {
       if (g.timer) clearTimeout(g.timer);
       g.timer = null;
+      if (u.current) endGroup(u.current.token);
+      u.current = null;
     };
   }, []);
 

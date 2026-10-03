@@ -201,6 +201,14 @@
   pointer-events: none;
 }
 
+/* Upright, the dock is a bar along the top: bubbles speak just below it, so the
+   button the Coach's hand points at is never hidden under one. */
+@media (orientation: portrait) {
+  .bubble-layer {
+    top: calc(var(--safe-t) + var(--gap) * 2 + var(--dock-btn) + var(--gap-s) * 2 + 28px);
+  }
+}
+
 .bubble {
   display: flex;
   align-items: center;

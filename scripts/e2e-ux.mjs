@@ -14,6 +14,7 @@
 //      Record, Surprise, Undo and Play) → Blocks, playing an arranged song;
 //      one Undo takes it back. Blocks' Magic replays from block 1.
 //   7. Reduced motion: no blinking, no echo ghosts, glows instead of jumps.
+//   8. Upright tablets: the answer's bubble never hides what the hand points at.
 // Usage: node scripts/e2e-ux.mjs [url]   (the dev server must be running)
 import { chromium } from 'playwright';
 
@@ -65,6 +66,17 @@ const handOn = (page, selector) =>
     if (!hand || !el) return false;
     const r = el.getBoundingClientRect();
     return Math.abs(parseFloat(hand.style.left) - (r.left + r.width / 2)) < 2 && Math.abs(parseFloat(hand.style.top) - (r.top + r.height / 2)) < 2;
+  }, selector);
+/** Nothing covers this element's centre (bubbles and the hand let touches through, so a covering bubble shows here). */
+const uncovered = (page, selector) =>
+  page.evaluate((selector) => {
+    const el = document.querySelector(selector);
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    const b = document.querySelector('.bubble')?.getBoundingClientRect();
+    const clear = !b || b.right <= r.left || r.right <= b.left || b.bottom <= r.top || r.bottom <= b.top;
+    return !!top && (top === el || el.contains(top)) && clear;
   }, selector);
 /** Count "nothing-to-play" answers from now on. */
 const countNothing = (page) =>
@@ -145,7 +157,7 @@ async function recordKeys(page, monster, keys) {
   await page.locator('.t-play').click();
   await page.waitForTimeout(150);
   check('Blocks: Play on an empty song stays stopped', !(await S(page)).transport.playing);
-  check('…and the hand points at the Lab, where loops are made', await handOn(page, '.dock-btn[data-screen="lab"]'));
+  check('…and the hand points at the screen\'s own "Go to the Lab", where loops are made', await handOn(page, '.blocks-empty .btn-primary'));
   const arrangementBefore = JSON.stringify((await S(page)).project.arrangement);
   await page.locator('.t-magic').click();
   const finale = await page
@@ -184,6 +196,25 @@ async function recordKeys(page, monster, keys) {
   await ctx.close();
 }
 
+// ── 1b. Arming Record is not a dead end: no "huh?" ─────────────────────────
+{
+  const { ctx, page } = await openApp();
+  await page.evaluate(() => window.__monster.actions.newSong('blank'));
+  await page.waitForTimeout(300);
+  await spy(page);
+  await page.getByRole('button', { name: 'Record a loop' }).click();
+  await page.waitForTimeout(300);
+  const armed = (await S(page)).transport.armed;
+  const sounds = await trig(page);
+  check('arming Record shows "Play something!" without the "huh?" chirp', armed && (await page.locator('.bubble').textContent())?.includes('Play something') && sounds.length === 0, sounds.join(' '));
+  await page.getByRole('button', { name: 'Stop recording' }).click();
+  await spy(page);
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await page.waitForTimeout(200);
+  check('…while "Nothing to undo" still wonders "huh?" (two notes)', (await trig(page)).length === 2);
+  await ctx.close();
+}
+
 // ── 2. Monster Blocks is heard, and never writes a note ────────────────────
 {
   const { ctx, page } = await openApp();
@@ -202,9 +233,9 @@ async function recordKeys(page, monster, keys) {
   await page.mouse.down();
   const t0 = Date.now();
   let pressed = await dbg(page);
-  while (pressed.voices === 0 && Date.now() - t0 < 150) pressed = await dbg(page);
+  while (!(pressed.voices > 0 && pressed.auditioning) && Date.now() - t0 < 350) pressed = await dbg(page);
   const pressSounds = await trig(page);
-  check('pressing a block plays its loop within 150 ms', pressed.voices > 0 && pressed.auditioning, `${pressed.voices} voices after ${Date.now() - t0} ms`);
+  check('holding a block plays its loop (after a short rest, well under 350 ms)', pressed.voices > 0 && pressed.auditioning, `${pressed.voices} voices after ${Date.now() - t0} ms`);
   check("…on Bloop's own preview channel (dressed like Bloop, never its loop's channel)", pressSounds.length > 0 && pressSounds.every((ch) => ch === 'preview:bloop'), pressSounds.join(' '));
   await spy(page);
   await page.mouse.up();
@@ -213,6 +244,18 @@ async function recordKeys(page, monster, keys) {
   const pop = await trig(page);
   let s = await S(page);
   check('lifting takes the block away with a pop from Bloop (the preview stops)', s.project.arrangement.rows[bloop][col] === null && !released.auditioning && pop.length === 2 && pop.every((ch) => ch === bloop), pop.join(' '));
+  await page.evaluate(() => window.__monster.studio.undo());
+  await page.waitForTimeout(100);
+  // A quick tap only pops: no cut-off fragment of the loop first.
+  await spy(page);
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.waitForTimeout(40);
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const tapped = await trig(page);
+  s = await S(page);
+  check('a quick tap on a block is one clean pop (no preview first)', s.project.arrangement.rows[bloop][col] === null && tapped.length === 2 && tapped.every((ch) => ch === bloop), tapped.join(' '));
   await page.evaluate(() => window.__monster.studio.undo());
   await page.waitForTimeout(100);
 
@@ -419,6 +462,20 @@ async function recordKeys(page, monster, keys) {
   const down = await focused();
   check('↓ moves to the next monster, same block', down[0] !== bloop && down[1] === 3);
   check('the keyboard never writes a note either', (await clipsJson(page)) === clips0);
+  // No loops at all: the blocks hide under the empty card, so Tab skips them for "Go to the Lab".
+  await page.evaluate(async () => {
+    await window.__monster.actions.newSong('blank');
+    window.__monster.actions.setScreen('blocks');
+  });
+  await page.waitForTimeout(300);
+  await page.evaluate(() => document.activeElement?.blur());
+  let walk = '';
+  for (let i = 0; i < 30; i++) {
+    await page.keyboard.press('Tab');
+    walk = await page.evaluate(() => (document.activeElement?.matches('.block') ? 'block' : document.activeElement?.matches('.blocks-empty .btn-primary') ? 'go' : ''));
+    if (walk) break;
+  }
+  check('empty Blocks: a Tab walk reaches "Go to the Lab" without landing on a hidden block', walk === 'go', walk);
   await ctx.close();
 }
 
@@ -426,6 +483,7 @@ async function recordKeys(page, monster, keys) {
 for (const viewport of [
   { width: 1024, height: 768 },
   { width: 844, height: 390 },
+  { width: 820, height: 1180 },
 ]) {
   const tag = `${viewport.width}×${viewport.height}`;
   const { ctx, page } = await openApp({ viewport });
@@ -433,14 +491,19 @@ for (const viewport of [
   await page.waitForTimeout(300);
   await recordKeys(page, 'bloop', ['a', 'd', 'g', 'd']);
   check(`${tag}: one loop, no song button yet`, (await page.locator('.t-song').count()) === 0);
+  // A re-take on the same monster is still one loop: no song hint is spent on it.
+  await page.waitForTimeout(1300);
+  await recordKeys(page, 'bloop', ['g', 'd', 'a', 'd']);
+  await page.waitForTimeout(1300);
+  check(`${tag}: two takes on one monster: no song button, no hand on Blocks`, (await page.locator('.t-song').count()) === 0 && !(await handOn(page, '.dock-btn[data-screen="blocks"]')));
   await recordKeys(page, 'boom', ['a', 's', 'a', 's']);
-  check(`${tag}: two loops bring the song button`, (await page.locator('.t-song').count()) === 1);
+  check(`${tag}: two monsters with loops bring the song button`, (await page.locator('.t-song').count()) === 1);
   const r = await rects(page, ['.t-play', '.t-rec', '.t-small:not(.t-song)', '.t-song']);
   check(`${tag}: the song button is clear of Play, Record and Undo, and on screen`, r.every(Boolean) && !overlap(r[3], r[0]) && !overlap(r[3], r[1]) && !overlap(r[3], r[2]) && r[3].b <= viewport.height && r[3].r <= viewport.width);
-  if (viewport.width === 1024) {
-    await page.waitForTimeout(1300);
-    check(`${tag}: after the second loop the hand points at the song button`, await handOn(page, '.t-song'));
-  }
+  const face = await page.locator('.t-song .t-face').boundingBox();
+  check(`${tag}: the song button is a primary-sized target (≥ 52 px)`, face.width >= 52 && face.height >= 52, `${face.width.toFixed(0)}×${face.height.toFixed(0)}`);
+  await page.waitForTimeout(1300);
+  check(`${tag}: after the second monster's loop the hand points at the song button`, await handOn(page, '.t-song'));
   // Under Beat Hop's grid, the Surprise wand has Record's place: still no collision.
   await page.evaluate(() => window.__monster.actions.setLabView('grid'));
   await page.waitForTimeout(250);
@@ -506,6 +569,25 @@ for (const viewport of [
   const cheer = await anims(page, 'cheer-');
   const moving = cheer.filter((a) => a.props.some((p) => ['transform', 'translate', 'scale', 'rotate'].includes(p)));
   check('a first loop with reduced motion: a glow, and no transform animation', cheer.some((a) => a.id === 'cheer-glow') && moving.length === 0, cheer.map((a) => a.id).join(' '));
+  await ctx.close();
+}
+
+// ── 8. Upright tablets: the bubble never hides the hand's target ───────────
+{
+  const viewport = { width: 820, height: 1180 };
+  const { ctx, page } = await openApp({ viewport });
+  await page.evaluate(() => window.__monster.actions.newSong('blank'));
+  await page.waitForTimeout(300);
+  await page.locator('.t-play').click();
+  await page.waitForTimeout(200);
+  check('820×1180 Lab: the empty-Play hand points at Record, and nothing covers it', (await handOn(page, '.t-rec')) && (await uncovered(page, '.t-rec')));
+  check('820×1180 Lab: the bubble sits below the dock', await page.evaluate(() => document.querySelector('.bubble').getBoundingClientRect().top >= document.querySelector('.dock').getBoundingClientRect().bottom));
+  await page.locator('.dock-btn[data-screen="blocks"]').click();
+  await page.waitForTimeout(300);
+  await page.locator('.t-play').click();
+  await page.waitForTimeout(200);
+  check('820×1180 Blocks: the empty-Play hand points at "Go to the Lab", and nothing covers it', (await handOn(page, '.blocks-empty .btn-primary')) && (await uncovered(page, '.blocks-empty .btn-primary')));
+  check('820×1180 Blocks: …and the dock stays uncovered too', await uncovered(page, '.dock-btn[data-screen="lab"]'));
   await ctx.close();
 }
 

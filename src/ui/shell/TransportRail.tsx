@@ -70,7 +70,8 @@ export function TransportRail() {
     return !t || (activeClip(t)?.notes.length ?? 0) === 0;
   });
   const caps = useCaps();
-  const songReady = useApp((s) => s.project.tracks.filter(trackHasLoop).length >= 2);
+  // Two awake monsters with loops: enough for a song (sleeping ones would only bring a "huh?").
+  const songReady = useApp((s) => s.project.tracks.filter((t) => trackHasLoop(t) && !t.sleeping).length >= 2);
   const [bump, setBump] = useState<string | null>(null);
   // "Play something!" goes as soon as the take starts (or is called off), so it
   // never hides the effect buddies a child reaches for mid-take.
@@ -138,7 +139,8 @@ export function TransportRail() {
             const st = getState();
             if (st.transport.armed) {
               const monster = st.project.tracks.find((t) => t.id === st.selectedTrackId)?.monster;
-              askId.current = say({ text: 'Play something!', icon: 'record', monster });
+              // No voice: the armed button is its own feedback, and "huh?" means "nothing here".
+              askId.current = say({ text: 'Play something!', icon: 'record', monster, chirp: null });
             }
           }}
         >
@@ -184,19 +186,19 @@ export function TransportRail() {
         )}
       </div>
 
-      {/* Little Monsters: the Magic panel's place holds "make it a song" (the wand, then the blocks). */}
+      {/* Little Monsters: the Magic panel's place holds "make it a song" (blocks, then play). */}
       {!caps.magicPanel && screen === 'lab' && songReady && (
         <button
           className="t-btn t-small t-song"
           data-bump={bump === 'song'}
           aria-label="Make it a song: Monster Magic builds a song from my loops and plays it"
           onClick={() => {
-            flash('song');
-            studio.makeSong();
+            if (studio.makeSong()) flash('song');
           }}
         >
           <span className="t-face">
-            <Icon name="wand" className="t-song-wand" />
+            {/* A play badge, not a wand: the Surprise wand sits next to it under the grid. */}
+            <Icon name="play" className="t-song-badge" />
             <Icon name="blocks" className="t-song-blocks" />
           </span>
           <span className="t-label">Song</span>

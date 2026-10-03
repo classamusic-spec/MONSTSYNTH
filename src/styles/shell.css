@@ -486,9 +486,12 @@
   animation: bump 420ms var(--ease-pop);
 }
 
-/* "Make it a song" (Little Monsters, two loops or more): the wand over a stack
-   of blocks, in the Magic panel's place under Undo. */
+/* "Make it a song" (Little Monsters, two awake loops or more): a stack of blocks
+   with a play badge, in the Magic panel's place under Undo. */
 .t-song .t-face {
+  /* The one-tap primary action for the youngest: never smaller than a primary button. */
+  width: max(52px, var(--small-btn));
+  height: max(52px, var(--small-btn));
   background: radial-gradient(circle at 35% 28%, #ffd76a 0%, #ff8a2b 72%);
   color: #fff;
   border-color: rgba(255, 255, 255, 0.85);
@@ -500,7 +503,7 @@
   height: 62%;
 }
 
-.t-song .t-song-wand {
+.t-song .t-song-badge {
   position: absolute;
   right: -8%;
   top: -10%;
@@ -508,8 +511,8 @@
   height: 46%;
   padding: 3px;
   border-radius: 50%;
-  background: #6a3fe0;
-  color: #fff6c7;
+  background: var(--play-2);
+  color: #fff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
