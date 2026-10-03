@@ -37,6 +37,8 @@ export type StudioEvent =
   | { type: 'record-start' }
   | { type: 'record-stop'; notes: number }
   | { type: 'loop-created'; trackId: string }
+  /** Play (or Magic) was pressed with nothing to hear: the Coach shows where the music comes from. */
+  | { type: 'nothing-to-play' }
   | { type: 'mic-level'; level: number };
 
 type NoteListener = (v: NoteVisual) => void;

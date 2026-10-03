@@ -46,6 +46,22 @@ export function paintingAudible(project: Project): boolean {
   return !anySolo && !project.painting.sleeping && project.painting.strokes.length > 0;
 }
 
+/**
+ * Would Play make a sound? In the Lab (loop mode): a monster you can hear has
+ * notes in its loop, or the painting sings. In Monster Blocks (song mode): some
+ * block holds a loop with notes, of a monster you can hear, or the painting's
+ * row is on. False means Play would only run a silent clock.
+ */
+export function songHasSound(project: Project, mode: PlayMode): boolean {
+  const tracks = audibleTracks(project);
+  const paint = paintingAudible(project);
+  if (mode === 'loop') return paint || tracks.some((t) => (activeClip(t)?.notes.length ?? 0) > 0);
+  const cols = project.arrangement.length;
+  const used = (rowId: string) => (project.arrangement.rows[rowId] ?? []).slice(0, cols);
+  if (paint && used(PAINT_ROW).some(Boolean)) return true;
+  return tracks.some((t) => used(t.id).some((id) => !!id && (t.clips.find((c) => c.id === id)?.notes.length ?? 0) > 0));
+}
+
 export function paintChannel(project: Project, monster: MonsterKind): { channelId: string; trackId: string | null } {
   const track = project.tracks.find((t) => t.monster === monster);
   return track ? { channelId: track.id, trackId: track.id } : { channelId: `paint:${monster}`, trackId: null };

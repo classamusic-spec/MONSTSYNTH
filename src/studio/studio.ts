@@ -6,9 +6,10 @@ import { Transport } from '../audio/transport';
 import type { Voice } from '../audio/voices/base';
 import { TICK_PAD } from '../audio/voices/drums';
 import { audioBufferToWav, blobToAudioBuffer } from '../audio/wav';
+import { magicArrange } from '../magic/arrange';
 import { wandPattern } from '../magic/grooves';
 import { placeNote } from '../magic/recorder';
-import { audibleTracks, collectEvents, type PlayMode, type SeqEvent } from '../magic/sequence';
+import { audibleTracks, collectEvents, songHasSound, type PlayMode, type SeqEvent } from '../magic/sequence';
 import { hasGridFace } from '../magic/steps';
 import { gridLinesIn, isBounce, nextLine, nextOccurrence, snapDuration, wrap } from '../magic/timing';
 import { recordNote, replaceLoopNotes, setRecordedDuration, setTrackSample, tidyLoop } from '../model/edits';
@@ -107,6 +108,58 @@ export interface LessonPlayback {
   lengthBeats: number;
   onEnd?: () => void;
 }
+
+/** A note of a block being heard on its own (Monster Blocks). `absBeat` is the note's beat in its loop. */
+interface AuditionEvent {
+  absBeat: number;
+  channelId: string;
+  trackId: string;
+  monster: MonsterKind;
+  note: NoteEvent;
+  /** Beat the preview ends (long notes are cut short there, with a little tail). */
+  end: number;
+}
+
+/** A monster's little sounds: "huh?" (nothing to play), "yay!" and "pop" (a block goes away). */
+export type ChirpKind = 'huh' | 'yay' | 'pop';
+
+/** [scale step (a drum pad for Boom), start (s), length (s), velocity] */
+type ChirpNote = [step: number, at: number, dur: number, vel: number];
+
+const CHIRPS: Record<ChirpKind, { tune: ChirpNote[]; drums: ChirpNote[] }> = {
+  // A question: two notes up, the second one longer.
+  huh: {
+    tune: [
+      [2, 0, 0.12, 0.6],
+      [4, 0.16, 0.3, 0.68],
+    ],
+    drums: [
+      [4, 0, 0.12, 0.6],
+      [7, 0.16, 0.3, 0.6],
+    ],
+  },
+  // A cheer: a quick climb to the top.
+  yay: {
+    tune: [
+      [2, 0, 0.1, 0.62],
+      [4, 0.09, 0.1, 0.66],
+      [7, 0.18, 0.34, 0.72],
+    ],
+    drums: [
+      [0, 0, 0.12, 0.7],
+      [1, 0.11, 0.12, 0.62],
+      [3, 0.22, 0.2, 0.66],
+    ],
+  },
+  // Going away: a soft blip, high then low.
+  pop: {
+    tune: [
+      [5, 0, 0.07, 0.42],
+      [2, 0.06, 0.1, 0.38],
+    ],
+    drums: [[4, 0, 0.08, 0.45]],
+  },
+};
 
 /** The metronome: a woodblock tick on a channel of its own that no song change touches. */
 const CLICK: ChannelSpec = {
@@ -219,6 +272,14 @@ class Studio {
   private lastPreviewLine = new Map<string, number>();
   private lastPreview: { beat: number; when: number } | null = null;
   private lastQuietPreview = -Infinity;
+  /** This run of the song had something to hear when it started (an empty song never gets a finale). */
+  private songHadSound = false;
+  /** Monster Blocks: a block heard on its own, on a little clock of its own. */
+  private auditionTransport: Transport<AuditionEvent> | null = null;
+  private auditionEvents: AuditionEvent[] = [];
+  private auditionVoices: Voice[] = [];
+  /** Songs that had their first Magic this session (the first one starts on the beat). */
+  private arranged = new Set<string>();
 
   get ready(): boolean {
     return !!this.engine;

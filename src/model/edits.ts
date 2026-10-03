@@ -1,6 +1,6 @@
 import { ensureRows, fillRow, rowIsEmpty } from '../magic/arrange';
 import { insertRecordedNote, setNoteDuration, type InsertOptions } from '../magic/recorder';
-import { isTidy, snapNotes, writeCell, type CellWrite } from '../magic/steps';
+import { isTidy, moveCell, snapNotes, writeCell, type CellWrite } from '../magic/steps';
 import { newId } from './ids';
 import { FX_STEPS, nextFxLevel, nextPreset } from './monsters';
 import { activeClip, createClip, createTrack } from './project';
@@ -114,7 +114,11 @@ export function recordNote(p: Project, trackId: string, note: NoteEvent, opts: I
 /** Set one grid cell of a monster's loop (see writeCell: a full cell or loop changes nothing). */
 export const setCellEdit = (p: Project, trackId: string, w: CellWrite) => editActiveClip(p, trackId, (c) => writeCell(c, w).clip);
 
-/** Replace a loop's notes (a wand groove). */
+/** Move a bead up or down its column (a bead lane drag): the note keeps its id, beat and length. */
+export const moveCellEdit = (p: Project, trackId: string, col: number, from: number, to: number, maxStep?: number) =>
+  editActiveClip(p, trackId, (c) => moveCell(c, col, from, to, c.lengthBeats, maxStep));
+
+/** Replace a loop's notes (a wand groove or tune). */
 export const replaceLoopNotes = (p: Project, trackId: string, notes: NoteEvent[]) => editActiveClip(p, trackId, (c) => ({ ...c, notes }));
 
 /** The magnet: pull every note of a monster's loop exactly onto `grid`. The same project when already tidy. */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GROOVES, grooveNotes } from '../src/magic/grooves';
-import { collectEvents } from '../src/magic/sequence';
+import { collectEvents, songHasSound } from '../src/magic/sequence';
+import { monsterBandProject } from '../src/magic/templates';
 import { writeCell } from '../src/magic/steps';
 import { seededRandom } from '../src/model/ids';
 import { createClip, createProject, songBeats } from '../src/model/project';
@@ -146,5 +147,53 @@ describe('collectEvents · Beat Hop grids', () => {
     for (let k = 0; k * 8 < from; k++) for (const n of clip.notes) if (k * 8 + n.beat < from) expected.push(`${n.id}@${k * 8 + n.beat}`);
     expect(seen.length).toBe(expected.length);
     expect(new Set(seen)).toEqual(new Set(expected));
+  });
+});
+
+describe('songHasSound · Play never runs a silent clock', () => {
+  const paintStroke = { id: 's1', kind: 'line' as const, brush: 'bloop' as const, points: [0.1, 0.5, 0.5, 0.5, 0.9, 0.5], weight: 0.8 };
+
+  it('is false for a new song and true for the Monster Band, in both modes', () => {
+    const empty = createProject({ seed: 1 });
+    expect(songHasSound(empty, 'loop')).toBe(false);
+    expect(songHasSound(empty, 'song')).toBe(false);
+    const band = monsterBandProject(4);
+    expect(songHasSound(band, 'loop')).toBe(true);
+    expect(songHasSound(band, 'song')).toBe(true);
+  });
+
+  it('a loop with no blocks sounds in the Lab but not in Monster Blocks', () => {
+    const p = withLoop(createProject({ seed: 2 }), 0, [note('a', 0)]);
+    expect(songHasSound(p, 'loop')).toBe(true);
+    expect(songHasSound(p, 'song')).toBe(false);
+    const row = new Array(p.arrangement.length).fill(null);
+    row[5] = p.tracks[0].activeClipId;
+    const placed = { ...p, arrangement: { ...p.arrangement, rows: { ...p.arrangement.rows, [p.tracks[0].id]: row } } };
+    expect(songHasSound(placed, 'song')).toBe(true);
+  });
+
+  it('only counts what can be heard (sleeping, solo, empty clips)', () => {
+    const band = monsterBandProject(5);
+    const asleep = { ...band, tracks: band.tracks.map((t) => ({ ...t, sleeping: true })) };
+    expect(songHasSound(asleep, 'loop')).toBe(false);
+    expect(songHasSound(asleep, 'song')).toBe(false);
+    // Soloing a monster with nothing to play leaves silence.
+    const lonely = { ...band, tracks: [...band.tracks, { ...band.tracks[0], id: 'tx', clips: [], activeClipId: null, solo: true }] };
+    expect(songHasSound(lonely, 'loop')).toBe(false);
+    // A block that points at an empty loop is silent.
+    const p = withLoop(createProject({ seed: 3 }), 0, []);
+    const t = p.tracks[0];
+    const rows = { ...p.arrangement.rows, [t.id]: new Array(p.arrangement.length).fill(t.activeClipId) };
+    expect(songHasSound({ ...p, arrangement: { ...p.arrangement, rows } }, 'song')).toBe(false);
+  });
+
+  it('the painting sings in the Lab, and in Blocks when its row is on', () => {
+    const p = createProject({ seed: 6 });
+    const painted: Project = { ...p, painting: { strokes: [paintStroke], sleeping: false } };
+    expect(songHasSound(painted, 'loop')).toBe(true);
+    expect(songHasSound(painted, 'song')).toBe(false);
+    const rows = { ...p.arrangement.rows, [PAINT_ROW]: [PAINT_ROW, ...new Array(p.arrangement.length - 1).fill(null)] };
+    expect(songHasSound({ ...painted, arrangement: { ...p.arrangement, rows } }, 'song')).toBe(true);
+    expect(songHasSound({ ...painted, painting: { ...painted.painting, sleeping: true } }, 'loop')).toBe(false);
   });
 });

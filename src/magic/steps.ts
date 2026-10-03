@@ -7,9 +7,11 @@ import { wrap } from './timing';
 // MONSTER MAGIC · Beat Hop, the step grid on the back of the keys.
 //
 // The grid is only a second way to look at (and edit) the loop the monster
-// already has: one column is one beat, one row is one drum. Nothing new is
-// stored. A cell is just "the notes of this drum that land in this beat", so
-// live recordings, wand grooves and grid taps all show up in the same picture.
+// already has: one column is one beat, one row is one drum (Boom) or one key
+// (the melodic monsters' bead lane: eight bands in the key colours, so a bead
+// can never be out of key). Nothing new is stored. A cell is just "the notes of
+// this drum (or key) that land in this beat", so live recordings, wand grooves
+// and grid taps all show up in the same picture.
 //
 //   'one'    a hit on the beat              (one pip)
 //   'double' on the beat and on its "and"   (two pips: tss-tss)
@@ -47,10 +49,15 @@ export interface GridProjection {
   noteCell: Map<string, [number, number]>;
 }
 
-/** Monsters with a grid face. (Melodic monsters get theirs, the bead lane, next.) */
+const GRID_FACES: readonly MonsterKind[] = ['boom', 'bloop', 'grumble', 'spark', 'puff', 'mimic'];
+
+/** Monsters with a grid face: Boom's drum rows, and a bead lane for every melodic monster. */
 export function hasGridFace(monster: MonsterKind): boolean {
-  return monster === 'boom';
+  return GRID_FACES.includes(monster);
 }
+
+/** The keys a bead lane always shows (one band per key). */
+export const BEAD_KEYS = 8;
 
 /** Grid columns for a loop: one per beat, for whole loops of 4 to 16 beats; otherwise no grid. */
 export function gridColumns(clip: Clip | null, loopBeats: number): number | null {
@@ -89,6 +96,17 @@ export function drumRows(clip: Clip | null, base: readonly number[], added: read
     return i < 0 ? DRUM_ROW_ORDER.length + p : i;
   };
   return [...pads].sort((a, b) => rank(a) - rank(b));
+}
+
+/**
+ * Bands of a bead lane, top to bottom: the eight keys (step 0 at the bottom),
+ * plus any key the loop already plays beyond them (a kept Learn song can reach
+ * one higher), so a lane never hides a note it plays.
+ */
+export function melodicRows(notes: readonly NoteEvent[] = [], count = BEAD_KEYS): number[] {
+  const steps = new Set<number>(Array.from({ length: count }, (_, i) => i));
+  for (const n of notes) steps.add(n.step);
+  return [...steps].sort((a, b) => b - a);
 }
 
 /**
@@ -224,8 +242,10 @@ export type WriteResult = 'changed' | 'same' | 'full';
 /**
  * Set one cell. Only notes of `w.step` in column `w.col` are touched; 'off'
  * removes them all (off-grid pips too). Notes already where the target wants
- * them keep their ids. A full column or loop is refused, never evicted, and
- * 'same' and 'full' return the very same clip object.
+ * them keep their ids. Drums: a full column or loop is refused, never evicted,
+ * and 'same' and 'full' return the very same clip object. Beads: a full column
+ * lets go of its oldest bead, which really *moves* to the new key (it keeps its
+ * id, so it glides there and is never heard twice).
  */
 export function writeCell(clip: Clip, w: CellWrite): { clip: Clip; result: WriteResult } {
   const L = w.lengthBeats;
@@ -241,17 +261,20 @@ export function writeCell(clip: Clip, w: CellWrite): { clip: Clip; result: Write
 
   const missing = want.filter((beat) => !mine.some((n) => keep.has(n.id) && n.beat === beat));
   let notes = clip.notes.filter((n) => !(n.step === w.step && inCol(n)) || keep.has(n.id));
+  /** Ids of beads that make room: they move to the new key. */
+  const moving: string[] = [];
 
   if (missing.length > 0) {
     if (w.isDrum) {
       const pads = new Set(notes.filter(inCol).map((n) => n.step));
       if (!pads.has(w.step) && pads.size >= (w.maxDrumsPerCell ?? 4)) return { clip, result: 'full' };
     } else {
-      // A full column lets go of its oldest note to make room (one bead per column: it moves).
+      // A full column lets go of its oldest bead to make room (one bead per column: it jumps).
       const others = notes.filter((n) => inCol(n) && n.step !== w.step);
       const over = others.length + want.length - Math.max(1, w.columnCap);
       if (over > 0) {
         const drop = new Set(others.slice(0, over).map((n) => n.id));
+        moving.push(...drop);
         notes = notes.filter((n) => !drop.has(n.id));
       }
     }
@@ -264,12 +287,36 @@ export function writeCell(clip: Clip, w: CellWrite): { clip: Clip; result: Write
       });
     }
     const id = w.newId ?? (() => makeId('n'));
-    for (const beat of missing) {
+    const added = missing.map((beat): NoteEvent => {
       const vel = w.isDrum ? stepVelocity(w.step, beat, w.beatsPerBar) : beat % w.beatsPerBar === 0 ? 0.9 : 0.85;
-      notes.push({ id: id(), beat, step: w.step, dur: w.dur, vel, tone: 0 });
+      return { id: moving.shift() ?? id(), beat, step: w.step, dur: w.dur, vel, tone: 0 };
+    });
+    if (w.trimPrevious) {
+      // One note at a time (Puff): a new note also ends where the next one begins.
+      for (const a of added) {
+        for (const n of [...notes, ...added]) {
+          const gap = (((n.beat - a.beat) % L) + L) % L;
+          if (gap > 1e-9 && gap < a.dur) a.dur = gap;
+        }
+      }
     }
+    notes.push(...added);
   }
   return { clip: { ...clip, notes }, result: 'changed' };
+}
+
+/**
+ * Bead lane: a bead dragged up or down. The notes of `fromStep` in column `col`
+ * move to `toStep` (kept within 0..`maxStep`), keeping their ids, beats and
+ * lengths. A bead already on `toStep` in that column gives way (one bead per key
+ * per beat). The same clip when nothing moves.
+ */
+export function moveCell(clip: Clip, col: number, fromStep: number, toStep: number, lengthBeats: number, maxStep = BEAD_KEYS - 1): Clip {
+  const to = Math.max(0, Math.min(maxStep, Math.round(toStep)));
+  const inCol = (n: NoteEvent) => cellOf(n.beat, lengthBeats).col === col;
+  if (to === fromStep || !clip.notes.some((n) => n.step === fromStep && inCol(n))) return clip;
+  const notes = clip.notes.filter((n) => n.step !== to || !inCol(n)).map((n) => (n.step === fromStep && inCol(n) ? { ...n, step: to } : n));
+  return { ...clip, notes };
 }
 
 // ── Tidy (the magnet): pull a loop's notes exactly onto the grid ────────────
