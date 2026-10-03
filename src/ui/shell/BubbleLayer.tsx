@@ -8,7 +8,11 @@ export function BubbleLayer() {
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const off = onSay((m) => {
+    const off = onSay((m, hushed) => {
+      if (!m) {
+        setMsg((cur) => (cur?.id === hushed ? null : cur));
+        return;
+      }
       setMsg(m);
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => setMsg(null), 2600);

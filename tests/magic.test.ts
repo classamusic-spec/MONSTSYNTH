@@ -129,9 +129,11 @@ describe('drum snap', () => {
     };
     for (const s of [little, maker] as DrumSnap[]) {
       for (let i = 0; i < 1000; i++) {
-        const beat = rand() * 40 - 4;
+        // Every eighth beat is a hair below zero, where a careless snap returns -0.
+        const beat = i % 8 === 0 ? -rand() * 0.2 : rand() * 40 - 4;
         const q = snapDrum(beat, s);
-        expect(q % s.grid === 0 || q % s.grid === -0).toBe(true);
+        expect(Number.isInteger(q / s.grid)).toBe(true);
+        expect(Object.is(q, -0)).toBe(false);
         expect(Math.abs(q - beat)).toBeLessThanOrEqual(Math.max(s.strongWindow, s.grid / 2) + 1e-9);
       }
     }

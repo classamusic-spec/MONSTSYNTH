@@ -1,8 +1,9 @@
 // Beat accuracy: drums always land on the beat. Checks the record path (armed
 // takes, drum snap, bounce filter, touch timestamps), what is heard (flam guard,
 // the whole-take click, grid-locked rolls, the finale on the downbeat), the
-// transport (no bursts after a stall, visuals in time order, resting frames) and
-// a few guards (one undo per take, keyboard keys only for visible pads).
+// transport (no bursts after a stall, visuals in time order, resting frames),
+// the UI handing touch timestamps over, and a few guards (one undo per take,
+// keyboard keys only for visible pads).
 // Usage: node scripts/e2e-beat.mjs [url]
 import { chromium } from 'playwright';
 
@@ -37,6 +38,9 @@ await page.evaluate(async () => {
     trig: [],
     on: [],
     sched: [],
+    clicks: [],
+    presses: [],
+    releases: [],
     frames: 0,
     lastFrame: null,
     comp: () => inputCompensation(ac),
@@ -45,6 +49,9 @@ await page.evaluate(async () => {
       T.trig = [];
       T.on = [];
       T.sched = [];
+      T.clicks = [];
+      T.presses = [];
+      T.releases = [];
     },
     /** Resolve once the audio clock reaches `time`. */
     until: (time) =>
@@ -70,6 +77,7 @@ await page.evaluate(async () => {
   };
   const trigger = eng.trigger.bind(eng);
   eng.trigger = (req, when, dur) => {
+    const v = trigger(req, when, dur);
     T.trig.push({
       ch: req.channelId,
       pad: req.pad,
@@ -78,14 +86,29 @@ await page.evaluate(async () => {
       at: ac.currentTime,
       beat: st.transport.playing ? st.transport.beatAt(when) : null,
       solo: st.rollTransport.playing ? st.rollTransport.beatAt(when) : null,
+      v,
     });
-    return trigger(req, when, dur);
+    return v;
   };
+  /** Was this trigger heard at all? A voice whose fade-out (stop, steal) ended before it started was not. */
+  T.heard = (x) => !!x.v && x.v.startTime < (x.v.fader?.to ?? Infinity) - 0.001;
   // The transport's callbacks call studio.schedule at call time, so this sees every event with its beat.
   const schedule = st.schedule.bind(st);
   st.schedule = (e, when) => {
     if (e.note) T.sched.push({ absBeat: e.absBeat, when, at: ac.currentTime, ideal: st.transport.timeAt(e.absBeat) });
+    if (e.click) T.clicks.push({ absBeat: e.absBeat, when });
     return schedule(e, when);
+  };
+  // What the UI hands the studio: each touch's own timestamp (performance.now() ms).
+  const press = st.press.bind(st);
+  st.press = (trackId, step, expr, opts) => {
+    T.presses.push({ at: opts?.at, now: performance.now() });
+    return press(trackId, step, expr, opts);
+  };
+  const release = st.release.bind(st);
+  st.release = (id, at) => {
+    T.releases.push({ at, now: performance.now() });
+    return release(id, at);
   };
   const noteOn = eng.noteOn.bind(eng);
   eng.noteOn = (req, when) => {
@@ -138,7 +161,7 @@ const armed = await page.evaluate(async () => {
 });
 check(
   'an armed take stores notes played one beat apart at 0, 1, 2, 3',
-  armed.length === 4 && armed.every((b, i) => Math.abs(b - i) <= 0.02),
+  armed.length === 4 && armed.every((b, i) => Math.abs(b - i) <= 0.01),
   armed.map((b) => b.toFixed(3)).join(' '),
 );
 
@@ -207,13 +230,13 @@ const bounce = await page.evaluate(async () => {
   const boom = T.track('boom').id;
   const first = st.press(boom, 0, { vel: 0.8 });
   setTimeout(() => st.release(first), 60);
-  // Two snare taps 50 ms apart, straddling the edge between beat 1 and its "and".
+  // Two snare taps 70 ms apart (just inside the 80 ms bounce limit), straddling beat 1 and its "and".
   const spb = 60 / window.__monster.getState().project.tempo;
   const t1 = st.transport.timeAt(1.25) + T.comp();
   await T.until(t1);
   const a = st.press(boom, 1, { vel: 0.8 });
   setTimeout(() => st.release(a), 30);
-  await T.until(t1 + 0.05);
+  await T.until(t1 + 0.07);
   const b = st.press(boom, 1, { vel: 0.8 });
   setTimeout(() => st.release(b), 30);
   await T.sleep(120);
@@ -221,7 +244,7 @@ const bounce = await page.evaluate(async () => {
   return {
     snares: T.notes('boom').filter((n) => n.step === 1).map((n) => n.beat),
     heard: T.on.filter((o) => o.pad === 1).length,
-    gap: (0.05 / spb).toFixed(3),
+    gap: (0.07 / spb).toFixed(3),
   };
 });
 check(
@@ -249,21 +272,33 @@ const flam = await page.evaluate(async () => {
     setTimeout(() => st.release(id), 60);
   };
   await tapAt(st.transport.timeAt(8) - 0.05);
-  await tapAt(st.transport.timeAt(16) + 0.03);
-  const liveBefore = T.on.filter((x) => x.pad === 0).length;
-  await tapAt(st.transport.timeAt(24) - 0.15);
-  const liveAfter = T.on.filter((x) => x.pad === 0).length;
+  await tapAt(st.transport.timeAt(16) + 0.04);
+  // Taps further away sound live, even though the loop's kick is already queued (the guard knows it).
+  const far = [];
+  for (const [beat, off] of [
+    [24, -0.09],
+    [32, 0.15],
+  ]) {
+    const before = T.on.filter((x) => x.pad === 0).length;
+    await tapAt(st.transport.timeAt(beat) + off);
+    const queued = T.trig.some((x) => x.ch === boom && x.pad === 0 && Math.abs(x.beat - beat) < 1e-6);
+    far.push({ off, sounded: T.on.filter((x) => x.pad === 0).length - before, queued });
+  }
   await T.sleep(200);
   st.stopRecording();
   st.stop();
-  return { early: kicksNear(8), late: kicksNear(16), farSounds: liveAfter - liveBefore };
+  return { early: kicksNear(8), late: kicksNear(16), far };
 });
 check(
-  'a kick re-played 50 ms early or 30 ms late over the loop sounds once',
+  'a kick re-played 50 ms early or 40 ms late over the loop sounds once',
   flam.early === 1 && flam.late === 1,
   `beat 8: ${flam.early} kick(s), beat 16: ${flam.late}`,
 );
-check('a re-tap 150 ms away still sounds live', flam.farSounds === 1);
+check(
+  're-taps 90 ms early and 150 ms late still sound live (the loop kick already queued)',
+  flam.far.every((f) => f.sounded === 1 && f.queued),
+  JSON.stringify(flam.far),
+);
 
 // ── 6. The click lasts the whole drum take, in its own woodblock voice ─────
 await fresh('little', 'boom');
@@ -277,35 +312,45 @@ const click = await page.evaluate(async () => {
   const first = st.press(boom, 0, { vel: 0.8 });
   setTimeout(() => st.release(first), 60);
   let channelKept = true;
+  let costume = null;
   for (let k = 1; k <= 16; k++) {
     await T.tapHeard('boom', k % 2, k, 0.02);
     if (k === 6) {
       // A costume change mid-take must not tear down the click's channel.
+      const before = T.track('boom').preset;
       document.querySelector('.tool-costume')?.click();
       await T.sleep(60);
+      costume = { before, after: T.track('boom').preset };
       channelKept = st.engine.hasChannel('metronome');
     }
   }
   st.stopRecording();
-  const ticks = T.trig.filter((x) => x.ch === 'metronome');
-  const onBeat = (b) => ticks.some((x) => Math.abs(x.beat - b) < 1e-6);
+  const beats = T.clicks.map((c) => c.absBeat);
   const missing = [];
-  for (let b = 1; b <= 16; b++) if (!onBeat(b)) missing.push(b);
+  for (let b = 0; b <= 16; b++) if (!beats.includes(b)) missing.push(b);
+  const zero = T.clicks.find((c) => c.absBeat === 0);
+  const ticks = T.trig.filter((x) => x.ch === 'metronome');
   return {
     missing,
-    first: ticks.length ? ticks[0].beat : null,
+    // The take starts where the first tap was heard, so its beat-0 tick sounds at once (at most the compensation late).
+    zeroLate: zero ? zero.when - st.transport.timeAt(0) : null,
+    comp: T.comp(),
     pads: [...new Set(ticks.map((x) => x.pad))],
+    costume,
     channelKept,
-    visualsSorted: st.visuals.every((v, i, a) => i === 0 || a[i - 1].time <= v.time),
   };
 });
 check(
-  'the click ticks on every beat of a drum take (beats 0–16)',
-  click.missing.length === 0 && click.first !== null && click.first < 0.5,
-  click.missing.length ? `missing ${click.missing.join(',')}` : `first at ${click.first?.toFixed(3)}`,
+  'the click ticks on every beat of a drum take, beat 0 included and heard at once',
+  click.missing.length === 0 && click.zeroLate !== null && click.zeroLate >= 0 && click.zeroLate <= click.comp + 0.01,
+  click.missing.length ? `missing ${click.missing.join(',')}` : `beat-0 tick ${(click.zeroLate * 1000).toFixed(1)} ms after beat 0 (compensation ${(click.comp * 1000).toFixed(1)} ms)`,
 );
 check('the click is the woodblock tick (pad 8), never a drum pad', click.pads.length === 1 && click.pads[0] === 8, `pads ${click.pads}`);
-check('a costume change mid-take keeps the click channel', click.channelKept);
+check(
+  'a costume change mid-take keeps the click channel',
+  click.channelKept && !!click.costume && click.costume.before !== click.costume.after,
+  JSON.stringify(click.costume),
+);
 
 await fresh('little', 'bloop', 'band');
 const bandClick = await page.evaluate(async () => {
@@ -316,6 +361,25 @@ const bandClick = await page.evaluate(async () => {
   return T.trig.filter((x) => x.ch === 'metronome').length;
 });
 check('no click over a song that already has a drum loop', bandClick === 0, `${bandClick} ticks`);
+
+// Bloop soloed: Boom's loop is silent, so the take gets the click after all.
+await fresh('maker', 'bloop', 'band');
+const soloClick = await page.evaluate(async () => {
+  const T = window.__t;
+  const M = window.__monster;
+  const p = M.getState().project;
+  M.setState({ project: { ...p, tracks: p.tracks.map((t) => (t.monster === 'bloop' ? { ...t, solo: true } : t)) } });
+  M.studio.startRecording();
+  await T.sleep(1500);
+  M.studio.stop();
+  const boom = T.track('boom').id;
+  return { ticks: T.trig.filter((x) => x.ch === 'metronome').length, boomHits: T.trig.filter((x) => x.ch === boom).length };
+});
+check(
+  'a take with Boom left out of the solo still gets the click',
+  soloClick.ticks >= 3 && soloClick.boomHits === 0,
+  `${soloClick.ticks} ticks, ${soloClick.boomHits} Boom hits`,
+);
 
 // ── 7. Visual queue order and stalls ───────────────────────────────────────
 await fresh('little', 'bloop', 'band');
@@ -464,6 +528,52 @@ check(
 );
 check('letting go of a roll with nothing playing stops it (and records nothing)', solo.lateHits === 0 && !solo.soloAfter && solo.recorded === 0);
 
+// Holding a roll while the band starts and stops: the roll changes clocks without a da-dum.
+for (const [mode, grid, tempo] of [
+  ['little', 0.5, 100],
+  ['maker', 0.25, 120],
+]) {
+  const handoff = await page.evaluate(
+    async ({ mode, grid, tempo }) => {
+      const T = window.__t;
+      const M = window.__monster;
+      const st = M.studio;
+      M.actions.updateSettings({ ageMode: mode });
+      M.setState({ project: { ...M.getState().project, tempo } });
+      st.stop();
+      const boom = T.track('boom').id;
+      const gridSec = (grid * 60) / tempo;
+      const runs = [];
+      // Different phases between the roll's own clock and the band's.
+      for (let i = 0; i < 6; i++) {
+        T.reset();
+        const id = st.startRoll(boom, 4, { vel: 0.8 });
+        await T.sleep(330 + i * 47);
+        st.play();
+        await T.sleep(420 + i * 61);
+        st.stop();
+        await T.sleep(380);
+        st.stopRoll(id);
+        await T.sleep(250);
+        // Only hits that were heard: the band's stop silences what it had queued.
+        const hits = T.trig.filter((x) => x.ch === boom && x.pad === 4 && T.heard(x)).map((x) => x.when);
+        hits.sort((a, b) => a - b);
+        const gaps = hits.slice(1).map((w, k) => w - hits[k]);
+        runs.push({ n: hits.length, min: Math.min(...gaps) / gridSec, max: Math.max(...gaps) / gridSec });
+      }
+      return runs;
+    },
+    { mode, grid, tempo },
+  );
+  const min = Math.min(...handoff.map((r) => r.min));
+  const max = Math.max(...handoff.map((r) => r.max));
+  check(
+    `${mode}: a roll held while the band starts and stops never doubles a hit`,
+    handoff.every((r) => r.n >= 3) && min >= 0.75 - 0.01 && max <= 2 + 0.02,
+    `gaps ${min.toFixed(2)}–${max.toFixed(2)} grid steps; hits per run ${handoff.map((r) => r.n).join(',')}`,
+  );
+}
+
 // ── 9. A take is one undo step, even with an effect tapped in the middle ───
 await fresh('little', 'bloop');
 const take = await page.evaluate(async () => {
@@ -514,20 +624,53 @@ await page.waitForTimeout(100);
 const makerJ = await keyJ();
 check('Maker mode: J plays the seventh drum', makerJ.on.length === 1 && makerJ.on[0] === 6, JSON.stringify(makerJ));
 
-// ── 11. Glows: repeated notes keep a key lit until the last glow ends ──────
+// ── 11. Glows: repeated loop notes keep a key lit until the last glow ends ──
+await fresh('little', 'boom');
 const glowKept = await page.evaluate(async () => {
   const T = window.__t;
+  const M = window.__monster;
+  const st = M.studio;
+  const p = M.getState().project;
   const boom = T.track('boom').id;
+  // Two snares a sixteenth apart (150 ms at 100 bpm); each glows for its length (300 ms).
+  const { recordNote } = await import('/src/model/edits.ts');
+  let next = { ...p, tempo: 100 };
+  for (const [i, beat] of [0, 0.25].entries()) {
+    next = recordNote(next, boom, { id: `glow${i}`, beat, dur: 0.5, step: 1, vel: 0.8, tone: 0 }, { grid: 0.25, isDrum: true });
+  }
+  M.setState({ project: next });
+  await T.sleep(50);
   const key = document.querySelectorAll('.keys .key')[1];
-  T.emitNote({ trackId: boom, monster: 'boom', step: 1, vel: 0.8, dur: 0.4, source: 'loop' });
-  await T.sleep(250);
-  T.emitNote({ trackId: boom, monster: 'boom', step: 1, vel: 0.8, dur: 0.4, source: 'loop' });
-  await T.sleep(250);
+  const seen = [];
+  const off = M.bus.onNote((v) => v.trackId === boom && v.step === 1 && v.source === 'loop' && seen.push(performance.now()));
+  st.play();
+  const waitFor = (cond, ms = 3000) =>
+    new Promise((resolve) => {
+      const give = performance.now() + ms;
+      const poll = () => (cond() || performance.now() > give ? resolve() : setTimeout(poll, 2));
+      poll();
+    });
+  await waitFor(() => seen.length >= 2);
+  if (seen.length < 2) {
+    off();
+    st.stop();
+    return { seen: seen.length };
+  }
+  // After the first glow ended, before the second one does.
+  await waitFor(() => performance.now() >= seen[0] + 360);
   const mid = key.dataset.glow;
-  await T.sleep(250);
-  return { mid, end: key.dataset.glow };
+  const midInWindow = performance.now() < seen[1] + 290;
+  await waitFor(() => performance.now() >= seen[1] + 400);
+  const end = key.dataset.glow;
+  off();
+  st.stop();
+  return { mid, midInWindow, end, apart: Math.round(seen[1] - seen[0]) };
 });
-check('a key glowing for repeated notes stays lit until the last one ends', glowKept.mid === 'true' && glowKept.end === 'false', JSON.stringify(glowKept));
+check(
+  'a key lit by repeated loop notes stays lit until the last glow ends',
+  glowKept.mid === 'true' && glowKept.midInWindow && glowKept.end === 'false',
+  JSON.stringify(glowKept),
+);
 
 // ── 12. Frames rest while stopped, and come back at once on play ───────────
 const frames = await page.evaluate(async () => {
@@ -553,42 +696,158 @@ check(
 );
 
 // ── 13. The finale lands exactly on the last downbeat ──────────────────────
+/** Play a one-block band song at full speed to its end; `sleepBoom` puts Boom to sleep first. */
+const playFinale = (sleepBoom) =>
+  page.evaluate(async (sleepBoom) => {
+    const T = window.__t;
+    const M = window.__monster;
+    const st = M.studio;
+    const eng = st.engine;
+    const p = M.getState().project;
+    // A one-block song at full speed keeps the wait short.
+    const rows = Object.fromEntries(Object.entries(p.arrangement.rows).map(([k, v]) => [k, v.slice(0, 1)]));
+    const tracks = p.tracks.map((t) => (sleepBoom && t.monster === 'boom' ? { ...t, sleeping: true } : t));
+    M.setState({ project: { ...p, tempo: 140, tracks, arrangement: { ...p.arrangement, length: 1, rows } } });
+    M.actions.setScreen('blocks');
+    await T.sleep(100);
+    let atFinale = null;
+    const off = M.bus.onStudioEvent((e) => {
+      if (e.type !== 'finale') return;
+      // The tail fade has just run: every finale voice must still be sounding.
+      const end = st.transport.timeAt(8);
+      const finale = T.trig.filter((x) => x.when >= end - 0.001);
+      atFinale = { n: finale.length, alive: finale.filter((x) => eng.voices.includes(x.v) && x.v.endTime > st.audioContext.currentTime).length };
+    });
+    T.reset();
+    st.play();
+    await T.sleep(4300);
+    off();
+    const end = st.transport.timeAt(8);
+    const boom = T.track('boom').id;
+    const spark = T.track('spark').id;
+    const onEnd = T.trig.filter((x) => Math.abs(x.when - end) < 0.001);
+    const pastEnd = T.trig.filter((x) => x.when > end + 0.001);
+    M.actions.setScreen('lab');
+    return {
+      crash: onEnd.some((x) => x.ch === boom && x.pad === 5),
+      kick: onEnd.some((x) => x.ch === boom && x.pad === 0),
+      tada: onEnd.some((x) => x.ch === spark),
+      pastEndAllTada: pastEnd.every((x) => x.ch === spark),
+      boomHits: T.trig.filter((x) => x.ch === boom).length,
+      atFinale,
+      playing: M.getState().transport.playing,
+    };
+  }, sleepBoom);
+
 await fresh('little', 'bloop', 'band');
-const finale = await page.evaluate(async () => {
-  const T = window.__t;
-  const M = window.__monster;
-  const st = M.studio;
-  const p = M.getState().project;
-  // A one-block song at full speed keeps the wait short.
-  M.setState({ project: { ...p, tempo: 140, arrangement: { ...p.arrangement, length: 1, rows: Object.fromEntries(Object.entries(p.arrangement.rows).map(([k, v]) => [k, v.slice(0, 1)])) } } });
-  M.actions.setScreen('blocks');
-  await T.sleep(100);
-  let finaleEvent = false;
-  const { onStudioEvent } = M.bus;
-  const off = onStudioEvent((e) => e.type === 'finale' && (finaleEvent = true));
-  T.reset();
-  st.play();
-  await T.sleep(4300);
-  off();
-  const end = st.transport.timeAt(8);
-  const boom = T.track('boom').id;
-  const spark = T.track('spark').id;
-  const onEnd = T.trig.filter((x) => Math.abs(x.when - end) < 0.001);
-  const pastEnd = T.trig.filter((x) => x.when > end + 0.001);
-  M.actions.setScreen('lab');
-  return {
-    crash: onEnd.some((x) => x.ch === boom && x.pad === 5),
-    kick: onEnd.some((x) => x.ch === boom && x.pad === 0),
-    tada: onEnd.some((x) => x.ch === spark),
-    pastEndAllTada: pastEnd.every((x) => x.ch === spark),
-    finaleEvent,
-    playing: M.getState().transport.playing,
-  };
-});
+const finale = await playFinale(false);
 check(
   'the finale (crash, kick and ta-da) lands exactly on the last downbeat',
-  finale.crash && finale.kick && finale.tada && finale.pastEndAllTada && finale.finaleEvent && !finale.playing,
+  finale.crash && finale.kick && finale.tada && finale.pastEndAllTada && !!finale.atFinale && !finale.playing,
   JSON.stringify(finale),
+);
+check(
+  'the tail fade at the end of the song leaves the finale ringing',
+  !!finale.atFinale && finale.atFinale.n >= 6 && finale.atFinale.alive === finale.atFinale.n,
+  JSON.stringify(finale.atFinale),
+);
+await fresh('little', 'bloop', 'band');
+const sleepyFinale = await playFinale(true);
+check(
+  'a sleeping Boom stays asleep at the finale (Spark still sings ta-da)',
+  sleepyFinale.boomHits === 0 && sleepyFinale.tada && !sleepyFinale.playing,
+  JSON.stringify({ boomHits: sleepyFinale.boomHits, tada: sleepyFinale.tada }),
+);
+
+// ── 14. The UI hands each touch's own timestamp to the studio ──────────────
+await fresh('little', 'boom');
+const cdp = await ctx.newCDPSession(page);
+const touch = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
+const centre = (sel, i = 0) =>
+  page.evaluate(
+    ({ sel, i }) => {
+      const r = document.querySelectorAll(sel)[i].getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    },
+    { sel, i },
+  );
+const stamps = async (gesture) => {
+  await page.evaluate(() => window.__t.reset());
+  await gesture();
+  await page.waitForTimeout(120);
+  return page.evaluate(() => ({ presses: window.__t.presses, releases: window.__t.releases }));
+};
+// Every press and release carries a timestamp from the event: finite, in the past, and recent.
+const stamped_ = (s) =>
+  s.presses.length >= 1 &&
+  s.releases.length >= 1 &&
+  [...s.presses, ...s.releases].every((e) => Number.isFinite(e.at) && e.at <= e.now + 1 && e.now - e.at < 200);
+const keyAt = await centre('.keys .key', 2);
+const viaKey = await stamps(async () => {
+  await touch('touchStart', [{ x: keyAt.x, y: keyAt.y, id: 1 }]);
+  await page.waitForTimeout(60);
+  await touch('touchEnd', []);
+});
+const podAt = await centre('.pod[data-selected="true"] .pod-hit');
+const viaPod = await stamps(async () => {
+  await page.mouse.move(podAt.x, podAt.y);
+  await page.mouse.down();
+  await page.waitForTimeout(60);
+  await page.mouse.up();
+});
+const viaKeyboard = await stamps(async () => {
+  await page.keyboard.down('a');
+  await page.waitForTimeout(60);
+  await page.keyboard.up('a');
+});
+const lagOf = (s) => s.presses.map((e) => (e.now - e.at).toFixed(1)).join(',');
+check('a touch on a key passes its own timestamp (press and release)', stamped_(viaKey), `lag ${lagOf(viaKey)} ms`);
+check('a press on the monster passes its own timestamp', stamped_(viaPod), `lag ${lagOf(viaPod)} ms`);
+check('a computer key passes its own timestamp', stamped_(viaKeyboard), `lag ${lagOf(viaKeyboard)} ms`);
+
+// "Play something!" makes way as soon as the take starts (it covers the effect buddies on tablets).
+await page.click('.t-rec');
+await page.waitForSelector('.bubble', { timeout: 2000 }).catch(() => null);
+const asked = await page.locator('.bubble').count();
+await touch('touchStart', [{ x: keyAt.x, y: keyAt.y, id: 1 }]);
+await page.waitForTimeout(60);
+await touch('touchEnd', []);
+await page.waitForTimeout(120);
+const hushed = await page.evaluate(() => ({ bubbles: document.querySelectorAll('.bubble').length, recording: window.__monster.getState().transport.recording }));
+await page.evaluate(() => window.__monster.studio.stop());
+check('the "Play something!" bubble goes as soon as the take starts', asked === 1 && hushed.bubbles === 0 && hushed.recording, JSON.stringify({ asked, ...hushed }));
+
+// ── 15. Under a 4× CPU throttle, real touches still record on whole beats ──
+await fresh('maker', 'boom');
+await page.evaluate(() => {
+  const M = window.__monster;
+  M.setState({ project: { ...M.getState().project, tempo: 100 } });
+  M.studio.startRecording();
+});
+const kickAt = await centre('.keys .key', 0);
+await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+const tapsFrom = Date.now() + 100;
+for (let k = 0; k < 16; k++) {
+  const wait = tapsFrom + k * 600 - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  await touch('touchStart', [{ x: kickAt.x, y: kickAt.y, id: 1 }]);
+  await new Promise((r) => setTimeout(r, 50));
+  await touch('touchEnd', []);
+}
+await page.waitForTimeout(300);
+await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+const throttled = await page.evaluate(() => {
+  const T = window.__t;
+  const st = window.__monster.studio;
+  st.stopRecording();
+  st.stop();
+  const lags = T.presses.map((e) => e.now - e.at);
+  return { beats: T.notes('boom').map((n) => n.beat).sort((a, b) => a - b), presses: lags.length, maxLag: Math.max(...lags) };
+});
+check(
+  'under a 4× CPU throttle, 16 real touches on the kick (one per beat) record on whole beats',
+  throttled.presses === 16 && throttled.beats.length === 8 && throttled.beats.every((b, i) => b === i),
+  `beats ${throttled.beats.join(' ')}; handler lag up to ${throttled.maxLag.toFixed(0)} ms`,
 );
 
 check('no console errors', errors.length === 0, errors.slice(0, 3).join(' | '));

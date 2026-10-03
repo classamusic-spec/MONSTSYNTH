@@ -6,7 +6,7 @@ import { studio } from '../../studio/studio';
 import { onFrame } from '../../studio/visualBus';
 import { useCaps } from '../hooks/useCaps';
 import { Icon } from '../icons/Icon';
-import { say } from './bubbles';
+import { hush, say } from './bubbles';
 
 // Big, always-in-the-same-place controls: Play, Record, Undo (+ Redo and the
 // Monster Magic panel for Monster Makers). On Monster Blocks, Record becomes the
@@ -61,6 +61,14 @@ export function TransportRail() {
   const canRedo = useApp((s) => s.future.length > 0);
   const caps = useCaps();
   const [bump, setBump] = useState<string | null>(null);
+  // "Play something!" goes as soon as the take starts (or is called off), so it
+  // never hides the effect buddies a child reaches for mid-take.
+  const askId = useRef<number | null>(null);
+  useEffect(() => {
+    if (t.armed || askId.current === null) return;
+    hush(askId.current);
+    askId.current = null;
+  }, [t.armed]);
 
   const flash = (k: string) => {
     setBump(k);
@@ -101,7 +109,7 @@ export function TransportRail() {
             const st = getState();
             if (st.transport.armed) {
               const monster = st.project.tracks.find((t) => t.id === st.selectedTrackId)?.monster;
-              say({ text: 'Play something!', icon: 'record', monster });
+              askId.current = say({ text: 'Play something!', icon: 'record', monster });
             }
           }}
         >

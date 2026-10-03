@@ -1,4 +1,5 @@
 import type { NoteRequest } from '../audio/engine';
+import { TICK_PAD } from '../audio/voices/drums';
 import { chordSteps, mimicSemitones, stepToMidi } from '../magic/scales';
 import type { MonsterKind, Project } from '../model/types';
 
@@ -21,7 +22,8 @@ export function noteRequest(
   const base = { channelId, vel: expr.vel, tone: expr.tone ?? 0, size: expr.size ?? 0, bend: expr.bend ?? 0, pad: 0 };
   switch (monster) {
     case 'boom':
-      return { ...base, midi: [], pad: step };
+      // Boom's eight drums only: a stored step can be up to 15, and the next pad is the metronome's tick.
+      return { ...base, midi: [], pad: Math.min(TICK_PAD - 1, Math.max(0, step)) };
     case 'puff':
       return { ...base, midi: chordSteps(step).map((s) => stepToMidi(s, 'puff', project.scale, project.key)) };
     case 'mimic':

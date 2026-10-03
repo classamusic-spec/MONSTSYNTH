@@ -11,13 +11,21 @@ export interface BubbleMsg {
   id?: number;
 }
 
-type Listener = (b: BubbleMsg) => void;
+/** A new bubble, or `null` with the id of one taken back early. */
+type Listener = (b: BubbleMsg | null, hushed?: number) => void;
 const listeners = new Set<Listener>();
 let seq = 0;
 
-export function say(b: BubbleMsg) {
+/** Show a bubble; returns its id (for hush). */
+export function say(b: BubbleMsg): number {
   const msg = { ...b, id: ++seq };
   listeners.forEach((l) => l(msg));
+  return msg.id;
+}
+
+/** Take a bubble back once it no longer applies ("Play something!" after the child played). */
+export function hush(id: number) {
+  listeners.forEach((l) => l(null, id));
 }
 
 export function onSay(l: Listener): () => void {

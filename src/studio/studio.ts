@@ -7,7 +7,7 @@ import type { Voice } from '../audio/voices/base';
 import { TICK_PAD } from '../audio/voices/drums';
 import { audioBufferToWav, blobToAudioBuffer } from '../audio/wav';
 import { placeNote } from '../magic/recorder';
-import { collectEvents, type PlayMode, type SeqEvent } from '../magic/sequence';
+import { audibleTracks, collectEvents, type PlayMode, type SeqEvent } from '../magic/sequence';
 import { gridLinesIn, isBounce, nextLine, snapDuration, wrap } from '../magic/timing';
 import { recordNote, setRecordedDuration, setTrackSample } from '../model/edits';
 import { newId } from '../model/ids';
@@ -82,6 +82,8 @@ interface Roll {
   clock: 'main' | 'solo';
   /** Grid lines up to here (beats on that clock) have been scheduled. */
   after: number;
+  /** AudioContext time of its last scheduled hit, so a change of clock never doubles a hit. */
+  lastWhen: number;
 }
 
 /** A note in a song lesson (a phrase the teacher sings, or the whole song with its band). */
@@ -123,6 +125,10 @@ const IDLE_SETTLE_MS = 600;
 const MAX_TOUCH_LAG = 0.15;
 /** A roll's first hit is at least this far ahead (seconds), so it is scheduled on time. */
 const ROLL_LEAD = 0.02;
+/** Moving to another clock, a roll's next hit is at least this many grid steps after its last one. */
+const ROLL_HANDOFF_GAP = 0.75;
+/** Stopping the band fades what it queued over this long (seconds); later queued hits are silent. */
+const STOP_FADE = 0.06;
 
 function isClick(e: Scheduled): e is ClickEvent {
   return (e as ClickEvent).click === true;
@@ -454,6 +460,7 @@ class Studio {
       size: expr.size ?? 0,
       clock: 'main',
       after: -Infinity,
+      lastWhen: -Infinity,
     };
     this.rolls.set(id, roll);
     this.homeRoll(id, roll);
@@ -470,23 +477,35 @@ class Studio {
     return MODE_CAPS[getState().settings.ageMode].drumSnap.grid;
   }
 
-  /** Put a roll on the clock that runs now; its next hit is the next grid line. */
-  private homeRoll(id: number, roll: Roll) {
+  /**
+   * Put a roll on the clock that runs now; its next hit is the next grid line.
+   * A change of clock (the band starts or stops under a held roll) never doubles
+   * a hit: what the old clock queued still sounds, so the first hit on the new
+   * one comes at least ¾ of a grid step after it, unless that hit was silenced
+   * (from `silencedFrom` on, the band's stop faded out what it had queued).
+   */
+  private homeRoll(id: number, roll: Roll, silencedFrom = Infinity) {
     const ctx = this.ctx;
     const main = this.transport;
     const solo = this.rollTransport;
     if (!ctx || !main || !solo) return;
     const grid = this.rollGrid();
+    const tempo = getState().project.tempo;
+    const gridSec = grid * (60 / tempo);
+    const earliest = Math.max(ctx.currentTime + ROLL_LEAD, Math.min(roll.lastWhen + ROLL_HANDOFF_GAP * gridSec, silencedFrom));
     if (!main.playing && !solo.playing) {
+      // A clock of its own: the roll keeps its pulse (a silenced hit is played again in its place).
+      const pulse = roll.lastWhen > -Infinity;
+      const at = pulse ? roll.lastWhen + Math.ceil((earliest - roll.lastWhen) / gridSec - 1e-9) * gridSec : earliest;
       roll.clock = 'solo';
       roll.after = -grid / 2;
-      solo.setTempo(getState().project.tempo);
-      solo.start({ atTime: ctx.currentTime + ROLL_LEAD, fromBeat: 0 });
+      solo.setTempo(tempo);
+      solo.start({ atTime: at, fromBeat: 0 });
       return;
     }
     const clock = main.playing ? main : solo;
     roll.clock = main.playing ? 'main' : 'solo';
-    const first = nextLine(clock.beatAt(ctx.currentTime + ROLL_LEAD), grid);
+    const first = nextLine(clock.beatAt(earliest), grid);
     roll.after = first - grid / 2;
     // Lines the clock has already handed out would be skipped: schedule them now.
     for (const line of gridLinesIn(first, clock.scheduledUntil, grid)) {
@@ -496,9 +515,9 @@ class Studio {
   }
 
   /** The band started or stopped: held rolls move to the clock that runs now. */
-  private rehomeRolls() {
+  private rehomeRolls(silencedFrom = Infinity) {
     this.rollTransport?.stop();
-    for (const [id, roll] of this.rolls) this.homeRoll(id, roll);
+    for (const [id, roll] of this.rolls) this.homeRoll(id, roll, silencedFrom);
   }
 
   private rollEvents(clock: 'main' | 'solo', from: number, to: number): RollEvent[] {
@@ -521,6 +540,7 @@ class Studio {
     if (!engine || !roll) return;
     const p = getState().project;
     if (!p.tracks.some((t) => t.id === roll.trackId)) return;
+    roll.lastWhen = when;
     // The loop already hits this drum on this line: one hit, not two.
     if (roll.monster !== 'boom' || !this.seqHitNear(roll.trackId, roll.step, when)) {
       engine.trigger(noteRequest(p, roll.monster, roll.trackId, roll.step, roll), when, 0.12);
@@ -697,8 +717,9 @@ class Studio {
       lastActivityBeat: 0,
       notes: 0,
       firstLoopFor: new Set(),
-      // Decided once: a take that makes the drum loop keeps its click to the end.
-      click: !s.project.tracks.some((t) => t.monster === 'boom' && trackHasLoop(t) && !t.sleeping),
+      // Decided once, from what will be heard (asleep or left out of a solo, Boom keeps no beat):
+      // a take that makes the drum loop keeps its click to the end.
+      click: !audibleTracks(s.project).some((t) => t.monster === 'boom' && trackHasLoop(t)),
       lastHit: new Map(),
     };
     if (s.transport.playing && s.transport.mode === 'loop') {
@@ -785,14 +806,15 @@ class Studio {
     this.stopRecording();
     const wasPlaying = !!this.transport?.playing;
     this.transport?.stop();
-    this.engine?.stopSequenced();
+    this.engine?.stopSequenced(STOP_FADE);
+    const silencedFrom = (this.ctx?.currentTime ?? 0) + STOP_FADE;
     this.visuals = [];
     this.skipBefore.clear();
     this.seqHits.clear();
     this.finaleAt = Infinity;
     const t = getState().transport;
     if (t.playing || t.recording || t.armed) setTransport({ playing: false, recording: false, armed: false });
-    if (wasPlaying) this.rehomeRolls();
+    if (wasPlaying) this.rehomeRolls(silencedFrom);
   }
 
   /**
@@ -806,7 +828,9 @@ class Studio {
     const at = Math.max(ctx.currentTime, when);
     this.finaleAt = at;
     const p = getState().project;
-    const boom = p.tracks.find((t) => t.monster === 'boom');
+    // Only monsters the child can hear take the bow (a sleeping Boom stays asleep).
+    const heard = audibleTracks(p);
+    const boom = heard.find((t) => t.monster === 'boom');
     if (boom) {
       for (const [pad, vel] of [
         [5, 0.75],
@@ -816,7 +840,8 @@ class Studio {
         this.queueVisual(at, { trackId: boom.id, monster: 'boom', step: pad, vel, dur: 0.5, source: 'loop' });
       }
     }
-    const singer = p.tracks.find((t) => t.monster === 'spark') ?? p.tracks.find((t) => t.monster !== 'boom') ?? p.tracks[0];
+    const singer = heard.find((t) => t.monster === 'spark') ?? heard.find((t) => t.monster !== 'boom');
+    if (!singer) return;
     [0, 2, 4, 7].forEach((step, i) => {
       const t = at + i * 0.09;
       engine.trigger(noteRequest(p, singer.monster, singer.id, step, { vel: 0.7 }), t, 0.4);

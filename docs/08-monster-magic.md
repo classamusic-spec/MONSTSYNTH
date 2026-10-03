@@ -30,11 +30,11 @@ Monster Magic is the invisible musical helper. It makes whatever a child does so
 * All loops share the length, so they are synchronised by construction — no loop-length correction problem can arise.
 * **The first note is the downbeat:** when Record is pressed with nothing playing and an empty song, the loop starts on the child's first note (no count-in to wait for). Beat 0 is placed where the finger landed, measured exactly like every later note.
 * When other loops exist, Record starts the band immediately so there is something to play along with.
-* **The click:** a take that begins without an awake drum loop gets a soft woodblock tick on every beat (louder on each bar) for the *whole* take — also the take that records the first drum loop. It has its own voice, so it never sounds like one of Boom's drums.
+* **The click:** a take that begins without a drum loop the child can hear (none yet, Boom asleep, or Boom left out of a solo) gets a soft woodblock tick on every beat (louder on each bar) for the *whole* take — also the take that records the first drum loop. It has its own voice, so it never sounds like one of Boom's drums, and no stored note can reach it (Boom's notes play pads 0–7 only).
 * A note played live is never also triggered by the loop on the same pass (per-note skip guard).
 * **Flam guard:** playing a drum that the loop hits within ±60 ms, only the loop's on-beat hit sounds. The touch still animates and records.
 * **Bounce filter:** the same drum again within 80 ms in a take (a finger bouncing) is recorded once; both touches still sound.
-* **Rolls:** holding Boom or Spark plays repeated hits on the grid lines (eighths in Little, sixteenths in Maker), starting on the next line. While the band plays they ride its clock and are recorded exactly on the grid; with nothing playing they get a clock of their own at the song's speed (never recorded). Speed changes are followed at once. Letting go ends the roll (a hit already scheduled, at most 120 ms ahead, still sounds).
+* **Rolls:** holding Boom or Spark plays repeated hits on the grid lines (eighths in Little, sixteenths in Maker), starting on the next line. While the band plays they ride its clock and are recorded exactly on the grid; with nothing playing they get a clock of their own at the song's speed (never recorded). Speed changes are followed at once. When the band starts or stops under a held roll, the roll moves to the other clock without a doubled hit: its next hit comes at least ¾ of a grid step after the last one that sounds (with nothing playing it simply keeps its pulse). Letting go ends the roll (a hit already scheduled, at most 120 ms ahead, still sounds).
 
 ## 4 · Looper rules: replace, don't pile up
 
