@@ -1,6 +1,7 @@
-import { memo, type CSSProperties } from 'react';
-import type { CellState, CellView } from '../../magic/steps';
-import { DRUM_PADS } from '../../model/monsters';
+import { memo, useEffect, useRef, type ComponentType, type CSSProperties } from 'react';
+import { drumRows, type CellState, type CellView } from '../../magic/steps';
+import { DRUM_PADS, type ModeCaps } from '../../model/monsters';
+import type { NoteEvent } from '../../model/types';
 import { Icon } from '../icons/Icon';
 import { colTrack } from './BeatRuler';
 import { DRUM_COLORS, DrumIcon } from './glyphs';
@@ -14,28 +15,53 @@ import { DRUM_COLORS, DrumIcon } from './glyphs';
 
 const SAYS: Record<CellState, string> = { off: 'off', one: 'on', double: 'on twice', custom: 'a little' };
 
-export interface DrumRowProps {
+/** Registers a cell's element under its row's step (drum pad) and column; -1 is the row head. */
+export type RegisterCell = (step: number, col: number, el: HTMLDivElement | null) => void;
+
+export interface LaneRowProps {
   r: number;
-  pad: number;
+  /** The row's drum pad (or, for a bead lane, its scale step). */
+  step: number;
   cells: CellView[];
   /** Changes whenever anything this row draws changes (rows re-render only then). */
   sig: string;
   beatsPerBar: number;
-  /** Column holding the keyboard focus in this row (-1: none). */
-  focusCol: number;
+  /** Column holding the keyboard focus in this row (-1: the row head; null: none). */
+  focusCol: number | null;
   /** Empty grid: the big drum's bar-start stones shimmer. */
   invite: boolean;
-  register: (r: number, c: number, el: HTMLDivElement | null) => void;
+  register: RegisterCell;
 }
 
-function Stone({ pad, c, cell, beatsPerBar, focused, invite, name, register, r }: { pad: number; c: number; cell: CellView; beatsPerBar: number; focused: boolean; invite: boolean; name: string; register: DrumRowProps['register']; r: number }) {
+/**
+ * What a grid face needs from its kind of rows. Drums now; the bead lane for
+ * the melodic monsters plugs in here next. Rows and heads carry
+ * data-grid-row / data-grid-head, and rows, heads and cells data-step and
+ * data-col, so StepGrid measures and focuses any lane the same way.
+ */
+export interface GridLane {
+  /** The rows every loop shows in this mode (they never fold). */
+  base(caps: ModeCaps): readonly number[];
+  /** Every row this loop has, top to bottom (`kept`: extra rows already on screen this visit). */
+  rows(notes: readonly NoteEvent[], lengthBeats: number, caps: ModeCaps, kept: readonly number[]): number[];
+  /** Rows beyond what fits at a finger's size fold behind a '+N' chip (drums; bead bands never fold). */
+  folds: boolean;
+  /** What a tap on a dark cell writes. */
+  rowDefault(step: number, caps: ModeCaps): 'one' | 'double';
+  /** Notes ring on through the next cells (Puff). */
+  sustain: boolean;
+  Row: ComponentType<LaneRowProps>;
+}
+
+function Stone({ pad, c, cell, beatsPerBar, focused, invite, name, register, r }: { pad: number; c: number; cell: CellView; beatsPerBar: number; focused: boolean; invite: boolean; name: string; register: RegisterCell; r: number }) {
   const lit = cell.state === 'one' || cell.state === 'double';
   return (
     <div
-      ref={(el) => register(r, c, el)}
+      ref={(el) => register(pad, c, el)}
       role="gridcell"
       className="stone"
       data-row={r}
+      data-step={pad}
       data-pad={pad}
       data-col={c}
       data-state={cell.state}
@@ -70,11 +96,12 @@ function Stone({ pad, c, cell, beatsPerBar, focused, invite, name, register, r }
 }
 
 export const DrumRow = memo(
-  function DrumRow({ r, pad, cells, beatsPerBar, focusCol, invite, register }: DrumRowProps) {
+  function DrumRow({ r, step: pad, cells, beatsPerBar, focusCol, invite, register }: LaneRowProps) {
     const name = DRUM_PADS[pad]?.name ?? 'Drum';
     return (
-      <div role="row" className="drum-row" data-row={r} data-pad={pad} style={{ ['--k' as string]: `var(--key-${DRUM_COLORS[pad] ?? 0})` } as CSSProperties}>
-        <div role="gridcell" className="drum-head" data-row={r} aria-label={name}>
+      <div role="row" className="drum-row" data-grid-row data-row={r} data-step={pad} data-pad={pad} style={{ ['--k' as string]: `var(--key-${DRUM_COLORS[pad] ?? 0})` } as CSSProperties}>
+        {/* The drum's picture: a touch (or Enter) plays it; nothing is written. */}
+        <div ref={(el) => register(pad, -1, el)} role="gridcell" className="drum-head" data-grid-head data-row={r} data-step={pad} data-pad={pad} data-col={-1} aria-label={`Play ${name}`} tabIndex={focusCol === -1 ? 0 : -1}>
           <span className="row-pad">
             <DrumIcon pad={pad} />
           </span>
@@ -86,8 +113,18 @@ export const DrumRow = memo(
     );
   },
   (a, b) =>
-    a.sig === b.sig && a.r === b.r && a.pad === b.pad && a.beatsPerBar === b.beatsPerBar && a.focusCol === b.focusCol && a.invite === b.invite && a.register === b.register,
+    a.sig === b.sig && a.r === b.r && a.step === b.step && a.beatsPerBar === b.beatsPerBar && a.focusCol === b.focusCol && a.invite === b.invite && a.register === b.register,
 );
+
+/** Boom's lane: base rows of the mode, every drum the loop plays, and every row already shown this visit. */
+export const DRUM_LANE: GridLane = {
+  base: (caps) => caps.gridDrumRows,
+  rows: (notes, lengthBeats, caps, kept) => drumRows({ id: '', lengthBeats, notes: [...notes] }, caps.gridDrumRows, kept),
+  folds: true,
+  rowDefault: (pad, caps) => (caps.gridCellStates === 2 && pad === 2 ? 'double' : 'one'),
+  sustain: false,
+  Row: DrumRow,
+};
 
 /** Everything a row draws, as a string (cheap to compare). */
 export function rowSignature(cells: CellView[]): string {
@@ -95,26 +132,79 @@ export function rowSignature(cells: CellView[]): string {
 }
 
 /**
- * Monster Makers' "+": the drums that have no row yet. Each one plays when
- * touched, and its row appears (while the grid is open; a row with stones stays).
+ * The '+' (or '+N') tray: drums folded away for lack of room come first, each
+ * with a lit dot (they hold stones and keep playing), then (Monster Makers)
+ * the drums that have no row yet. Each one plays when touched, and its row
+ * appears; rows stay while the grid is open.
  */
-export function AddRowPicker({ pads, onPick, onClose }: { pads: number[]; onPick: (pad: number) => void; onClose: () => void }) {
+export function AddRowPicker({
+  folded,
+  spare,
+  focusFirst,
+  onPick,
+  onClose,
+}: {
+  folded: number[];
+  spare: number[];
+  /** Opened from a keyboard: focus moves into the tray (Escape closes it). */
+  focusFirst: boolean;
+  onPick: (pad: number) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focusFirst) ref.current?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
+  }, [focusFirst]);
   return (
-    <div className="grid-picker" role="group" aria-label="More drums">
-      {pads.map((pad) => (
-        <button
-          key={pad}
-          className="picker-pad"
-          style={{ ['--k' as string]: `var(--key-${DRUM_COLORS[pad] ?? 0})` } as CSSProperties}
-          aria-label={`Add ${DRUM_PADS[pad].name}`}
-          onClick={() => onPick(pad)}
-        >
-          <DrumIcon pad={pad} />
-        </button>
-      ))}
+    <div
+      ref={ref}
+      className="grid-picker"
+      role="group"
+      aria-label="More drums"
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }}
+    >
+      {[...folded, ...spare].map((pad) => {
+        const has = folded.includes(pad);
+        return (
+          <button
+            key={pad}
+            className="picker-pad"
+            data-has={has}
+            style={{ ['--k' as string]: `var(--key-${DRUM_COLORS[pad] ?? 0})` } as CSSProperties}
+            aria-label={`${has ? 'Show' : 'Add'} ${DRUM_PADS[pad].name}`}
+            onClick={() => onPick(pad)}
+          >
+            <DrumIcon pad={pad} />
+          </button>
+        );
+      })}
       <button className="picker-close" aria-label="Close" onClick={onClose}>
         <Icon name="close" />
       </button>
     </div>
+  );
+}
+
+/** The '+' button's face: a plus, or (rows folded away) peeks of those drums and how many. */
+export function AddFace({ folded }: { folded: number[] }) {
+  if (folded.length === 0) return <Icon name="plus" />;
+  return (
+    <>
+      <span className="add-peek" aria-hidden>
+        {folded.slice(0, 2).map((pad) => (
+          <i key={pad} style={{ ['--k' as string]: `var(--key-${DRUM_COLORS[pad] ?? 0})` } as CSSProperties}>
+            <DrumIcon pad={pad} />
+          </i>
+        ))}
+      </span>
+      <b className="add-count" aria-hidden>
+        +{folded.length}
+      </b>
+    </>
   );
 }

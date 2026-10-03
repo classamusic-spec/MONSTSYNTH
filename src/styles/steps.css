@@ -162,24 +162,24 @@
   display: grid;
   place-items: center;
   border-radius: var(--radius-s);
-  background: color-mix(in srgb, var(--k) 14%, var(--sky-0));
+  background: color-mix(in srgb, var(--k) 22%, var(--sky-0));
   box-shadow:
-    inset 0 3px 7px rgba(3, 4, 26, 0.55),
-    inset 0 0 0 1.5px color-mix(in srgb, var(--k) 26%, transparent);
+    inset 0 3px 7px rgba(3, 4, 26, 0.5),
+    inset 0 0 0 2px color-mix(in srgb, var(--k) 40%, transparent);
   transition:
     translate 70ms var(--ease-out),
     filter 120ms;
 }
 
 .stone[data-strong='true'] .stone-socket {
-  background: color-mix(in srgb, var(--k) 20%, #151a5a);
+  background: color-mix(in srgb, var(--k) 28%, #1b2066);
 }
 
 .stone-socket > .glyph {
   width: 46%;
   max-width: 46px;
   height: auto;
-  opacity: 0.25;
+  opacity: 0.32;
 }
 
 /* Lit stones (and partly lit ones) live on a face that pops on the beat. */
@@ -224,6 +224,19 @@
   height: auto;
   opacity: 0.95;
   filter: drop-shadow(0 2px 0 color-mix(in srgb, var(--k) 50%, black));
+}
+
+/* Short stones (a phone, five rows): the picture moves up out of the pips'
+   strip, so one pip and two pips never read as part of the drum. */
+.stone {
+  container-type: size;
+}
+
+@container (max-height: 54px) {
+  .stone-lit > .glyph {
+    width: 44%;
+    translate: 0 -14%;
+  }
 }
 
 /* One pip for a hit, two for a double (tss-tss), like the effect buddies. */
@@ -340,8 +353,8 @@
   0%,
   100% {
     box-shadow:
-      inset 0 3px 7px rgba(3, 4, 26, 0.55),
-      inset 0 0 0 1.5px color-mix(in srgb, var(--k) 26%, transparent),
+      inset 0 3px 7px rgba(3, 4, 26, 0.5),
+      inset 0 0 0 2px color-mix(in srgb, var(--k) 40%, transparent),
       0 0 0 0 color-mix(in srgb, var(--k) 0%, transparent);
   }
   50% {
@@ -420,6 +433,84 @@
   border-color: #fff;
 }
 
+/* Drums folded away for lack of room: the '+' shows a peek of them and how many. */
+.grid-add:not([data-folded='0']) {
+  grid-auto-flow: column;
+  place-content: center;
+  align-items: center;
+  gap: 3px;
+  color: #fff;
+  border-style: solid;
+  border-color: rgba(255, 224, 138, 0.6);
+  background: radial-gradient(circle at 35% 28%, #3a3f9e 0%, #23276f 80%);
+}
+
+.add-peek {
+  display: flex;
+}
+
+.add-peek > i {
+  width: clamp(18px, 3.4vmin, 24px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--k) 78%, white) 0%, var(--k) 50%, color-mix(in srgb, var(--k) 85%, black) 100%);
+  box-shadow: 0 0 0 2px #23276f;
+}
+
+.add-peek > i + i {
+  margin-left: -7px;
+}
+
+.add-peek .glyph {
+  width: 72%;
+  height: auto;
+}
+
+.add-count {
+  font-size: var(--fs-s);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+/* Phones: in Monster Maker's two-wide toy column the '+' is a pill like the
+   flip (room for the peek); Little Monsters' single column shows the count. */
+.app[data-mode='maker'] .surface-side > .grid-add-side {
+  grid-column: 1 / -1;
+  aspect-ratio: auto;
+  height: var(--tool);
+  border-radius: 999px;
+}
+
+.app[data-mode='little'] .grid-add-side .add-peek {
+  display: none;
+}
+
+.grid-add-side .add-count {
+  font-size: clamp(13px, 3.6vmin, 17px);
+}
+
+.grid-add-side .add-peek > i {
+  width: clamp(16px, 4.6vmin, 20px);
+}
+
+/* In the tray, a drum that is folded away (it still plays) wears a lit dot. */
+.picker-pad[data-has='true']::after {
+  content: '';
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--moon);
+  box-shadow:
+    0 0 0 2px var(--panel-2),
+    0 0 8px rgba(255, 224, 138, 0.8);
+}
+
 /* Phones have no room under the heads: the "+" joins the toys' column. Tall
    screens keep it under the drum pictures. */
 .surface-side > .grid-add-head,
@@ -471,6 +562,7 @@
 
 .picker-pad,
 .picker-close {
+  position: relative;
   width: clamp(44px, 10vmin, 64px);
   height: clamp(44px, 10vmin, 64px);
   display: grid;
@@ -617,6 +709,13 @@
   }
   .stone-pips {
     bottom: 3px;
+  }
+  /* Five rows (the most a phone shows): a slimmer ruler and panel edge keep every stone ≥ 44 px. */
+  .step-grid:not([data-rows='1'], [data-rows='2'], [data-rows='3'], [data-rows='4']) {
+    --ruler: 16px;
+  }
+  .surface-grid:has(> .step-grid:not([data-rows='1'], [data-rows='2'], [data-rows='3'], [data-rows='4'])) {
+    padding-block: 3px;
   }
 }
 

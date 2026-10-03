@@ -6,6 +6,7 @@ import {
   cellState,
   drumRows,
   fineSlot,
+  foldDrumRows,
   gridColumns,
   isOnGrid,
   isTidy,
@@ -89,6 +90,58 @@ describe('drum rows', () => {
     const b = drumRows(clipOf([note('b', 1, 4), note('a', 0, 6)]), [0, 1, 2], [3, 5]);
     expect(a).toEqual(b);
     expect(a).toEqual([5, 2, 6, 3, 1, 4, 0]);
+  });
+});
+
+describe('folding drum rows (view only)', () => {
+  // Robot-ish loop: hat, cowbell ×3, boing ×1, clap, snare, kick; plus bongo ×2 and crash ×1.
+  const notes = [
+    note('k', 0, 0),
+    note('s', 1, 1),
+    note('h', 0, 2),
+    note('c1', 0, 6),
+    note('c2', 2, 6),
+    note('c3', 4, 6),
+    note('b1', 3, 7),
+    note('g1', 1, 4),
+    note('g2', 5, 4),
+    note('x1', 0, 5),
+  ];
+  const rows = drumRows(clipOf(notes), [2, 3, 1, 0], []);
+  const before = JSON.stringify(notes);
+
+  it('folds nothing when every row fits', () => {
+    expect(foldDrumRows(rows, notes, { base: [2, 3, 1, 0], cap: 8 })).toEqual({ shown: rows, folded: [] });
+    expect(foldDrumRows([2, 1, 0], [], { base: [2, 1, 0], cap: 5 })).toEqual({ shown: [2, 1, 0], folded: [] });
+  });
+
+  it('never folds a base row, and folds the least-used extra rows first', () => {
+    const { shown, folded } = foldDrumRows(rows, notes, { base: [2, 3, 1, 0], cap: 5 });
+    expect(shown).toEqual([2, 6, 3, 1, 0]);
+    expect(folded).toEqual([4, 5, 7]);
+    // Base rows show even when the cap is smaller than the base.
+    expect(foldDrumRows(rows, notes, { base: [2, 3, 1, 0], cap: 3 }).shown).toEqual([2, 3, 1, 0]);
+  });
+
+  it('keeps rows already on screen, and a picked row pushes out the least-used one', () => {
+    // On screen: boing (1 hit) and cowbell (3). A busier bongo row does not swap in by itself.
+    const kept = foldDrumRows(rows, notes, { base: [2, 3, 1, 0], cap: 6, keep: [7, 6] });
+    expect(kept.shown).toEqual([2, 6, 7, 3, 1, 0]);
+    // The child picks the crash: it shows, and boing (the least used on screen) folds.
+    const picked = foldDrumRows(rows, notes, { base: [2, 3, 1, 0], cap: 6, pinned: [5], keep: kept.shown });
+    expect(picked.shown).toEqual([5, 2, 6, 3, 1, 0]);
+    expect(picked.folded).toEqual([4, 7]);
+  });
+
+  it('a row emptied on screen stays (no jumping), and the newest pick wins when picks overflow', () => {
+    const emptied = notes.filter((n) => n.step !== 6);
+    expect(foldDrumRows(rows, emptied, { base: [2, 3, 1, 0], cap: 5, keep: [6] }).shown).toEqual([2, 6, 3, 1, 0]);
+    expect(foldDrumRows(rows, notes, { base: [2, 3, 1, 0], cap: 5, pinned: [7, 5] }).shown).toEqual([2, 7, 3, 1, 0]);
+  });
+
+  it('only changes what is drawn: the notes are untouched', () => {
+    foldDrumRows(rows, notes, { base: [2, 3, 1, 0], cap: 4, pinned: [7], keep: [6] });
+    expect(JSON.stringify(notes)).toBe(before);
   });
 });
 

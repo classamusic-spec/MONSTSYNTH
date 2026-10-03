@@ -91,6 +91,35 @@ export function drumRows(clip: Clip | null, base: readonly number[], added: read
   return [...pads].sort((a, b) => rank(a) - rank(b));
 }
 
+/**
+ * Which drum rows show when not all of them fit at a finger's size (a phone
+ * holds five). Folding only changes the picture: folded drums keep playing.
+ *   base rows   always show (the mode's own drums)
+ *   `pinned`    next (picked by the child, newest first)
+ *   `keep`      next (rows already on screen, so nothing jumps under a finger),
+ *               the busiest first
+ *   the rest    by how many hits they have, then top to bottom
+ * `shown` comes back in row order; `folded` busiest first.
+ */
+export function foldDrumRows(
+  rows: readonly number[],
+  notes: readonly NoteEvent[],
+  o: { base: readonly number[]; cap: number; pinned?: readonly number[]; keep?: readonly number[] },
+): { shown: number[]; folded: number[] } {
+  if (rows.length <= o.cap) return { shown: [...rows], folded: [] };
+  const hits = new Map<number, number>();
+  for (const n of notes) hits.set(n.step, (hits.get(n.step) ?? 0) + 1);
+  const busiest = (a: number, b: number) => (hits.get(b) ?? 0) - (hits.get(a) ?? 0) || rows.indexOf(a) - rows.indexOf(b);
+  const shown = new Set(rows.filter((p) => o.base.includes(p)));
+  const take = (pads: readonly number[]) => {
+    for (const p of pads) if (shown.size < o.cap && rows.includes(p)) shown.add(p);
+  };
+  take(o.pinned ?? []);
+  take([...(o.keep ?? [])].sort(busiest));
+  take([...rows].sort(busiest));
+  return { shown: rows.filter((p) => shown.has(p)), folded: rows.filter((p) => !shown.has(p)).sort(busiest) };
+}
+
 const EMPTY = (): CellView => ({ state: 'off', ids: [], subs: [], vel: 0, held: false });
 
 function stateOf(subs: number[]): CellState {

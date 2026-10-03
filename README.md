@@ -17,7 +17,7 @@ A tablet-first creative music toy for children aged about 3–10. It is built fr
 * **Four core monsters**: Bloop (lead), Boom (drums), Grumble (bass), Spark (bells). **Puff** (pads) and **Mimic** (voice sampler) join through *Add Monster*. There are 25 synthesised sounds, and each one is a monster costume.
 * **Monster Magic**: scale locking (pentatonic by default), soft quantisation (drums snap exactly onto the beat), "first note is the downbeat" looping, replace-don't-pile-up overdubs, auto-stop, and automatic song arrangement.
 * **Loops**: record, play, stop and undo. Every monster shares one clock, so loops always line up.
-* **Beat Hop**: flip the Lab's keys over into a grid of stepping stones and tap a beat for Boom, one column per beat. The first stone starts the loop from its own beat, every stone is heard exactly on the beat, a swipe paints a row, the *Surprise* wand stamps ready-made grooves, and a magnet tidies any loop onto the beat in one tap. Also from the *Make a beat* card on the Songs shelf.
+* **Beat Hop**: flip the Lab's keys over into a grid of stepping stones and tap a beat for Boom, one column per beat. The first stone starts the loop from its own beat, every stone is heard exactly on the beat, a swipe paints a row, the *Surprise* wand stamps ready-made grooves, and a magnet tidies any loop onto the beat in one tap. Stones stay finger-sized on every screen (extra drums fold behind a *+N* chip and keep playing). Also from the *Make a beat* card on the Songs shelf.
 * **Monster Blocks**: the song as rows of blocks. Tap, swipe or drag to change it, then play it through to a finale ("You made a song!").
 * **Sound Painting**: draw music. Colour picks the monster, height is pitch, and left-to-right is time.
 * **Learn**: a monster teaches eight classic songs (Hot Cross Buns, Mary Had a Little Lamb, Twinkle Twinkle, Row Row Row Your Boat, Old MacDonald, London Bridge, Ode to Joy, Jingle Bells). It sings a phrase, then the next key glows and a hand points at it; children play back at their own pace. Wrong keys still make music. *Magic help* (any key plays the right note) is on for Little Monsters. Finish for stars, hear it with the band, or keep it as a song in Monster Blocks.
@@ -47,7 +47,7 @@ node scripts/e2e-more.mjs           # Blocks, Paint, Add Monster, Mimic (fake mi
 node scripts/e2e-learn.mjs          # song lessons: listen, play back, stars, band, keep as a song
 node scripts/e2e-edge.mjs           # review regressions: no recorded feedback sounds, focus loss, rest time, shared recordings
 node scripts/e2e-beat.mjs           # beat accuracy: drum snap, flam guard, click, grid-locked rolls
-node scripts/e2e-steps.mjs          # Beat Hop: stones on the beat, catch-up, swipes and wand as one undo, tidy, sizes, axe
+node scripts/e2e-steps.mjs          # Beat Hop: stones on the beat, catch-up, no double hits, swipes and wand as one undo, sticky rows, tap slop, tidy, folded rows, sizes, axe
 node scripts/e2e-visual.mjs         # layout and motion at phone, iPad and portrait sizes
 node scripts/touch-check.mjs        # real touch events, first-tap audio unlock, no stuck notes, 4× CPU throttle
 node scripts/audio-levels.mjs       # offline-render every preset, report peak/RMS, worst-case mix

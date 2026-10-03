@@ -1,7 +1,7 @@
 // Real touch events (no autoplay bypass): first tap unlocks audio, touch keys,
 // glissando, monster squish drag, multi-finger chord, hold-to-roll, performance
 // under CPU throttle, and Beat Hop's stones (rapid multi-finger taps and a paint
-// swipe under CPU throttle).
+// swipe under CPU throttle, and taps that slide a little).
 import { chromium } from 'playwright';
 
 const url = process.argv[2] || 'http://127.0.0.1:5173/';
@@ -183,6 +183,23 @@ await page.evaluate(() => window.__monster.studio.play());
 await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
 const beat0 = (await dbg()).beat;
 const sig0 = await boomSig();
+// What the loop must be if every one of the 12 taps lands: each toggles its own stone
+// (snappy drum beats 1–6, big drum beats 4–8 and 1), worked out with the grid's own rules.
+const toggled = [];
+for (let i = 0; i < 6; i++) toggled.push([1, i % 8], [0, (i + 3) % 8]);
+const expectedSig = await page.evaluate(async (cells) => {
+  const steps = await import('/src/magic/steps.ts');
+  const { MODE_CAPS } = await import('/src/model/monsters.ts');
+  const s = window.__monster.getState();
+  const caps = MODE_CAPS[s.settings.ageMode];
+  const t = s.project.tracks.find((x) => x.monster === 'boom');
+  let clip = t.clips.find((c) => c.id === t.activeClipId);
+  for (const [pad, col] of cells) {
+    const target = steps.nextTarget(steps.cellState(clip.notes, pad, col, clip.lengthBeats), { states: caps.gridCellStates, rowDefault: caps.gridCellStates === 2 && pad === 2 ? 'double' : 'one' });
+    clip = steps.writeCell(clip, { step: pad, col, target, lengthBeats: clip.lengthBeats, beatsPerBar: s.project.beatsPerBar, isDrum: true, columnCap: Infinity, dur: 0.5 }).clip;
+  }
+  return clip.notes.map((n) => `${n.step}@${n.beat}`).sort().join(' ');
+}, toggled);
 // Two fingers at once on different stones, again and again (each tap toggles its stone).
 for (let i = 0; i < 6; i++) {
   const a = await stone(1, i % 8);
@@ -216,10 +233,38 @@ await page.evaluate(() => window.__monster.studio.stop());
 await page.waitForTimeout(500);
 const gridEnd = await dbg();
 const downLeft = await page.$$eval('.step-grid .stone[data-down="true"]', (els) => els.length);
-check('Beat Hop: rapid two-finger stone taps all land under a 4× slower CPU', sigTaps !== sig0, `${sig0.split(' ').length} → ${sigTaps.split(' ').length} hits`);
+check('Beat Hop: rapid two-finger stone taps all land (all 12 toggles) under a 4× slower CPU', sigTaps === expectedSig && sigTaps !== sig0, `${sig0.split(' ').length} → ${sigTaps.split(' ').length} hits (expected ${expectedSig.split(' ').length})`);
 check('Beat Hop: a paint swipe lights the whole clap row as one undo step', painted.join(',') === '0,1,2,3,4,5,6,7' && past1 - past0 === 1, `${painted.join(',')}; ${past1 - past0} step(s)`);
 check('Beat Hop: the playhead keeps moving while stones are tapped', beat1 - beat0 > 2, `${beat0.toFixed(2)} → ${beat1.toFixed(2)}`);
 check('Beat Hop: no stuck voices, notes or pressed stones afterwards', gridEnd.held === 0 && gridEnd.live === 0 && downLeft === 0, `${gridEnd.held} held, ${gridEnd.live} live, ${downLeft} pressed`);
+
+// 9. A small child's tap slides a little: a tap 2 px from a stone's edge that drifts
+//    6 px across the gap (or 5 px down) still lights only that stone.
+await page.evaluate(() => window.__monster.studio.stop());
+const slid = [];
+for (const [dx, dy, edge] of [
+  [6, 0, 'right'],
+  [0, 5, 'bottom'],
+]) {
+  await page.evaluate(async () => {
+    const m = window.__monster;
+    await m.actions.newSong('beat');
+    m.studio.stop();
+  });
+  await page.waitForTimeout(250);
+  const b = await page.locator('.step-grid .stone[data-pad="1"][data-col="2"]').boundingBox();
+  const x = edge === 'right' ? b.x + b.width - 2 : b.x + b.width / 2;
+  const y = edge === 'bottom' ? b.y + b.height - 2 : b.y + b.height / 2;
+  await touch('touchStart', [{ x, y, id: 1 }]);
+  await page.waitForTimeout(40);
+  await touch('touchMove', [{ x: x + dx, y: y + dy, id: 1 }]);
+  await page.waitForTimeout(40);
+  await touch('touchEnd', []);
+  await page.waitForTimeout(150);
+  slid.push(await boomSig());
+}
+await page.evaluate(() => window.__monster.studio.stop());
+check('Beat Hop: a tap that slides 5–6 px from a stone\'s edge lights that one stone only', slid.every((x) => x === '1@2'), slid.join(' | '));
 check('no page errors', errors.length === 0, errors.join(' | '));
 await browser.close();
 const failed = results.filter((r) => !r.ok).length;

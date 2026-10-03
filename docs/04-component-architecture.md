@@ -60,7 +60,7 @@ Monster Synth is a React + TypeScript single-page PWA built with Vite. The code 
 | `src/store/actions.ts` | Boot, songs (open/new/copy/rename/delete), settings, navigation |
 | `src/store/persistence.ts`, `idb.ts` | Debounced autosave, IndexedDB with in-memory fallback |
 | `src/ui/shell/*` | AppShell, NavDock, TransportRail (+LoopRing), WakeOverlay, ParentGate, BubbleLayer, Coach, Finale, RotateHint, Sky, Logo |
-| `src/ui/lab/*` | LabScreen, StageScene, MonsterPod (squish gestures), PodTools, PlaySurface (keys), StepGrid + DrumRows + BeatRuler (Beat Hop, the grid face of the keys), SurfaceSide (flip button, tidy magnet), VoiceButton, MonsterTray, MagicPanel, glyphs, eye tracking |
+| `src/ui/lab/*` | LabScreen, StageScene, MonsterPod (squish gestures), PodTools, PlaySurface (keys), StepGrid + DrumRows + BeatRuler (Beat Hop, the grid face of the keys; StepGrid picks a `GridLane` per monster: `DRUM_LANE` for Boom now, the bead lane next), SurfaceSide (flip button, tidy magnet), VoiceButton, MonsterTray, MagicPanel, glyphs, eye tracking |
 | `src/ui/monsters/*` | `MonsterArt` (SVG cast), accessories (costumes), `FxBuddy`, note reactions (WAAPI), shape helpers |
 | `src/ui/blocks/*` | BlocksScreen, note thumbnails |
 | `src/ui/paint/*` | PaintScreen (canvas, tools, palette) |

@@ -16,7 +16,7 @@ import {
   saveSettings,
 } from './persistence';
 import { idbDelete, idbKeys, requestPersistentStorage } from './idb';
-import { canGrid, commit, getState, labFace, setProject, setState, type LabView, type Overlay, type PaintTool, type Screen } from './store';
+import { commit, getState, setProject, setState, type LabView, type Overlay, type PaintTool, type Screen } from './store';
 import type { PaintBrush } from '../model/types';
 
 // App-level actions: booting, switching songs, settings, navigation.
@@ -83,13 +83,9 @@ export function setScreen(screen: Screen) {
 }
 
 export function selectTrack(trackId: string) {
-  const s = getState();
-  if (s.selectedTrackId === trackId) return;
-  // The grid stays flipped only from one grid face to another; a monster without
-  // one (or a grid left behind while the keys showed) comes up on its keys.
-  const track = s.project.tracks.find((t) => t.id === trackId);
-  const keepGrid = labFace(s) === 'grid' && canGrid(track, s.project.loopBeats);
-  setState(s.labView === 'grid' && !keepGrid ? { selectedTrackId: trackId, labView: 'keys' } : { selectedTrackId: trackId });
+  if (getState().selectedTrackId !== trackId) setState({ selectedTrackId: trackId });
+  // labView is the child's choice of face, and it stays: a monster without a grid
+  // shows its keys (labFace), and tapping back to Boom finds its grid again.
 }
 
 /** Flip the Lab's play surface between the keys and Beat Hop's grid. */

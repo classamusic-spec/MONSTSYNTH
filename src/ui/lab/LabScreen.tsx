@@ -75,7 +75,8 @@ export function LabScreen() {
       const track = s.project.tracks.find((t) => t.id === s.selectedTrackId) ?? s.project.tracks[0];
       // ⇧G flips the keys over to Beat Hop's grid and back (plain G is a key).
       if (e.key === 'G' && e.shiftKey) {
-        if (canGrid(track, s.project.loopBeats)) setLabView(labFace(s) === 'grid' ? 'keys' : 'grid');
+        // Held down, it flips once (a repeating key would flip back and forth).
+        if (!e.repeat && canGrid(track, s.project.loopBeats)) setLabView(labFace(s) === 'grid' ? 'keys' : 'grid');
         return;
       }
       const idx = KEY_ROW.indexOf(key);

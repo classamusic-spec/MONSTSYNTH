@@ -99,6 +99,25 @@ for (const v of VIEWS) {
   await page.waitForTimeout(1200);
   await shot('6b-grid-maker-wand');
   await page.locator('.t-play').click();
+  // All eight drums: as many rows as fit at a finger's size, the rest folded behind
+  // '+N' (phones and iPad landscape), with the tray open.
+  await page.evaluate(async () => {
+    const m = window.__monster;
+    const edits = await import('/src/model/edits.ts');
+    const boom = m.getState().selectedTrackId;
+    const notes = [0, 1, 2, 3, 4, 5, 6, 7].flatMap((pad, i) => Array.from({ length: 8 - i }, (_, k) => ({ id: `t${pad}_${k}`, beat: (k * 3 + pad) % 8, step: pad, dur: 0.5, vel: 0.8, tone: 0 })));
+    m.studio.stepEdit(boom, (p) => edits.replaceLoopNotes(p, boom, notes), { col: 0, preview: 'none' });
+    m.studio.stop();
+  });
+  await page.waitForTimeout(300);
+  await shot('6c-grid-maker-eight-drums');
+  const more = page.locator('.grid-add').filter({ visible: true });
+  if (await more.count()) {
+    await more.first().click();
+    await page.waitForTimeout(350);
+    await shot('6d-grid-maker-more-drums-tray');
+    await page.locator('.picker-close').click();
+  }
   await page.locator('.surface-flip').click();
   await page.waitForTimeout(200);
   await page.locator('.t-magic').click();

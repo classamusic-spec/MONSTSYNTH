@@ -363,3 +363,38 @@
   font-size: var(--fs-m);
   color: var(--ink-2);
 }
+
+.blocks-empty-go {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Boom and three stones: straight to Boom's beat grid. */
+.blocks-empty-beat {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 14px 0 6px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--boom) 75%, white) 0%, var(--boom) 55%, color-mix(in srgb, var(--boom) 70%, black) 100%);
+  border: 2.5px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--boom) 55%, black);
+  color: #fff;
+  transition: transform var(--t-fast) var(--ease-out);
+}
+
+.blocks-empty-beat:active {
+  transform: scale(0.94);
+}
+
+.blocks-empty .blocks-empty-beat .monster-svg {
+  width: 42px;
+  height: 42px;
+}
+
+.blocks-empty-beat > svg:last-child {
+  width: 26px;
+  height: 26px;
+}

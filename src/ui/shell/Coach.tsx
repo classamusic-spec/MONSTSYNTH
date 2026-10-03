@@ -11,7 +11,7 @@ import { Icon } from '../icons/Icon';
 //   lots of playing, no record → points at Record
 //   lots of drumming on Boom   → points at the flip button (Beat Hop)
 //   stones placed after Stop   → points at Play
-//   first loop made            → points at another monster (add a layer)
+//   first loop made (a take, or stones on the grid) → points at another monster (add a layer)
 //   a few loops made           → points at Monster Blocks (make a song)
 // Hints never block anything and can be switched off in Parent Space.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -38,11 +38,13 @@ export function Coach() {
 
   useEffect(() => {
     if (!enabled || !awake) return;
-    let live = 0;
+    let live = 0; // notes played on the Lab's keys
+    let touched = false; // anything played in the Lab (keys, stones, drum pictures)
     let boomHits = 0;
     let stones = 0;
     let recorded = false;
     let loops = 0;
+    const gridLoops = new Set<string>(); // monsters whose first loop was made on the grid
     const timers: ReturnType<typeof setTimeout>[] = [];
     const show = (id: string, selector: string, ms: number) => {
       if (done.current.has(id)) return;
@@ -53,7 +55,7 @@ export function Coach() {
 
     timers.push(
       setTimeout(() => {
-        if (live > 0) return;
+        if (touched) return;
         const grid = labFace(getState()) === 'grid';
         show('tap-key', grid ? ".step-grid .stone[data-pad='0'][data-col='0']" : '.keys .key:nth-child(3)', 7000);
       }, 3000),
@@ -63,13 +65,14 @@ export function Coach() {
       // (and Beat Hop's stone previews) must not use up the once-per-session hints.
       const s = getState();
       if (v.source !== 'live' || s.screen !== 'lab') return;
-      if (labFace(s) === 'grid') {
-        if (live === 0) hide();
-        live++;
-        return;
+      if (!touched) {
+        touched = true;
+        hide();
       }
+      // Stone previews and drum pictures on the grid are not playing the keys:
+      // they never use up the "try Record" count.
+      if (labFace(s) === 'grid') return;
       live++;
-      if (live === 1) hide();
       if (live === 16 && !recorded) show('try-record', '.t-rec[data-state]', 5000);
       // Drumming away on Boom without recording: its beat grid might be the thing.
       if (v.monster === 'boom' && ++boomHits === 8 && !recorded) show('try-grid', '.surface-flip', 5000);
@@ -80,15 +83,22 @@ export function Coach() {
       if (s.screen !== 'lab' || labFace(s) !== 'grid' || s.transport.playing || studio.gridWaiting) return;
       if (spotlightNotes(s) > spotlightNotes(prev) && ++stones === 4) show('play-glow', '.t-play', 4000);
     });
+    const countLoop = (delay: number) => {
+      loops++;
+      if (loops === 1) timers.push(setTimeout(() => show('add-layer', '.pod:not([data-selected="true"]) .pod-hit', 5000), delay));
+      if (loops === 3) timers.push(setTimeout(() => show('make-song', '.dock-btn[data-screen="blocks"]', 5000), delay));
+    };
     const offEvent = onStudioEvent((e) => {
       if (e.type === 'record-start') {
         recorded = true;
         hide();
       }
-      if (e.type === 'record-stop' && e.notes > 0) {
-        loops++;
-        if (loops === 1) timers.push(setTimeout(() => show('add-layer', '.pod:not([data-selected="true"]) .pod-hit', 5000), 1200));
-        if (loops === 3) timers.push(setTimeout(() => show('make-song', '.dock-btn[data-screen="blocks"]', 5000), 1200));
+      if (e.type === 'record-stop' && e.notes > 0) countLoop(1200);
+      // A loop made on the grid (or by the wand) counts once per monster; a take
+      // counts when it ends (above). Grid hints wait a little: the child is still placing stones.
+      if (e.type === 'loop-created' && !getState().transport.recording && !gridLoops.has(e.trackId)) {
+        gridLoops.add(e.trackId);
+        countLoop(4000);
       }
     });
     return () => {

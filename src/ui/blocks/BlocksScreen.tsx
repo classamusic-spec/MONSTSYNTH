@@ -188,6 +188,8 @@ export function BlocksScreen() {
   };
 
   const draggingRow = dragging ? rows.find((r) => r.id === dragging.rowId) : null;
+  // A song with no loops yet can start straight on Boom's beat grid.
+  const beatTrack = project.tracks.find((t) => t.monster === 'boom' && canGrid(t, project.loopBeats));
 
   return (
     <section className="blocks" aria-label="Monster Blocks: arrange your song">
@@ -297,9 +299,26 @@ export function BlocksScreen() {
         <div className="blocks-empty">
           <MonsterArt kind="bloop" />
           <p>Make a loop in the Lab first — then build your song here!</p>
-          <button className="btn-primary" onClick={() => setScreen('lab')}>
-            Go to the Lab
-          </button>
+          <div className="blocks-empty-go">
+            <button className="btn-primary" onClick={() => setScreen('lab')}>
+              Go to the Lab
+            </button>
+            {/* No words needed: Boom and the stones open Boom's beat grid, ready for a first stone. */}
+            {beatTrack && (
+              <button
+                className="blocks-empty-beat"
+                aria-label="Make a beat with Boom"
+                onClick={() => {
+                  selectTrack(beatTrack.id);
+                  setScreen('lab');
+                  setLabView('grid');
+                }}
+              >
+                <MonsterArt kind="boom" />
+                <Icon name="grid" />
+              </button>
+            )}
+          </div>
         </div>
       )}
     </section>

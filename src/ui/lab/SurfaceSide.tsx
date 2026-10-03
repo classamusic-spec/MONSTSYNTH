@@ -65,7 +65,11 @@ export function SurfaceSide({ track, face, extra }: { track: Track; face: LabVie
       data-invite={invite}
       aria-label="Beat grid"
       aria-pressed={face === 'grid'}
-      onClick={() => setLabView(face === 'grid' ? 'keys' : 'grid')}
+      onClick={(e) => {
+        setLabView(face === 'grid' ? 'keys' : 'grid');
+        // The surface turns over (a new button on the other face): a keyboard user stays on the flip.
+        if (e.detail === 0) requestAnimationFrame(() => document.querySelector<HTMLElement>('.surface-flip')?.focus());
+      }}
     >
       <Icon name={face === 'grid' ? 'keys' : 'grid'} />
     </button>

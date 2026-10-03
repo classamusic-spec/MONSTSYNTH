@@ -569,6 +569,15 @@
   .lab[data-view='grid']:has(.step-grid[data-rows='5'], .step-grid[data-rows='6'], .step-grid[data-rows='7'], .step-grid[data-rows='8']) {
     grid-template-rows: 96px minmax(0, 1fr);
   }
+  /* A slim stage: badges and the add seat shrink to fit inside it. */
+  .lab[data-view='grid']:has(.step-grid[data-rows='5'], .step-grid[data-rows='6'], .step-grid[data-rows='7'], .step-grid[data-rows='8']) .stage {
+    --badge: 24px;
+  }
+  .lab[data-view='grid']:has(.step-grid[data-rows='5'], .step-grid[data-rows='6'], .step-grid[data-rows='7'], .step-grid[data-rows='8']) .add-seat {
+    height: 44px;
+    min-height: 0;
+    margin-bottom: var(--lift);
+  }
 }
 
 /* The beat you can see: a soft light that breathes on every beat (PlaySurface). */
