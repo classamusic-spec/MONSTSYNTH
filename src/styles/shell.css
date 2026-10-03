@@ -164,7 +164,7 @@
 @media (orientation: portrait) {
   .dock {
     flex-direction: row;
-    justify-content: space-between;
+    justify-content: center;
   }
   .dock-group {
     flex-direction: row;
@@ -244,10 +244,11 @@
   min-height: 0;
 }
 
+/* Labels share one baseline: buttons of different sizes align at the bottom. */
 .transport-row {
   display: flex;
   gap: var(--gap-s);
-  align-items: flex-start;
+  align-items: flex-end;
 }
 
 .t-btn {
@@ -277,6 +278,7 @@
 .t-btn .t-label {
   font-size: var(--fs-xs);
   font-weight: 600;
+  line-height: 1.1;
   color: var(--ink-2);
 }
 
@@ -341,7 +343,9 @@
   stroke: var(--rec);
 }
 
-.t-rec .t-face {
+/* Record (Lab) and the magic wand that stands in its place (Blocks). */
+.t-rec .t-face,
+.t-wand .t-face {
   width: var(--rec-size);
   height: var(--rec-size);
   font-size: calc(var(--rec-size) * 0.5);
@@ -415,6 +419,7 @@
 @media (orientation: portrait) {
   .transport {
     flex-direction: row;
+    align-items: flex-end;
     justify-content: center;
     gap: calc(var(--gap) * 2);
   }

@@ -4,7 +4,9 @@
   position: fixed;
   inset: 0;
   z-index: 80;
-  background: rgba(6, 7, 30, 0.78);
+  /* Opaque: the play space never shows through between the sections (the solid
+     base colour keeps it so in forced-colours modes, which drop gradients). */
+  background: var(--sky-0) linear-gradient(180deg, var(--sky-1), var(--sky-0));
   overflow-y: auto;
   /* Grown-ups may pinch-zoom here; the play space itself blocks zoom via touch-action. */
   touch-action: pan-y pinch-zoom;
@@ -40,7 +42,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 14px 18px;
-  border-radius: 18px;
+  border-radius: var(--radius-m);
   background: #1b1f63;
   border: 2px solid var(--edge-strong);
 }
@@ -62,7 +64,7 @@
   flex-direction: column;
   gap: 10px;
   padding: 16px 18px;
-  border-radius: 18px;
+  border-radius: var(--radius-m);
   background: #171a55;
   border: 2px solid var(--edge);
 }
@@ -84,8 +86,8 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 12px 14px 12px 44px;
-  border-radius: 14px;
+  padding: 12px 14px 12px 48px;
+  border-radius: var(--radius-s);
   background: rgba(255, 255, 255, 0.05);
   border: 2px solid var(--edge);
   cursor: pointer;
@@ -96,13 +98,34 @@
   background: rgba(123, 134, 255, 0.2);
 }
 
+/* Round radio dots that match the toggles (not the grey native ones). */
 .ps-choice input {
   position: absolute;
   left: 14px;
-  top: 15px;
-  width: 20px;
-  height: 20px;
-  accent-color: #7b86ff;
+  top: 13px;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 50%;
+  border: 2px solid var(--edge-strong);
+  background: #0f1146;
+  cursor: pointer;
+  transition:
+    border-color var(--t),
+    background var(--t);
+}
+
+.ps-choice input:checked {
+  border-color: #fff;
+  background: radial-gradient(circle, #7b86ff 0 45%, transparent 50%), #0f1146;
+}
+
+.ps-choice input:focus-visible,
+.ps-toggle input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
 }
 
 .ps-choice-title {
@@ -131,7 +154,7 @@
 .ps-input {
   font-size: 16px;
   padding: 8px 10px;
-  border-radius: 10px;
+  border-radius: var(--radius-s);
   border: 2px solid var(--edge-strong);
   background: #0f1146;
   color: #fff;
@@ -147,16 +170,56 @@
 .ps-toggle {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
   cursor: pointer;
 }
 
+/* On/off switches instead of native checkboxes. */
 .ps-toggle input {
+  position: relative;
+  flex: 0 0 auto;
+  width: 52px;
+  height: 30px;
+  margin: -3px 0 0;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 999px;
+  border: 2px solid var(--edge-strong);
+  background: #2b2f7a;
+  cursor: pointer;
+  transition:
+    background var(--t),
+    border-color var(--t);
+}
+
+.ps-toggle input::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
   width: 22px;
   height: 22px;
-  margin-top: 1px;
-  flex: 0 0 auto;
-  accent-color: #7b86ff;
+  border-radius: 50%;
+  background: #cfd2ff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+  transition:
+    transform var(--t) var(--ease-out),
+    background var(--t);
+}
+
+.ps-toggle input:checked {
+  border-color: #fff;
+  background: #7b86ff;
+}
+
+.ps-toggle input:checked::after {
+  transform: translateX(22px);
+  background: #fff;
+}
+
+.ps-toggle input:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .ps-note {
@@ -168,7 +231,7 @@
 .ps-status {
   margin: 0;
   padding: 8px 12px;
-  border-radius: 10px;
+  border-radius: var(--radius-s);
   background: rgba(123, 134, 255, 0.18);
   font-size: 14px;
 }
@@ -197,7 +260,7 @@
   justify-content: space-between;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: 14px;
+  border-radius: var(--radius-s);
   background: rgba(255, 255, 255, 0.04);
   border: 2px solid var(--edge);
 }
@@ -245,7 +308,7 @@
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-s);
   background: rgba(179, 36, 58, 0.18);
   border: 2px solid rgba(255, 120, 140, 0.5);
 }
@@ -260,6 +323,21 @@
   font-size: 13px;
   color: var(--ink-3);
   padding-bottom: 8px;
+}
+
+/* High-contrast (forced colours) modes drop the drawn knob and dot: use the
+   system's own switches and radios there, so on and off still look different. */
+@media (forced-colors: active) {
+  .ps-toggle input,
+  .ps-choice input {
+    appearance: auto;
+    -webkit-appearance: auto;
+    width: 24px;
+    height: 24px;
+  }
+  .ps-toggle input::after {
+    content: none;
+  }
 }
 
 @media (max-width: 560px) {

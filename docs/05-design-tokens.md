@@ -32,13 +32,27 @@ Children hold phones sideways, so **height is the scarce dimension**. Sizes are 
 
 ### Keys (low → high)
 `--key-0 … --key-7`: `#ff4f7e` `#ff8a2b` `#ffcf2e` `#4cd964` `#2fd0e8` `#3f8cff` `#9a5cff` `#ff5fd0`
-Colour is never the only cue: glyph height and size also encode pitch.
+Colour is never the only cue: glyph height and size also encode pitch, and readers get a name sticker.
+
+Key face (shared by the Lab and Learn; the rules live in `src/styles/keys.css`, except the Learn staircase range and the word tags, which are in `src/styles/learn.css`):
+
+| Part | Look | Contrast target |
+|---|---|---|
+| Glyph staircase | white at 80 % with a drop edge `color-mix(key 50%, black)` under the shape; drums 85 % | ≥ 3:1 for the non-text cue: the white fill alone is only 1.4–3:1 on the key, so the dark edge carries it (edge vs glyph ≥ 5:1 on every key) |
+| Name sticker (white key) | pill `rgba(255,255,255,.94)`, ink `color-mix(key 38%, black)`, Fredoka 700 `clamp(14px, 4.2vmin, 26px)`, pill `clamp(22px, 6.2vmin, 40px)` high at `bottom: max(8px, 7%)` | ≥ 4.5:1 (measures 7.7:1 on yellow up to 12:1 on purple) |
+| Name sticker (black piano key) | inverted pill `color-mix(key 30%, #0b0d30)`, white ink, thin white inner ring | ≥ 4.5:1 (measures ≥ 9:1) |
+| Drum word (Maker) | same white pill, `--fs-xs` | ≥ 4.5:1 |
+| Learn word tag | pill in the key colour, ink `#0b0d30`, always fully opaque (upcoming tags are scaled to 0.9 instead of faded) | ≥ 4.5:1 as rendered (lowest: purple ≈ 4.8:1; `e2e-learn` checks it) |
+| Finger sparks | white 14 px dots with a 2 px edge `color-mix(key 55%, black)`, alternating with key-colour dots ringed in white; full opacity for 60 % of the 420 ms flight | visible on every key colour, yellow included |
+| Sharps / flats | inline SVG strokes in `currentColor`, raised beside the letter | follows the ink |
+
+High contrast turns stickers solid white with `#0b0d30` ink and a 2 px outline (black-key stickers: solid `#0b0d30`, white outline), glyphs fully opaque with a dark outline, and outlines every key; a keyboard-focused key (the Learn keys are buttons) keeps the 4 px `--focus` ring over that outline.
 
 ### Actions
 `--rec #ff3b55` · `--play-1/2 #7b86ff → #4d4fe3` · `--focus #ffe066` (keyboard focus ring) · `--good #4cd964`
 
 ### High contrast (parent option)
-`.app[data-contrast='high']` raises panel opacity to 95 %, edges to 55–90 % white and secondary text to full white.
+`.app[data-contrast='high']` raises panel opacity to 95 %, edges to 55–90 % white and secondary text to full white; keys get the solid stickers and outlines above.
 
 ## Type
 

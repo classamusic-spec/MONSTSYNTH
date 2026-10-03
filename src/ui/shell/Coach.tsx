@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useApp } from '../../store/store';
+import { getState, useApp } from '../../store/store';
 import { onNote, onStudioEvent } from '../../studio/visualBus';
 import { Icon } from '../icons/Icon';
 
@@ -45,10 +45,12 @@ export function Coach() {
       }, 3000),
     );
     const offNote = onNote((v) => {
-      if (v.source !== 'live') return;
+      // Only playing in the Lab counts: auditions in Blocks, Paint and Learn must
+      // not use up the once-per-session 'try Record' hint before the Lab shows it.
+      if (v.source !== 'live' || getState().screen !== 'lab') return;
       live++;
       if (live === 1) hide();
-      if (live === 16 && !recorded) show('try-record', '.t-rec', 5000);
+      if (live === 16 && !recorded) show('try-record', '.t-rec[data-state]', 5000);
     });
     const offEvent = onStudioEvent((e) => {
       if (e.type === 'record-start') {

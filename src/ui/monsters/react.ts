@@ -1,5 +1,7 @@
 import type { MonsterKind } from '../../model/types';
 import type { NoteVisual } from '../../studio/visualBus';
+// The drum pads' colours, so a drum's sprite matches the pad that played it.
+import { DRUM_COLORS } from '../lab/glyphs';
 
 // How each monster *shows* its sound. Driven imperatively with the Web
 // Animations API so dozens of notes per second never trigger React renders.
@@ -138,4 +140,74 @@ export function reactToNote(root: HTMLElement, v: NoteVisual, o: ReactOptions) {
     host.appendChild(ring);
     setTimeout(() => ring.remove(), 1150);
   }
+}
+
+// ── Note sprites: little notes float up from the monster that is singing ─────
+
+/** At most this many sprites per monster: fast drum rolls stay light. */
+export const MAX_NOTE_SPRITES = 8;
+const SPRITE_MS = 850;
+/** Half a sprite (its size is clamp(20px, 5vmin, 30px) in lab.css). */
+const HALF_SPRITE = 'clamp(10px, 2.5vmin, 15px)';
+
+const SPRITE_SVG: Record<'note' | 'star' | 'burst', string> = {
+  note: '<path d="M9 17.5V5.2l11-2.6v12.2" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/><ellipse cx="6.2" cy="17.8" rx="3.8" ry="3.1" fill="currentColor"/><ellipse cx="17.2" cy="15" rx="3.8" ry="3.1" fill="currentColor"/>',
+  star: '<path d="m12 1.8 3.1 6.4 7 1-5.1 4.9 1.2 7L12 17.8l-6.2 3.3 1.2-7L1.9 9.2l7-1Z" fill="currentColor" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/>',
+  burst: '<path d="m12 1 2.2 6.2L20.5 4l-2.7 6.3L23 12l-5.2 1.7 2.7 6.3-6.3-3.2L12 23l-2.2-6.2L3.5 20l2.7-6.3L1 12l5.2-1.7L3.5 4l6.3 3.2Z" fill="currentColor" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/>',
+};
+
+const templates = new Map<string, HTMLElement>();
+
+function spriteNode(kind: keyof typeof SPRITE_SVG): HTMLElement {
+  let t = templates.get(kind);
+  if (!t) {
+    t = document.createElement('span');
+    t.className = 'note-sprite';
+    t.setAttribute('aria-hidden', 'true');
+    t.innerHTML = `<svg viewBox="0 0 24 24">${SPRITE_SVG[kind]}</svg>`;
+    templates.set(kind, t);
+  }
+  return t.cloneNode(true) as HTMLElement;
+}
+
+/**
+ * A note (a star for Spark, a burst for Boom) in the colour of the key that
+ * played floats up from the monster's mouth to just above its head, stays
+ * bright for most of the way, and fades. Purely decorative, so it is skipped
+ * entirely when motion is reduced.
+ *
+ * Distances are in the wrap's container units (1cqmin = 1% of the drawing's
+ * size), so a note never has to measure the page.
+ */
+export function spawnNoteSprite(root: HTMLElement, v: NoteVisual, reduced: boolean) {
+  if (reduced) return;
+  const wrap = root.querySelector<HTMLElement>('.monster-wrap');
+  if (!wrap || typeof wrap.animate !== 'function') return;
+  if (wrap.querySelectorAll(':scope > .note-sprite').length >= MAX_NOTE_SPRITES) return;
+  const drums = v.monster === 'boom';
+  const step = Math.max(0, Math.min(7, Math.round(v.step)));
+  const sprite = spriteNode(drums ? 'burst' : v.monster === 'spark' ? 'star' : 'note');
+  sprite.style.color = `var(--key-${drums ? DRUM_COLORS[step] : step})`;
+  sprite.style.setProperty('--sx', `${(Math.random() * 20 - 10).toFixed(1)}%`);
+  wrap.appendChild(sprite);
+  // From the mouth (68% down the drawing) to just clear of the head. Short
+  // stages (phones held sideways) have no sky above the spotlight monster, so
+  // there the note stops at the stage's top edge, drifting off to the side.
+  const short = window.innerHeight < 560;
+  const clear = `calc(90cqmin + ${HALF_SPRITE})`;
+  const rise = short ? `min(${clear}, calc(100cqh - 32cqmin - ${HALF_SPRITE}))` : clear;
+  const up = (k: number) => `calc(${rise} * ${-k})`;
+  const side = Math.random() < 0.5 ? -1 : 1;
+  const dx = side * ((short ? 24 : 12) + Math.random() * 12); // cqmin: off the central eye (and the head, on phones)
+  const tilt = side * (8 + Math.random() * 10);
+  const a = sprite.animate(
+    [
+      { transform: 'translate(0, 0) scale(.4)', opacity: 0, easing: 'cubic-bezier(.22,1,.36,1)' },
+      { transform: `translate(${(dx * 0.4).toFixed(1)}cqmin, ${up(0.2)}) scale(1.1)`, opacity: 1, offset: 0.15, easing: 'ease-out' },
+      { transform: `translate(${dx.toFixed(1)}cqmin, ${up(0.8)}) scale(1) rotate(${tilt.toFixed(0)}deg)`, opacity: 1, offset: 0.7, easing: 'ease-in' },
+      { transform: `translate(${(dx * 1.2).toFixed(1)}cqmin, ${up(1)}) scale(.8) rotate(${(tilt * 1.5).toFixed(0)}deg)`, opacity: 0 },
+    ],
+    { duration: SPRITE_MS, easing: 'linear' },
+  );
+  a.onfinish = a.oncancel = () => sprite.remove();
 }

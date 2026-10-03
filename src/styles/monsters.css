@@ -137,11 +137,12 @@
   transform-origin: 100px 190px;
 }
 
-/* Gloop buddy: a goo puddle that grows with the reverb. */
+/* Gloop buddy: a goo puddle that grows with the reverb (at the monster's feet,
+   which stand --lift above the stage floor). */
 .goo {
   position: absolute;
   left: 50%;
-  bottom: 1%;
+  bottom: calc(var(--lift, 0px) + 1%);
   width: 70%;
   height: 12%;
   transform: translateX(-50%) scale(0);
@@ -161,7 +162,7 @@
   position: absolute;
   z-index: 0;
   left: 50%;
-  bottom: 4%;
+  bottom: calc(var(--lift, 0px) + 4%);
   width: 60%;
   aspect-ratio: 3 / 1;
   margin-left: -30%;

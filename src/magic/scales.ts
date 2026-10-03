@@ -15,15 +15,45 @@ export interface ScaleInfo {
   /** What grown-ups see. */
   musicName: string;
   steps: number[];
+  /**
+   * Letter offset from the tonic for each step (0 = the tonic's letter … 6), so
+   * note names are spelled from the scale degree: D major has F♯, not G♭.
+   * Empty for chromatic, which is spelled from a sharp or flat table instead.
+   */
+  degrees: number[];
+  /** Which tonic spelling the mood reads with: major-type (E♭, B♭) or minor-type (C♯, G♯). */
+  family: 'major' | 'minor';
 }
 
 export const SCALES: Record<ScaleId, ScaleInfo> = {
-  pentatonicMajor: { id: 'pentatonicMajor', kidName: 'Happy', musicName: 'Major pentatonic', steps: [0, 2, 4, 7, 9] },
-  pentatonicMinor: { id: 'pentatonicMinor', kidName: 'Mystery', musicName: 'Minor pentatonic', steps: [0, 3, 5, 7, 10] },
-  major: { id: 'major', kidName: 'Sunny', musicName: 'Major', steps: [0, 2, 4, 5, 7, 9, 11] },
-  minor: { id: 'minor', kidName: 'Moody', musicName: 'Natural minor', steps: [0, 2, 3, 5, 7, 8, 10] },
-  blues: { id: 'blues', kidName: 'Bluesy', musicName: 'Blues', steps: [0, 3, 5, 6, 7, 10] },
-  chromatic: { id: 'chromatic', kidName: 'Wild', musicName: 'Chromatic', steps: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] },
+  pentatonicMajor: {
+    id: 'pentatonicMajor',
+    kidName: 'Happy',
+    musicName: 'Major pentatonic',
+    steps: [0, 2, 4, 7, 9],
+    degrees: [0, 1, 2, 4, 5],
+    family: 'major',
+  },
+  pentatonicMinor: {
+    id: 'pentatonicMinor',
+    kidName: 'Mystery',
+    musicName: 'Minor pentatonic',
+    steps: [0, 3, 5, 7, 10],
+    degrees: [0, 2, 3, 4, 6],
+    family: 'minor',
+  },
+  major: { id: 'major', kidName: 'Sunny', musicName: 'Major', steps: [0, 2, 4, 5, 7, 9, 11], degrees: [0, 1, 2, 3, 4, 5, 6], family: 'major' },
+  minor: { id: 'minor', kidName: 'Moody', musicName: 'Natural minor', steps: [0, 2, 3, 5, 7, 8, 10], degrees: [0, 1, 2, 3, 4, 5, 6], family: 'minor' },
+  // The blue note is spelled as a flat 5th (C E♭ F G♭ G B♭).
+  blues: { id: 'blues', kidName: 'Bluesy', musicName: 'Blues', steps: [0, 3, 5, 6, 7, 10], degrees: [0, 2, 3, 4, 4, 6], family: 'minor' },
+  chromatic: {
+    id: 'chromatic',
+    kidName: 'Wild',
+    musicName: 'Chromatic',
+    steps: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    degrees: [],
+    family: 'major',
+  },
 };
 
 export const SCALE_ORDER: ScaleId[] = ['pentatonicMajor', 'pentatonicMinor', 'major', 'minor', 'blues', 'chromatic'];

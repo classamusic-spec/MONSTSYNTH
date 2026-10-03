@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   bandMonsters,
   findSong,
@@ -13,6 +13,7 @@ import {
   type SongPicture,
   type TeachSong,
 } from '../../magic/lessons';
+import { keyNames } from '../../magic/noteNames';
 import { MONSTERS } from '../../model/monsters';
 import { recordLessonStars, saveLessonAsSong } from '../../store/actions';
 import { getState, useApp } from '../../store/store';
@@ -20,7 +21,9 @@ import { studio, type LessonEvent } from '../../studio/studio';
 import { onNote } from '../../studio/visualBus';
 import { glow } from '../common/glow';
 import { isReducedMotion } from '../hooks/useCaps';
+import { useNoteNameStyle } from '../hooks/useKeyNames';
 import { Icon } from '../icons/Icon';
+import { KeyGlyph, KeyName, NoteText } from '../lab/glyphs';
 import { MonsterArt } from '../monsters/MonsterArt';
 import { reactToNote } from '../monsters/react';
 import { SongArt } from './SongArt';
@@ -155,6 +158,17 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
   const target = phase === 'play' ? notes[index] : undefined;
   const spb = 60 / song.tempo;
   const teacher = MONSTERS[song.teacher];
+  // Lessons are always in the major scale of the song's key (Old MacDonald is in D).
+  // Do re mi starts on the tune's home note, where it ends (Old MacDonald: G).
+  const style = useNoteNameStyle();
+  const names = useMemo(() => {
+    const last = song.phrases[song.phrases.length - 1].notes;
+    return keyNames(LESSON_KEYS, 'major', song.key, last[last.length - 1][1]);
+  }, [song]);
+  const spoken = useMemo(
+    () => names.map((n, k) => (names.slice(0, k).some((m) => m.spoken === n.spoken) ? `${n.spoken} (higher)` : n.spoken)),
+    [names],
+  );
 
   const clearTimer = () => {
     if (timer.current) clearTimeout(timer.current);
@@ -203,6 +217,8 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
       const key = keyEls.current[v.step];
       if (key) glow(key, Math.min(450, Math.max(140, v.dur * 1000)));
       requestAnimationFrame(() => {
+        // An eager press may have stopped the teacher since: no word stays lit into "Your turn".
+        if (phaseRef.current !== 'listen' && phaseRef.current !== 'band') return;
         wordEls.current.forEach((w, j) => {
           if (w) w.dataset.now = String(j === i);
         });
@@ -210,8 +226,9 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
     });
   }, [song]);
 
-  // Karaoke highlights belong to the teacher's singing only.
-  useEffect(() => {
+  // Karaoke highlights belong to the teacher's singing only (cleared before the
+  // next paint, so a word never stays lit into "Your turn").
+  useLayoutEffect(() => {
     if (phase === 'listen' || phase === 'band') return;
     wordEls.current.forEach((w) => {
       if (w) w.dataset.now = 'false';
@@ -256,6 +273,7 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
     if (phase === 'listen') {
       // An eager player: stop the demo and start from the top of the phrase.
       studio.lessonStop();
+      phaseRef.current = 'play';
       setPhase('play');
       i = 0;
     }
@@ -400,7 +418,11 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
                   className="lesson-word"
                   data-state={phase === 'play' ? (i < index ? 'sung' : i === index ? 'next' : 'todo') : phase === 'cheer' ? 'sung' : 'todo'}
                 >
-                  {w}
+                  {/* A tag in the key's colour, so non-readers can follow the colours and readers the names. */}
+                  <i className="word-note" style={{ '--k': `var(--key-${notes[i][1]})` } as CSSProperties} aria-hidden>
+                    <NoteText name={names[notes[i][1]]} style={style} />
+                  </i>
+                  <span className="word-text">{w}</span>
                 </span>
               ))}
             </p>
@@ -441,7 +463,7 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
         )}
       </div>
 
-      <div className="lesson-keys" role="group" aria-label={`${teacher.name}'s keys`}>
+      <div className="lesson-keys" role="group" aria-label={`${teacher.name}'s keys`} data-names={style !== 'off'}>
         {Array.from({ length: LESSON_KEYS }, (_, k) => {
           const next = !!target && target[1] === k;
           return (
@@ -453,7 +475,7 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
               className="key lesson-key"
               data-next={next}
               style={{ '--k': `var(--key-${k})` } as CSSProperties}
-              aria-label={`Note ${k + 1}${next ? ', play this one' : ''}`}
+              aria-label={`${spoken[k]}${next ? ', play this one' : ''}`}
               onPointerDown={(e) => {
                 e.preventDefault();
                 press(k);
@@ -463,9 +485,8 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
                 if (e.detail === 0) press(k);
               }}
             >
-              <span className="lesson-key-num" aria-hidden>
-                {k + 1}
-              </span>
+              <KeyGlyph glyph={teacher.glyph} index={k} count={LESSON_KEYS} />
+              <KeyName name={names[k]} style={style} />
               {next && (
                 <span className="lesson-hand" data-helper={helper} aria-hidden>
                   <Icon name="hand" />

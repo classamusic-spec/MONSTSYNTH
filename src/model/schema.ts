@@ -15,6 +15,7 @@ import type {
   FxLevels,
   MonsterKind,
   NoteEvent,
+  NoteNameStyle,
   PaintBrush,
   Project,
   ScaleId,
@@ -31,7 +32,7 @@ import { PAINT_ROW } from './types';
 // because a child should never be told their song is "corrupt".
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const SETTINGS_SCHEMA_VERSION = 2;
+export const SETTINGS_SCHEMA_VERSION = 3;
 
 type Json = Record<string, unknown>;
 type Migration = (doc: Json) => Json;
@@ -245,6 +246,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sessionMinutes: 0,
   lastProjectId: null,
   lessonStars: {},
+  noteNames: 'letters',
 };
 
 export const SESSION_CHOICES = [0, 15, 30, 45, 60] as const;
@@ -264,7 +266,13 @@ export function migrateSettings(raw: unknown): Settings {
     lastProjectId: typeof raw.lastProjectId === 'string' ? raw.lastProjectId : null,
     // v1 → v2: song lessons. Older settings simply start with no stars.
     lessonStars: sanitizeStars(raw.lessonStars),
+    // v2 → v3: names on the keys. Older settings (and unknown values) get letters.
+    noteNames: sanitizeNoteNames(raw.noteNames),
   };
+}
+
+function sanitizeNoteNames(raw: unknown): NoteNameStyle {
+  return raw === 'solfege' || raw === 'off' ? raw : 'letters';
 }
 
 function sanitizeStars(raw: unknown): Record<string, number> {

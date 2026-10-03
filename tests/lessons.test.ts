@@ -13,7 +13,7 @@ import {
 } from '../src/magic/lessons';
 import { collectEvents } from '../src/magic/sequence';
 import { stepToMidi } from '../src/magic/scales';
-import { migrateProject, migrateSettings } from '../src/model/schema';
+import { DEFAULT_SETTINGS, migrateProject, migrateSettings, SETTINGS_SCHEMA_VERSION } from '../src/model/schema';
 import { PAINT_ROW } from '../src/model/types';
 
 describe('song lessons', () => {
@@ -101,7 +101,7 @@ describe('song lessons', () => {
 describe('settings v2', () => {
   it('migrates v1 settings with no stars yet', () => {
     const s = migrateSettings({ schemaVersion: 1, ageMode: 'maker' });
-    expect(s.schemaVersion).toBe(2);
+    expect(s.schemaVersion).toBe(SETTINGS_SCHEMA_VERSION);
     expect(s.lessonStars).toEqual({});
   });
 
@@ -109,5 +109,32 @@ describe('settings v2', () => {
     const s = migrateSettings({ lessonStars: { twinkle: 3, mary: 9, bad: 'x', '': 2 } });
     expect(s.lessonStars).toEqual({ twinkle: 3, mary: 3 });
     expect(migrateSettings(JSON.parse(JSON.stringify(s)))).toEqual(s);
+  });
+});
+
+describe('settings v3', () => {
+  it('migrates v2 settings to letters on the keys', () => {
+    const s = migrateSettings({ schemaVersion: 2, ageMode: 'little', lessonStars: { twinkle: 2 } });
+    expect(SETTINGS_SCHEMA_VERSION).toBe(3);
+    expect(s.schemaVersion).toBe(3);
+    expect(s.noteNames).toBe('letters');
+    expect(s.lessonStars).toEqual({ twinkle: 2 });
+    expect(DEFAULT_SETTINGS.noteNames).toBe('letters');
+  });
+
+  it('keeps do re mi and none, and replaces garbage with letters', () => {
+    expect(migrateSettings({ schemaVersion: 3, noteNames: 'solfege' }).noteNames).toBe('solfege');
+    expect(migrateSettings({ schemaVersion: 3, noteNames: 'off' }).noteNames).toBe('off');
+    for (const bad of ['numbers', 'LETTERS', '', 7, null, true, { style: 'off' }, ['off']]) {
+      expect(migrateSettings({ schemaVersion: 3, noteNames: bad }).noteNames).toBe('letters');
+    }
+  });
+
+  it('survives a JSON round trip unchanged', () => {
+    for (const noteNames of ['letters', 'solfege', 'off'] as const) {
+      const s = migrateSettings({ ...DEFAULT_SETTINGS, ageMode: 'maker', noteNames });
+      expect(migrateSettings(JSON.parse(JSON.stringify(s)))).toEqual(s);
+      expect(s.noteNames).toBe(noteNames);
+    }
   });
 });

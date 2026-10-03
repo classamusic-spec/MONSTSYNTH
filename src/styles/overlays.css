@@ -263,7 +263,7 @@
   flex-direction: column;
   gap: 12px;
   padding: 22px;
-  border-radius: 22px;
+  border-radius: var(--radius-m);
   background: #1b1f63;
   border: 2px solid var(--edge-strong);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
@@ -284,7 +284,7 @@
 .modal input {
   font-size: 22px;
   padding: 10px 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-s);
   border: 2px solid var(--edge-strong);
   background: #11134a;
   color: #fff;
@@ -307,7 +307,7 @@
 .btn-danger {
   min-height: 44px;
   padding: 0 18px;
-  border-radius: 12px;
+  border-radius: var(--radius-s);
   font-weight: 600;
   font-size: 16px;
 }
@@ -520,10 +520,19 @@
   background: #fff;
 }
 
+/* Six monsters: two full rows of three when the screen is upright, one row of
+   six whenever it is sideways (so even a small phone shows all six without
+   scrolling, and none is ever left alone on a row). */
 .tray-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(clamp(96px, 20vmin, 150px), 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--gap);
+}
+
+@media (orientation: landscape) {
+  .tray-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
 }
 
 .tray-card {
@@ -642,12 +651,13 @@
 .magic-row {
   display: grid;
   grid-template-columns: clamp(60px, 12vmin, 90px) 1fr;
-  align-items: center;
+  align-items: start;
   gap: var(--gap);
   margin-bottom: var(--gap);
 }
 
 .magic-label {
+  padding-top: 0.7em;
   font-weight: 700;
   color: var(--ink-2);
 }
@@ -682,22 +692,45 @@
   text-align: right;
 }
 
+/* Six moods in two even rows of three, each with its own colour stripe. */
 .moods {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
 .mood {
+  --m: var(--edge-strong);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
+  min-width: 0;
   padding: 10px 12px;
-  border-radius: 14px;
+  border-radius: var(--radius-s);
   background: rgba(255, 255, 255, 0.06);
   border: 2px solid var(--edge);
+  border-left: 6px solid var(--m);
   text-align: left;
+}
+
+.mood[data-scale='pentatonicMajor'] {
+  --m: #ffd233;
+}
+.mood[data-scale='pentatonicMinor'] {
+  --m: #9a5cff;
+}
+.mood[data-scale='major'] {
+  --m: #ff8a2b;
+}
+.mood[data-scale='minor'] {
+  --m: #3f8cff;
+}
+.mood[data-scale='blues'] {
+  --m: #2fd0e8;
+}
+.mood[data-scale='chromatic'] {
+  --m: #ff5fd0;
 }
 
 .mood span {
@@ -707,6 +740,7 @@
 
 .mood[data-on='true'] {
   border-color: #fff;
+  border-left-color: var(--m);
   background: rgba(154, 92, 255, 0.35);
 }
 

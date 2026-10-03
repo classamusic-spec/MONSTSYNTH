@@ -25,6 +25,8 @@ Plain **Web Audio API** — no audio libraries, no sample packs. Every sound is 
 | `DrumVoice` | Boom, the metronome | fully synthesised kit: sine-sweep kick + click, noise+body snare, 808-style metallic square bank hats/crash, triple-burst clap, bongos, cowbell, spring "boing" (value curve); kit-wide tune, decay, brightness, drive, "tin can" resonances. A ninth voice, the woodblock **tick** (two triangle partials at 1.7 / 2.6 kHz, ~12 ms decay), is the metronome; no pad reaches it |
 | `SamplerVoice` | Mimic | recorded buffer at `playbackRate = 2^(semitones/12)` (voice pitch *and* speed change — deliberately funny), tone filter, optional ring modulation (robot) |
 
+**Mimic's singer stays in key.** Until a child records a sound, Mimic sings "la" with `MIMIC_SINGER`. Its costume moves that singer by **whole octaves only**: `singerTranspose(semis) = Math.round(semis / 12) * 12`, so Chipmunk (+7) sings an octave up and Giant (−9) an octave down (`engine.mimicVoice`; unit-tested in `tests/noteNames.test.ts`). Any other interval would put the singer outside the song's scale (Giant in Happy C would play E♭ and B♭ against the band's E and A) and make the letters on its keys wrong. A recording keeps the costume's own interval (`patch.semis`), because its pitch is the child's voice anyway; the keys then show no letters. Measured singer peaks (`scripts/audio-levels.mjs`): Just Me / Chipmunk −9.6 dBFS, Giant −12.3 dBFS.
+
 ## Presets are data
 
 `src/audio/presets.ts` defines all 25 sounds as JSON-like objects (`SynthPatch`, `BellPatch`, `DrumPatch`, `VoicePatch`). Adding a sound means adding an object. Playful parameters map onto real synthesis:

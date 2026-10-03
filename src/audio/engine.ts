@@ -41,6 +41,15 @@ export interface NoteRequest extends VoiceParams {
 
 const GLOBAL_VOICE_LIMIT = 30;
 
+/**
+ * How far a costume moves Mimic's built-in singer: the nearest whole octave of
+ * the costume's own interval (Chipmunk +7 → +12, Giant -9 → -12), so the singer
+ * stays in the song's scale and the names on its keys stay true.
+ */
+export function singerTranspose(semis: number): number {
+  return Math.round(semis / 12) * 12 || 0;
+}
+
 export class AudioEngine {
   readonly ctx: BaseAudioContext;
   private masterIn: GainNode;
@@ -241,9 +250,10 @@ export class AudioEngine {
 
   private mimicVoice(req: NoteRequest, host: VoiceHost, patch: VoicePatch, when: number, sequenced: boolean, durSec?: number): Voice {
     if (host.sample) return new SamplerVoice(req.channelId, host, host.sample, patch, req, when, sequenced);
-    // No recording yet: Mimic sings "la" with its formant voice, in the costume's key
-    // (glides keep the transposition too).
-    return new SynthVoice(req.channelId, host, MIMIC_SINGER, req, when, sequenced, durSec, patch.semis);
+    // No recording yet: Mimic sings "la" with its formant voice. Its costume moves it
+    // by whole octaves only (singerTranspose), so it stays in key (glides keep the
+    // transposition too). A recording keeps the costume's own interval above.
+    return new SynthVoice(req.channelId, host, MIMIC_SINGER, req, when, sequenced, durSec, singerTranspose(patch.semis));
   }
 
   /** A live note from a finger. Returns a handle for noteOff / glides. */

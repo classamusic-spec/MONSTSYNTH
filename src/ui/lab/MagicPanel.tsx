@@ -1,10 +1,13 @@
+import { keyNames } from '../../magic/noteNames';
 import { SCALE_ORDER, SCALES } from '../../magic/scales';
 import { setScale, setTempo } from '../../model/edits';
 import { MAX_TEMPO, MIN_TEMPO } from '../../model/project';
 import { setOverlay } from '../../store/actions';
 import { commit, getState, useApp } from '../../store/store';
 import { studio } from '../../studio/studio';
+import { useNoteNameStyle } from '../hooks/useKeyNames';
 import { Icon } from '../icons/Icon';
+import { NoteText } from './glyphs';
 
 // MONSTER MAGIC panel (Monster Maker mode): the two musical choices older kids
 // ask for — how fast, and what mood. Every choice stays in tune automatically.
@@ -21,6 +24,8 @@ const MOOD_HINT: Record<string, string> = {
 export function MagicPanel() {
   const tempo = useApp((s) => s.project.tempo);
   const scale = useApp((s) => s.project.scale);
+  const songKey = useApp((s) => s.project.key);
+  const style = useNoteNameStyle();
 
   const pick = (id: (typeof SCALE_ORDER)[number]) => {
     commit((p) => setScale(p, id));
@@ -66,9 +71,19 @@ export function MagicPanel() {
           <span className="magic-label">Mood</span>
           <div className="moods" role="radiogroup" aria-label="Mood (musical scale)">
             {SCALE_ORDER.map((id) => (
-              <button key={id} className="mood" role="radio" aria-checked={scale === id} data-on={scale === id} onClick={() => pick(id)}>
+              <button key={id} className="mood" role="radio" aria-checked={scale === id} data-on={scale === id} data-scale={id} onClick={() => pick(id)}>
                 <strong>{SCALES[id].kidName}</strong>
                 <span>{MOOD_HINT[id]}</span>
+                {/* The mood's notes, named like the key stickers (C E♭ F G B♭ for Mystery). */}
+                {style !== 'off' && (
+                  <span className="mood-notes" aria-hidden>
+                    {keyNames(SCALES[id].steps.length, id, songKey).map((n) => (
+                      <b key={n.pc} className="mood-note" data-acc={n.accidental ? 'true' : undefined}>
+                        <NoteText name={n} style={style} />
+                      </b>
+                    ))}
+                  </span>
+                )}
               </button>
             ))}
           </div>

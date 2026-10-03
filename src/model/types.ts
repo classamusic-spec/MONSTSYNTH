@@ -134,6 +134,9 @@ export interface ProjectMeta {
 
 export type MotionPreference = 'system' | 'reduce' | 'full';
 
+/** What the stickers on the keys say: letters (C D E), movable do (do re mi), or nothing (pictures only). */
+export type NoteNameStyle = 'letters' | 'solfege' | 'off';
+
 export interface Settings {
   schemaVersion: number;
   ageMode: AgeMode;
@@ -152,4 +155,6 @@ export interface Settings {
   lastProjectId: string | null;
   /** Best stars (1..3) earned per learned song, by song id (schema v2). */
   lessonStars: Record<string, number>;
+  /** Names on the keys (schema v3). The glyph staircase stays either way. */
+  noteNames: NoteNameStyle;
 }

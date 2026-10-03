@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import { useId, type ReactElement } from 'react';
 import type { SongPicture } from '../../magic/lessons';
 
 // One friendly picture per song, so children who can't read yet can still find
@@ -110,15 +110,17 @@ const PICTURES: Record<SongPicture, ReactElement> = {
 };
 
 export function SongArt({ picture, hue }: { picture: SongPicture; hue: number }) {
+  // One gradient id per drawing: two pictures on one page must not share a colour.
+  const id = `song-art-bg-${picture}-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   return (
     <svg className="song-art" viewBox="0 0 120 120" aria-hidden>
       <defs>
-        <radialGradient id={`song-art-bg-${picture}`} cx="50%" cy="35%" r="75%">
+        <radialGradient id={id} cx="50%" cy="35%" r="75%">
           <stop offset="0%" stopColor={`hsl(${hue} 70% 42%)`} />
           <stop offset="100%" stopColor={`hsl(${hue} 60% 22%)`} />
         </radialGradient>
       </defs>
-      <rect width="120" height="120" rx="22" fill={`url(#song-art-bg-${picture})`} />
+      <rect width="120" height="120" rx="22" fill={`url(#${id})`} />
       {PICTURES[picture]}
     </svg>
   );

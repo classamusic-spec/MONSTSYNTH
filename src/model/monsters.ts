@@ -205,17 +205,19 @@ export const ALL_MONSTERS: MonsterKind[] = ['bloop', 'boom', 'grumble', 'spark',
 export interface DrumPad {
   id: string;
   name: string;
+  /** Drum word on the pad's sticker (Maker mode), so a grown-up can say "kick on 1 and 3". */
+  short: string;
 }
 
 export const DRUM_PADS: DrumPad[] = [
-  { id: 'kick', name: 'Big drum' },
-  { id: 'snare', name: 'Snappy drum' },
-  { id: 'hat', name: 'Tiny cymbal' },
-  { id: 'clap', name: 'Clap' },
-  { id: 'tom', name: 'Bongo drum' },
-  { id: 'crash', name: 'Crash cymbal' },
-  { id: 'cowbell', name: 'Cowbell' },
-  { id: 'boing', name: 'Boing' },
+  { id: 'kick', name: 'Big drum', short: 'kick' },
+  { id: 'snare', name: 'Snappy drum', short: 'snare' },
+  { id: 'hat', name: 'Tiny cymbal', short: 'hat' },
+  { id: 'clap', name: 'Clap', short: 'clap' },
+  { id: 'tom', name: 'Bongo drum', short: 'bongo' },
+  { id: 'crash', name: 'Crash cymbal', short: 'crash' },
+  { id: 'cowbell', name: 'Cowbell', short: 'bell' },
+  { id: 'boing', name: 'Boing', short: 'boing' },
 ];
 
 export interface FxInfo {

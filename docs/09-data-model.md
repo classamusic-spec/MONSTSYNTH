@@ -62,16 +62,18 @@ Pitches are resolved at play time from `(step, monster register, key, scale)`. A
 | arrangement | `arrangement` |
 | settings | separate `Settings` document (below) |
 
-## Settings (schema v2, one per device)
+## Settings (schema v3, one per device)
 
 ```ts
-Settings { schemaVersion: 2; ageMode: 'little' | 'maker'; volume: 0..1; volumeCeiling: 0.1..1;
+Settings { schemaVersion: 3; ageMode: 'little' | 'maker'; volume: 0..1; volumeCeiling: 0.1..1;
            micAllowed: boolean; motion: 'system' | 'reduce' | 'full'; highContrast: boolean;
            hints: boolean; sessionMinutes: 0 | 15 | 30 | 45 | 60; lastProjectId: string | null;
-           lessonStars: Record<songId, 1..3> }   // v2: best stars per learned song
+           lessonStars: Record<songId, 1..3>;          // v2: best stars per learned song
+           noteNames: 'letters' | 'solfege' | 'off' }  // v3: names on the keys
 ```
 
 v1 → v2 adds `lessonStars` (older settings start with none).
+v2 → v3 adds `noteNames` (Parent Space › Comfort & accessibility › "Names on the keys"). Older settings and any unknown value get `'letters'`, the default in both Little and Maker mode. Names are never stored with notes: notes keep scale steps, and `src/magic/noteNames.ts` names a step from the song's key and mood at display time.
 
 Song lessons themselves are data in `src/magic/lessons.ts`, not stored: each song is
 phrases of exactly one block (8 beats) of major-scale steps 0–7 plus one chord root

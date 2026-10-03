@@ -60,10 +60,18 @@ All touch targets ≥ 44 px; primary actions ≥ 52 px; keys are the largest tar
 
 * 8 keys for melodic monsters; Boom has 6 big pads (Little) or 8 (Maker).
 * Keys are **scale steps**, never raw pitches — see Monster Magic. Nothing can be out of tune.
-* Colour-independent pitch cues: each key's glyph (the monster's shape: bubble, blob, star, cloud, heart) **climbs and shrinks** from left (low, big) to right (high, small) — a visual staircase.
+* Colour-independent pitch cues: each key's glyph (the monster's shape: bubble, blob, star, cloud, heart) **climbs and shrinks** from left (low, big) to right (high, small) — a visual staircase. `KeyGlyph` sets `--stair` (0 lowest … 1 highest; deliberately not `--t`, the timing token); `keys.css` turns it into a height, and lifts the staircase a little when a name sticker is shown so the lowest picture clears it.
+* **Key face = colour + staircase + name sticker.** A white pill at the bottom of each melodic key names its note, like the letter stickers on a toy xylophone: letters (C D E, the default in both modes), movable do re mi (in the Lab the leftmost key is always *do*), or none — a Parent Space choice ("Names on the keys"). Names come from `src/magic/noteNames.ts` (`spellStep` / `keyNames` / `keyLabel`) and follow the song's key and mood live, so picking Mystery re-letters the keys to C E♭ F G B♭. Spelling follows the scale degree (D major has F♯ and C♯), and one piano rule keeps it child-friendly: a white piano key is always its plain letter (no C♭, E♯ or double flats). Notes that are black piano keys get an inverted, dark sticker. Letter only — the staircase already shows the octave. Sharps and flats are drawn as tiny SVGs (the self-hosted font has no ♯/♭). The key's spoken label says the name ("Bloop: F sharp", "Bloop: C (higher)").
+  * Puff's sticker names its lowest note (the key's own step), never a chord name.
+  * Mimic shows names only while it sings with its built-in voice; with a recording the pitch is the child's own, so no name could be true.
+  * Boom shows no names (drums have no pitch). Monster Makers with names on see short drum words in the same sticker style (kick, snare, hat, clap, bongo, crash, bell, boing), so a grown-up can say "kick on 1 and 3"; the pictures stay the main cue.
+  * The sticker pops (scale 1.12) when a finger or the loop plays the key — CSS on `data-down` / `data-glow`, no React state.
 * Drum pads carry a picture for every drum (big drum, snappy drum, tiny cymbal, clap, bongos, crash, cowbell, boing).
-* One touch handler for the whole row: multi-finger chords, and **sliding across keys plays each key** (glissando).
-* Pressed keys sink (3D lip collapses) and ripple; keys glow when the loop plays them, so children see what they recorded.
+* One touch handler for the whole row: multi-finger chords, and **sliding across keys plays each key** (glissando). Stickers, glyphs and sparkles never take touches (`pointer-events: none`).
+* Pressed keys sink (3D lip collapses); a ring and a few colour sparks burst **where the finger lands**, clipped to that key so a press never seems to light its neighbour (at most 3 bursts per key, removed after 450 ms, none with reduced motion). Keys glow when the loop plays them, so children see what they recorded.
+* Learn uses the same key face (the teacher's staircase plus stickers, "E, play this one"), and every lyric syllable sits under a tag in its key's colour (with the name inside when names are on), lit for the next note to play and for the note the teacher is singing. Upcoming tags are a touch smaller, never faded. Do re mi in Learn starts on the tune's home note (where it ends), so Old MacDonald, on the keys of D major, sings "do do do so la la so" from G.
+* Sound Painting's left edge carries a ribbon of the key colours (high at the top, each colour spanning exactly its lane) that flashes the lane that sounds, plus the lane names beside it; lane lines sit exactly where `laneForY` changes lane. With the Boom brush the lanes are drum pads: no names, and the ribbon wears the pads' colours.
+* Monster Magic (Maker) shows each mood's notes under its name ("C E♭ F G B♭" for Mystery) when names are on.
 * Pen pressure (Apple Pencil) sets loudness; fingers use a friendly fixed velocity.
 
 ## Transport rail

@@ -34,36 +34,84 @@
   pointer-events: none;
 }
 
-/* Faint guides: 8 pitch lanes and 8 beats. */
+/* Guides under the painting: lane lines exactly where the pitch changes (the
+   top and bottom lanes are half-height, like laneForY), and a beat grid with a
+   stronger line at every bar. None of them catch touches. */
 .paint-lanes,
-.paint-beats {
+.paint-beats,
+.paint-ribbon,
+.paint-lane-names {
   position: absolute;
   inset: 0;
-  display: flex;
   pointer-events: none;
 }
 
-.paint-lanes {
-  flex-direction: column;
+.paint-lanes span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed rgba(170, 180, 255, 0.12);
 }
 
-.paint-lanes span {
-  flex: 1;
-  border-bottom: 1px dashed rgba(170, 180, 255, 0.07);
+.paint-beats {
+  display: flex;
 }
 
 .paint-beats span {
   flex: 1;
-  border-right: 1px solid rgba(170, 180, 255, 0.06);
+  border-right: 1px solid rgba(170, 180, 255, 0.12);
 }
 
-.paint-beats span:nth-child(4n) {
-  border-right-color: rgba(170, 180, 255, 0.14);
+.paint-beats span[data-bar='true'] {
+  border-right: 2px solid rgba(170, 180, 255, 0.26);
+}
+
+.paint-beats span:last-child {
+  border-right: none;
+}
+
+/* A slim ribbon of the key colours: high notes at the top, low at the bottom.
+   It spans the whole canvas height, so each segment lines up with its lane (the
+   end segments keep 6px clear of the rounded corners instead). */
+.paint-ribbon {
+  inset: 0 auto 0 5px;
+  width: 7px;
+}
+
+.paint-ribbon i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border: 1px solid rgba(11, 13, 48, 0.6);
+  border-radius: 4px;
+  background: var(--k);
+  opacity: 0.75;
+  transform-origin: left center;
+}
+
+/* Lane names in a column beside the ribbon, at the centre of each lane. */
+.paint-lane-name {
+  position: absolute;
+  left: 17px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  font: 700 var(--fs-s) / 1 var(--font);
+  color: rgba(225, 230, 255, 0.62);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.app[data-contrast='high'] .paint-lane-name {
+  color: #fff;
+}
+
+.app[data-contrast='high'] .paint-ribbon i {
+  opacity: 1;
 }
 
 .paint-hello {
   position: absolute;
-  left: 4%;
+  left: calc(4% + 30px);
   bottom: 0;
   width: clamp(80px, 24vmin, 200px);
   opacity: 0.85;

@@ -7,8 +7,12 @@
   gap: var(--gap);
 }
 
-/* The stage is a little night scene the monsters stand in. */
+/* The stage is a little night scene the monsters stand in. Monsters stand a
+   little above the floor so their loop badges make a row on the ground,
+   centred under each one (never over a face). */
 .stage {
+  --badge: clamp(32px, 7vmin, 46px);
+  --lift: calc(var(--badge) * 0.75);
   position: relative;
   min-height: 0;
   display: flex;
@@ -30,9 +34,32 @@
   pointer-events: none;
 }
 
-.stage-scene svg {
+.stage-scene > svg {
   width: 100%;
   height: 100%;
+}
+
+/* The moon lives in the open sky at the top right, whatever the stage's shape. */
+.stage-scene > .stage-moon {
+  position: absolute;
+  top: 2%;
+  right: 4%;
+  width: clamp(64px, 15vmin, 130px);
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.stage-moon .moon-glow {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* A soft wash of light that pulses on the beat (opacity only: cheap to animate). */
+.stage-pulse {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(90% 70% at 50% 100%, rgba(255, 236, 170, 0.1), rgba(255, 236, 170, 0) 70%);
 }
 
 /* ── Monster pods ─────────────────────────────────────────────────────────── */
@@ -53,27 +80,38 @@
   flex-grow: 1.75;
 }
 
-.pod[data-monster='boom'] {
+.pod-tools {
+  --c: var(--bloop);
+  --c-light: var(--bloop-light);
+  --c-dark: var(--bloop-dark);
+}
+
+.pod[data-monster='boom'],
+.pod-tools[data-monster='boom'] {
   --c: var(--boom);
   --c-light: var(--boom-light);
   --c-dark: var(--boom-dark);
 }
-.pod[data-monster='grumble'] {
+.pod[data-monster='grumble'],
+.pod-tools[data-monster='grumble'] {
   --c: var(--grumble);
   --c-light: var(--grumble-light);
   --c-dark: var(--grumble-dark);
 }
-.pod[data-monster='spark'] {
+.pod[data-monster='spark'],
+.pod-tools[data-monster='spark'] {
   --c: var(--spark);
   --c-light: var(--spark-light);
   --c-dark: var(--spark-dark);
 }
-.pod[data-monster='puff'] {
+.pod[data-monster='puff'],
+.pod-tools[data-monster='puff'] {
   --c: var(--puff);
   --c-light: var(--puff-light);
   --c-dark: var(--puff-dark);
 }
-.pod[data-monster='mimic'] {
+.pod[data-monster='mimic'],
+.pod-tools[data-monster='mimic'] {
   --c: var(--mimic);
   --c-light: var(--mimic-light);
   --c-dark: var(--mimic-dark);
@@ -86,6 +124,7 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  padding-bottom: var(--lift);
   touch-action: none;
   border-radius: var(--radius-m);
   cursor: grab;
@@ -100,7 +139,7 @@
   content: '';
   position: absolute;
   left: 50%;
-  bottom: 2%;
+  bottom: calc(var(--lift) + 2%);
   width: 92%;
   height: 16%;
   max-height: 34px;
@@ -138,8 +177,12 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  /* Note sprites find the monster's mouth from the wrap's size. */
+  container-type: size;
   transform-origin: 50% 100%;
-  transition: transform var(--t-slow) var(--ease-pop);
+  transition:
+    transform var(--t-slow) var(--ease-pop),
+    translate var(--t-slow) var(--ease-pop);
 }
 
 .pod:not([data-selected='true']) .monster-wrap {
@@ -168,18 +211,26 @@
   filter: saturate(0.45) brightness(0.8);
 }
 
-/* Name tag (readers and grown-ups; kids rely on the character). */
+/* Name tag (readers and grown-ups; kids rely on the character). Only the
+   monster on the keys wears one; the tray lists everybody's names. */
 .pod-name {
   position: absolute;
-  left: 50%;
-  top: 4px;
-  transform: translateX(-50%);
+  z-index: 3;
+  left: var(--gap-s);
+  top: var(--gap-s);
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(11, 13, 48, 0.6);
   font-size: var(--fs-xs);
   font-weight: 600;
+  line-height: 1.2;
   color: var(--ink-2);
   white-space: nowrap;
   pointer-events: none;
-  opacity: 0.85;
+}
+
+.pod:not([data-selected='true']) .pod-name {
+  display: none;
 }
 
 .pod-name small {
@@ -196,14 +247,18 @@
   }
 }
 
-/* Loop badge: shows a monster has a loop; tap to let it sleep (mute). */
+/* Loop badge: shows a monster has a loop; tap to let it sleep (mute). The
+   badges make a row along the ground, one under each monster's feet. (The
+   `translate` property centres it, so `transform` stays free for the press
+   and the hold-to-clear shake.) */
 .loop-badge {
   position: absolute;
-  left: 4px;
-  bottom: 4px;
+  left: 50%;
+  bottom: 2px;
+  translate: -50% 0;
   z-index: 2;
-  width: clamp(32px, 7vmin, 46px);
-  height: clamp(32px, 7vmin, 46px);
+  width: var(--badge);
+  height: var(--badge);
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -286,34 +341,69 @@
   }
 }
 
+/* Note sprites: little notes that float up from a singing monster's mouth
+   (react.ts animates them; a thin white halo keeps a green note readable on a
+   green monster). */
+.note-sprite {
+  --sprite: clamp(20px, 5vmin, 30px);
+  position: absolute;
+  z-index: 2;
+  left: calc(50% + var(--sx, 0%));
+  top: calc(100cqh - min(100cqw, 100cqh) * 0.32); /* the mouth: about 70% down the art */
+  width: var(--sprite);
+  height: var(--sprite);
+  margin: calc(var(--sprite) / -2) 0 0 calc(var(--sprite) / -2);
+  pointer-events: none;
+  filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
+}
+
+.note-sprite > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 /* Selected monster's toys: costume + effect buddies. Short screens (phones
    held sideways) keep them beside the keys so the stage stays for monsters;
-   tall screens put them above the spotlight monster. */
+   tall screens give them a toolbar along the top of the stage. */
 .surface > .surface-tools {
   align-self: center;
 }
 
+.stage > .stage-tools {
+  display: none;
+}
+
 @media (max-height: 559px) {
-  .pod .pod-tools {
-    display: none;
+  .stage {
+    --badge: clamp(26px, 6.6vmin, 36px);
   }
   .pod[data-selected='true'] {
     flex-grow: 1.45;
   }
-  .pod:not([data-selected='true']) .pod-name {
-    display: none;
-  }
-  .pod:has(.loop-badge) .pod-name {
-    left: calc(var(--gap-s) + clamp(26px, 6.6vmin, 36px) + 6px);
-    transform: none;
-  }
   .loop-badge {
-    top: 2px;
-    bottom: auto;
-    width: clamp(26px, 6.6vmin, 36px);
-    height: clamp(26px, 6.6vmin, 36px);
     border-width: 2px;
     font-size: clamp(14px, 3.4vmin, 20px);
+  }
+  /* A small badge, but a finger-sized target: wider, and down to the stage's
+     edge (only a little way up, where the monster's feet play). */
+  .loop-badge::before {
+    content: '';
+    position: absolute;
+    inset: -6px -11px;
+    border-radius: 40%;
+  }
+  /* A slimmer name pill tucked into the pod's corner, clear of the antennae. */
+  .pod-name {
+    top: 2px;
+    left: 2px;
+    padding: 1px 8px;
+    line-height: 1.1;
+  }
+  /* The moon keeps to the open sky left of the add seat (never behind it). */
+  .stage-scene > .stage-moon {
+    right: calc(var(--gap) + clamp(40px, 9vmin, 72px) + var(--gap-s));
+    width: clamp(56px, 15vmin, 72px);
   }
 }
 
@@ -400,11 +490,13 @@
   border-color: color-mix(in srgb, var(--c) 60%, transparent);
 }
 
-/* Add Monster seat */
+/* Add Monster seat: in front of the hills, so it is never cut off. */
 .add-seat {
+  position: relative;
+  z-index: 1;
   flex: 0 0 clamp(40px, 9vmin, 72px);
   align-self: flex-end;
-  margin-bottom: 8%;
+  margin-bottom: calc(var(--lift) + 4%);
   height: 60%;
   min-height: 56px;
   max-height: 170px;
@@ -412,6 +504,7 @@
   place-items: center;
   border: 3px dashed rgba(200, 206, 255, 0.35);
   border-radius: var(--radius-m);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--ink-3);
   font-size: clamp(22px, 5vmin, 36px);
   transition:
@@ -512,15 +605,6 @@
   transform: translate(-50%, -50%) scale(1.18);
 }
 
-.key .key-num {
-  position: absolute;
-  bottom: 8px;
-  font-size: var(--fs-xs);
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.75);
-  pointer-events: none;
-}
-
 /* Drum pads: bigger, squarer, with an icon for every drum. */
 .keys[data-kind='drums'] .key {
   border-radius: var(--radius-l);
@@ -608,28 +692,82 @@
 }
 
 /* Tall screens (tablets, desktops): the stage gets the extra height, the
-   spotlight monster grows, and its toys move above its head. */
+   spotlight monster grows (but its friends stay friend-sized, standing on the
+   back hill), and its toys get a toolbar along the top of the stage. */
 @media (min-height: 560px) {
   .lab {
     grid-template-rows: minmax(0, 1.3fr) minmax(0, 1fr);
+  }
+  .stage {
+    padding-top: calc(var(--tool) + var(--gap-s) * 2);
   }
   .pod {
     flex-direction: column;
   }
   .pod[data-selected='true'] {
-    flex-grow: 2.3;
+    flex-grow: 1.7;
   }
   .pod .monster-wrap {
     max-width: 360px;
   }
-  .pod-tools,
-  .app[data-mode='maker'] .pod-tools {
-    order: -1;
-    grid-auto-flow: column;
-    grid-template-columns: none;
-    grid-auto-columns: var(--tool);
-    justify-content: center;
-    padding: var(--gap-s) 0 0;
+  .pod:not([data-selected='true']) .monster-wrap {
+    transform: scale(0.94);
+    translate: 0 -6%;
+  }
+  .stage > .stage-tools {
+    position: absolute;
+    top: var(--gap-s);
+    left: var(--gap);
+    z-index: 3;
+    max-width: calc(100% - var(--gap) * 2);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--gap-s);
+    padding: 0;
+  }
+  .stage-tools .tool-btn {
+    flex: 0 0 auto;
+    width: var(--tool);
+  }
+  /* The name tag floats just above the spotlight monster's head. Monster
+     Makers (who see names) keep a name's height free above it, so a monster
+     that fills the stage's height never wears its tag on its antennae. */
+  .pod {
+    --name-h: calc(var(--fs-xs) * 2.5 + 4px);
+  }
+  .pod-hit {
+    container-type: size;
+  }
+  .app[data-mode='maker'] .pod[data-selected='true'] .pod-hit {
+    padding-top: calc(var(--name-h) + var(--gap-s));
+  }
+  .pod-name {
+    left: 50%;
+    translate: -50% 0;
+    top: max(var(--gap-s), calc(100cqh - min(100cqw, 360px, 100cqh)));
+    text-align: center;
+  }
+  /* Sleepy "z"s rise from the monster's head, not from the empty sky above it
+     (friends stand 6% up the back hill at 94% size; the spotlight monster is
+     full size, under its name band in Monster Maker). */
+  .zzz {
+    top: calc(94cqh - min(100cqw, 360px, 100cqh) * 0.89);
+  }
+  .pod[data-selected='true'] .zzz {
+    top: calc(100cqh - min(100cqw, 360px, 100cqh) * 0.95);
+  }
+  .app[data-mode='maker'] .pod[data-selected='true'] .zzz {
+    top: calc(var(--name-h) + var(--gap-s) + 100cqh - min(100cqw, 360px, 100cqh) * 0.95);
+  }
+}
+
+/* Not-so-tall screens: a one-line name tag (the sound's name is in the tray). */
+@media (min-height: 560px) and (max-height: 719px) {
+  .pod {
+    --name-h: calc(var(--fs-xs) * 1.2 + 4px);
+  }
+  .pod-name small {
+    display: none;
   }
 }
 

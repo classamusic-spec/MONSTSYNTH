@@ -9,14 +9,15 @@ import { Icon } from '../icons/Icon';
 
 // The spotlight monster's toys: a costume (= a new sound) and its effect
 // buddies. Each buddy has three friendly levels: asleep, a little, a lot.
-// Tablets show them above the monster's head; phones on the left of the keys.
+// Tablets show them in a toolbar along the top of the stage; phones on the left
+// of the keys.
 
 export function PodTools({ track, className = 'pod-tools' }: { track: Track; className?: string }) {
   const caps = useCaps();
   const info = MONSTERS[track.monster];
   const preset = presetInfo(track.monster, track.preset);
   return (
-    <div className={className} role="group" aria-label={`${info.name}'s sound toys`}>
+    <div className={className} data-monster={track.monster} role="group" aria-label={`${info.name}'s sound toys`}>
       <button
         className="tool-btn tool-costume"
         aria-label={`Change ${info.name}'s sound. Now: ${preset.name}`}

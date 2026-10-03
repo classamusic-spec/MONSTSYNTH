@@ -1,11 +1,13 @@
-import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { DRUM_PADS, MONSTERS, surfaceSize } from '../../model/monsters';
 import type { Track } from '../../model/types';
 import { useApp } from '../../store/store';
 import { studio } from '../../studio/studio';
 import { onNote } from '../../studio/visualBus';
 import { glow } from '../common/glow';
-import { DrumIcon, KeyGlyph } from './glyphs';
+import { isReducedMotion } from '../hooks/useCaps';
+import { useKeyNames } from '../hooks/useKeyNames';
+import { DRUM_COLORS, DrumIcon, KeyGlyph, KeyName } from './glyphs';
 import { getSize } from './expression';
 import { PodTools } from './PodTools';
 import { VoiceButton } from './VoiceButton';
@@ -14,8 +16,38 @@ import { VoiceButton } from './VoiceButton';
 // One container handles every finger, so kids can play chords with several
 // fingers and slide across keys for a glissando.
 
-/** Drum pad colours, chosen so neighbouring pads never look alike. */
-const DRUM_COLORS = [0, 1, 2, 6, 4, 3, 5, 7];
+/** Sparks per touch, and how many touch bursts one key may show at once (fast rolls stay light). */
+const SPARKS = 5;
+const MAX_BURSTS = 3;
+const BURST_MS = 450;
+
+/**
+ * A ring and a few colour sparks right where the finger landed. Purely decorative.
+ * The burst is clipped to its key, so a press never seems to light the neighbour.
+ */
+function burst(el: HTMLElement, x: number, y: number) {
+  if (isReducedMotion() || el.querySelectorAll(':scope > .key-burst').length >= MAX_BURSTS) return;
+  const r = el.getBoundingClientRect();
+  const b = document.createElement('span');
+  b.className = 'key-burst';
+  const at = document.createElement('span');
+  at.className = 'key-burst-at';
+  at.style.left = `${Math.min(r.width, Math.max(0, x - r.left))}px`;
+  at.style.top = `${Math.min(r.height, Math.max(0, y - r.top))}px`;
+  const ripple = document.createElement('span');
+  ripple.className = 'key-ripple';
+  at.appendChild(ripple);
+  const turn = Math.random() * 72;
+  for (let i = 0; i < SPARKS; i++) {
+    const spark = document.createElement('i');
+    spark.className = 'key-spark';
+    spark.style.setProperty('--a', `${turn + i * (360 / SPARKS)}deg`);
+    at.appendChild(spark);
+  }
+  b.appendChild(at);
+  el.appendChild(b);
+  setTimeout(() => b.remove(), BURST_MS);
+}
 
 interface Finger {
   key: number;
@@ -27,23 +59,32 @@ export function PlaySurface({ track }: { track: Track }) {
   const count = surfaceSize(track.monster, mode);
   const info = MONSTERS[track.monster];
   const drums = track.monster === 'boom';
+  const { names, style } = useKeyNames(count);
+  // A recording plays at the child's own pitch, so no letter could be honest there.
+  const recorded = track.monster === 'mimic' && track.sampleId !== null;
+  const showNames = !drums && !recorded && style !== 'off';
+  // Drums have no pitch: Monster Makers get drum words (kick, snare…) instead.
+  const drumWords = drums && mode === 'maker' && style !== 'off';
+  const labels = useMemo(() => {
+    const seen = new Set<string>();
+    return names.map((n) => {
+      const label = `${info.name}: ${n.spoken}${seen.has(n.spoken) ? ' (higher)' : ''}`;
+      seen.add(n.spoken);
+      return label;
+    });
+  }, [names, info.name]);
   const keysRef = useRef<HTMLDivElement>(null);
   const keyEls = useRef<(HTMLDivElement | null)[]>([]);
   const fingers = useRef(new Map<number, Finger>());
   const rect = useRef<DOMRect | null>(null);
   const downCount = useRef<number[]>([]);
 
-  const setDown = (k: number, delta: number) => {
+  const setDown = (k: number, delta: number, e?: ReactPointerEvent) => {
     const counts = downCount.current;
     counts[k] = Math.max(0, (counts[k] ?? 0) + delta);
     const el = keyEls.current[k];
     if (el) el.dataset.down = counts[k] > 0 ? 'true' : 'false';
-    if (delta > 0 && el) {
-      const ripple = document.createElement('span');
-      ripple.className = 'key-ripple';
-      el.appendChild(ripple);
-      setTimeout(() => ripple.remove(), 450);
-    }
+    if (delta > 0 && el && e) burst(el, e.clientX, e.clientY);
   };
 
   const keyAt = (x: number): number => {
@@ -63,7 +104,7 @@ export function PlaySurface({ track }: { track: Track }) {
     // The touch's own timestamp: recording measures from when the finger landed.
     const liveId = studio.press(track.id, k, { vel: velocity(e), size: getSize(track.id) }, { at: e.timeStamp });
     fingers.current.set(e.pointerId, { key: k, liveId });
-    setDown(k, 1);
+    setDown(k, 1, e);
   };
 
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -76,7 +117,7 @@ export function PlaySurface({ track }: { track: Track }) {
     setDown(f.key, -1);
     const liveId = studio.press(track.id, k, { vel: velocity(e) * 0.92, size: getSize(track.id) }, { at: e.timeStamp });
     fingers.current.set(e.pointerId, { key: k, liveId });
-    setDown(k, 1);
+    setDown(k, 1, e);
   };
 
   const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -116,6 +157,7 @@ export function PlaySurface({ track }: { track: Track }) {
         ref={keysRef}
         className="keys"
         data-kind={drums ? 'drums' : 'keys'}
+        data-names={showNames || drumWords}
         role="group"
         aria-label={`${info.name}'s ${drums ? 'drums' : 'keys'}`}
         onPointerDown={onPointerDown}
@@ -134,9 +176,15 @@ export function PlaySurface({ track }: { track: Track }) {
             data-down="false"
             style={{ ['--k' as string]: `var(--key-${drums ? DRUM_COLORS[i] : i})` }}
             role="button"
-            aria-label={drums ? DRUM_PADS[i].name : `${info.name} note ${i + 1}`}
+            aria-label={drums ? DRUM_PADS[i].name : recorded ? `${info.name} note ${i + 1}` : labels[i]}
           >
             {drums ? <DrumIcon pad={i} /> : <KeyGlyph glyph={info.glyph} index={i} count={count} />}
+            {showNames && <KeyName name={names[i]} style={style} />}
+            {drumWords && (
+              <span className="pad-name" aria-hidden>
+                {DRUM_PADS[i].short}
+              </span>
+            )}
           </div>
         ))}
       </div>

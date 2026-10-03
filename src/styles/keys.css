@@ -1,0 +1,230 @@
+/* ── Key faces: name stickers, the glyph staircase, finger sparkles ──────────
+   Shared by the Lab keys and the Learn keys (loaded after lab.css, so these
+   rules win where they overlap). A key reads three ways at once: its colour,
+   its picture climbing from big & low to tiny & high, and, for readers, a
+   sticker with the note's name, like a toy xylophone. */
+
+/* Pitch staircase: --stair runs 0 (lowest key) … 1 (highest). With names on,
+   it climbs a little higher so the lowest picture clears the sticker. */
+.key .glyph-stair {
+  top: calc(70% - var(--stair, 0.5) * 42%);
+}
+
+/* (Learn keys tune their own range in learn.css, clear of the pointing hand.) */
+.keys[data-names='true'] .glyph-stair {
+  top: calc(62% - var(--stair, 0.5) * 38%);
+}
+
+/* Legibility: the staircase is the colour-free pitch cue, so it must stand out
+   on the yellow and green keys too (a darker drop edge in the key's own hue). */
+.key .glyph {
+  opacity: 0.8;
+  filter: drop-shadow(0 2px 0 color-mix(in srgb, var(--k) 50%, black));
+}
+
+.keys[data-kind='drums'] .key .glyph {
+  opacity: 0.85;
+}
+
+/* ── Name stickers ────────────────────────────────────────────────────────── */
+
+.key-name,
+.pad-name {
+  position: absolute;
+  left: 50%;
+  bottom: max(8px, 7%);
+  transform: translateX(-50%);
+  min-width: clamp(22px, 6.2vmin, 40px);
+  height: clamp(22px, 6.2vmin, 40px);
+  padding: 0 0.3em;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* White sticker, ink tinted to the key: at least 7:1 on every key colour. */
+  background: rgba(255, 255, 255, 0.94);
+  color: color-mix(in srgb, var(--k) 38%, black);
+  font: 700 clamp(14px, 4.2vmin, 26px) / 1 var(--font);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+  transition: transform 120ms var(--ease-pop);
+}
+
+/* Notes that are black keys on a piano: an inverted, dark sticker. */
+.key-name[data-acc] {
+  background: color-mix(in srgb, var(--k) 30%, #0b0d30);
+  color: #fff;
+  box-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.22),
+    inset 0 0 0 1.5px rgba(255, 255, 255, 0.35);
+}
+
+/* The letter pops when a finger or the loop plays the key (CSS only, no React state). */
+.key[data-down='true'] .key-name,
+.key[data-glow='true'] .key-name,
+.key[data-down='true'] .pad-name,
+.key[data-glow='true'] .pad-name {
+  transform: translateX(-50%) scale(1.12);
+}
+
+/* Drawn sharps and flats sit a little raised beside the letter (every name is
+   drawn inside an inline-flex box that centres its contents). */
+.acc {
+  flex: 0 0 auto;
+  width: 0.44em;
+  height: 0.72em;
+  margin-left: 0.05em;
+  overflow: visible;
+  transform: translateY(-0.1em);
+}
+
+/* Drum words (Monster Maker): the same sticker, smaller type, picture nudged up. */
+.pad-name {
+  height: clamp(18px, 4.8vmin, 30px);
+  min-width: 0;
+  padding: 0 0.55em;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.02em;
+}
+
+.keys[data-kind='drums'][data-names='true'] .key .glyph {
+  margin-bottom: clamp(18px, 5.4vmin, 40px);
+}
+
+/* High contrast: solid outlined stickers, crisp pictures, outlined keys. */
+.app[data-contrast='high'] .key-name,
+.app[data-contrast='high'] .pad-name {
+  background: #fff;
+  color: #0b0d30;
+  outline: 2px solid #0b0d30;
+  box-shadow: none;
+}
+
+.app[data-contrast='high'] .key-name[data-acc] {
+  background: #0b0d30;
+  color: #fff;
+  outline: 2px solid #fff;
+}
+
+.app[data-contrast='high'] .key .glyph {
+  opacity: 1;
+  filter: drop-shadow(0 0 1.5px #0b0d30) drop-shadow(0 2px 0 #0b0d30);
+}
+
+.app[data-contrast='high'] .key {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: -2px;
+}
+
+/* …but a key with keyboard/switch focus (the Learn keys are real buttons) keeps
+   the chunky focus ring from base.css, so it still stands out from the rest. */
+.app[data-contrast='high'] .key:focus-visible {
+  outline: 4px solid var(--focus);
+  outline-offset: 3px;
+}
+
+/* ── Sparkles where the finger lands ─────────────────────────────────────── */
+
+/* A key-sized clip box: the ring and sparks stay on the key that was pressed. */
+.key-burst {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* The point where the finger landed. */
+.key-burst-at {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+/* The ring (styled in lab.css) is centred on the finger. */
+.key-burst .key-ripple {
+  left: 0;
+  top: 0;
+}
+
+/* Sparks: a white core with a dark edge in the key's hue (they read on yellow
+   too), held bright for most of the flight, then gone. */
+.key-spark {
+  position: absolute;
+  left: -7px;
+  top: -7px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--k) 55%, black),
+    0 0 8px rgba(255, 255, 255, 0.6);
+  pointer-events: none;
+  animation: key-spark 420ms var(--ease-out) forwards;
+}
+
+/* Every other spark: the key's own colour ringed in white. */
+.key-spark:nth-child(odd) {
+  left: -6px;
+  top: -6px;
+  width: 12px;
+  height: 12px;
+  background: color-mix(in srgb, var(--k) 85%, white);
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 6px rgba(255, 255, 255, 0.5);
+}
+
+@keyframes key-spark {
+  0% {
+    transform: rotate(var(--a)) translateY(-6px) scale(1);
+    opacity: 1;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--a)) translateY(clamp(-48px, -9vmin, -30px)) scale(0.5);
+    opacity: 0;
+  }
+}
+
+.app[data-motion='reduce'] .key-burst {
+  display: none;
+}
+
+/* ── Monster Magic: each mood shows its notes (Monster Maker) ────────────── */
+
+.mood .mood-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 4px;
+  font-size: var(--fs-xs);
+  color: var(--ink-2);
+}
+
+.mood-note {
+  min-width: 1.9em;
+  height: 1.9em;
+  padding: 0 0.3em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1a1f63;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Black piano keys: the same inverted sticker as on the keys. */
+.mood-note[data-acc] {
+  background: #0b0d30;
+  color: #fff;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.45);
+}

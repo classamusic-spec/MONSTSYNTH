@@ -7,8 +7,9 @@ import type { MonsterKind, Project } from '../../model/types';
 import { PAINT_ROW } from '../../model/types';
 import { selectTrack, setScreen } from '../../store/actions';
 import { commit, getState, useApp } from '../../store/store';
+import { studio } from '../../studio/studio';
 import { onFrame } from '../../studio/visualBus';
-import { useCaps } from '../hooks/useCaps';
+import { isReducedMotion, useCaps } from '../hooks/useCaps';
 import { Icon } from '../icons/Icon';
 import { MonsterArt } from '../monsters/MonsterArt';
 import { say } from '../shell/bubbles';
@@ -49,6 +50,20 @@ function rowsOf(p: Project): Row[] {
   return rows;
 }
 
+/** The note a monster sings when a block is filled: drums alternate big and
+ *  snappy, everyone else climbs the scale from left to right. */
+function auditionStep(monster: MonsterKind, col: number): number {
+  return monster === 'boom' ? col % 2 : col % 8;
+}
+
+/** The playhead's star hops on each beat; the playing column's number bounces with it. */
+function hop(grid: HTMLElement) {
+  const bead = grid.querySelector<HTMLElement>('.playhead-bead');
+  if (!bead || typeof bead.animate !== 'function') return;
+  bead.animate([{ translate: '0 0' }, { translate: '0 -6px' }, { translate: '0 0' }], { duration: 160, easing: 'ease-out', id: 'bead-hop' });
+  grid.querySelector<HTMLElement>('.col-num[data-now="true"]')?.animate([{ scale: '1' }, { scale: '1.18' }, { scale: '1' }], { duration: 160, easing: 'ease-out' });
+}
+
 interface Drag {
   pointerId: number;
   rowId: string;
@@ -71,23 +86,30 @@ export function BlocksScreen() {
   const rows = rowsOf(project);
   const cols = project.arrangement.length;
 
-  // Playhead: highlight the block column that is playing.
-  useEffect(
-    () =>
-      onFrame((p) => {
-        const grid = gridRef.current;
-        if (!grid) return;
-        const col = p.playing && p.mode === 'song' && p.beat >= 0 ? Math.floor(p.beat / p.loopBeats) : -1;
-        const frac = p.playing && p.mode === 'song' ? Math.min(1, Math.max(0, p.beat / p.songBeats)) : 0;
-        if (grid.dataset.col !== String(col)) {
-          grid.dataset.col = String(col);
-          grid.querySelectorAll<HTMLElement>('[data-now="true"]').forEach((el) => (el.dataset.now = 'false'));
-          if (col >= 0) grid.querySelectorAll<HTMLElement>(`[data-col="${col}"][data-cell], .col-num[data-c="${col}"]`).forEach((el) => (el.dataset.now = 'true'));
-        }
-        grid.style.setProperty('--playhead', frac.toFixed(4));
-      }),
-    [],
-  );
+  // Playhead: highlight the block column that is playing, fill its blocks as
+  // the loop goes by (--in-col), and hop the playhead's star on every beat.
+  useEffect(() => {
+    let lastBeat = -1;
+    return onFrame((p) => {
+      const grid = gridRef.current;
+      if (!grid) return;
+      const song = p.playing && p.mode === 'song' && p.beat >= 0;
+      const col = song ? Math.floor(p.beat / p.loopBeats) : -1;
+      const frac = song ? Math.min(1, Math.max(0, p.beat / p.songBeats)) : 0;
+      if (grid.dataset.col !== String(col)) {
+        grid.dataset.col = String(col);
+        grid.querySelectorAll<HTMLElement>('[data-now="true"]').forEach((el) => (el.dataset.now = 'false'));
+        if (col >= 0) grid.querySelectorAll<HTMLElement>(`[data-col="${col}"][data-cell], .col-num[data-c="${col}"]`).forEach((el) => (el.dataset.now = 'true'));
+      }
+      grid.style.setProperty('--playhead', frac.toFixed(4));
+      grid.style.setProperty('--in-col', song ? ((p.beat % p.loopBeats) / p.loopBeats).toFixed(3) : '0');
+      const beat = song ? Math.floor(p.beat) : -1;
+      if (beat !== lastBeat) {
+        lastBeat = beat;
+        if (beat >= 0 && !isReducedMotion()) hop(grid);
+      }
+    });
+  }, []);
 
   const cellFrom = (x: number, y: number): { rowId: string; col: number } | null => {
     const el = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-cell]');
@@ -101,7 +123,10 @@ export function BlocksScreen() {
     const row = rowFor(rowId);
     if (!row?.clipId) return;
     const value = row.clipId;
+    if (getState().project.arrangement.rows[rowId]?.[col]) return;
     commit((p) => (p.arrangement.rows[rowId]?.[col] ? p : { ...p, arrangement: setCell(p.arrangement, rowId, col, value) }), { coalesce: gesture });
+    // A soft "hello" from the row's monster: a swipe across plays a little scale.
+    if (row.kind === 'track' && row.monster !== 'paint') studio.hit(row.id, auditionStep(row.monster, col), { vel: 0.55 }, { record: false });
   };
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -242,7 +267,9 @@ export function BlocksScreen() {
             </div>
           );
         })}
-        <div className="playhead" aria-hidden />
+        <div className="playhead" aria-hidden>
+          <i className="playhead-bead" />
+        </div>
       </div>
       {dragging && draggingRow && (
         <div

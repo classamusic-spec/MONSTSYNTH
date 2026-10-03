@@ -120,9 +120,10 @@ export function TransportRail() {
         </button>
       )}
 
+      {/* Record-sized, but not a Record button (.t-rec): the Coach's "try Record" hand must never land on the wand. */}
       {screen === 'blocks' && (
         <button
-          className="t-btn t-rec t-magic"
+          className="t-btn t-wand t-magic"
           data-bump={bump === 'magic'}
           aria-label="Monster Magic: turn my loops into a song"
           onClick={() => {

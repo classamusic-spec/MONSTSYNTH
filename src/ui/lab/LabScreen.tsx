@@ -1,11 +1,16 @@
 import { useEffect, useRef } from 'react';
+import { audibleTracks } from '../../magic/sequence';
 import { surfaceSize } from '../../model/monsters';
+import { trackHasLoop } from '../../model/project';
 import { selectTrack, setOverlay } from '../../store/actions';
 import { getState, useApp } from '../../store/store';
 import { studio } from '../../studio/studio';
+import { onFrame } from '../../studio/visualBus';
+import { isReducedMotion } from '../hooks/useCaps';
 import { Icon } from '../icons/Icon';
 import { MonsterPod } from './MonsterPod';
 import { PlaySurface } from './PlaySurface';
+import { PodTools } from './PodTools';
 import { StageScene } from './StageScene';
 import { useLookAt } from './useLookAt';
 
@@ -14,12 +19,46 @@ import { useLookAt } from './useLookAt';
 
 const KEY_ROW = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k'];
 
+/** The stage feels the pulse: a soft light on every beat, the moon glows on each bar,
+ *  and every monster whose loop you can hear bobs along (not one asleep or left out
+ *  by a solo; the spotlight one has its own moves). */
+function beatDance(stage: HTMLElement, beat: number) {
+  if (typeof stage.animate !== 'function') return;
+  stage.querySelector('.stage-pulse')?.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], { duration: 180, easing: 'ease-out' });
+  if (beat % 4 === 0) {
+    stage.querySelector('.moon-glow')?.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.18)' }, { transform: 'scale(1)' }], { duration: 260, easing: 'ease-out' });
+  }
+  const s = getState();
+  const ms = Math.min(240, (60000 / s.project.tempo) * 0.5);
+  const dancing = new Set(audibleTracks(s.project).filter((t) => t.id !== s.selectedTrackId && trackHasLoop(t)).map((t) => t.id));
+  stage.querySelectorAll<HTMLElement>('.pod').forEach((pod) => {
+    if (!dancing.has(pod.dataset.track ?? '')) return;
+    pod.querySelector('.squish')?.animate([{ translate: '0 0' }, { translate: '0 -3%' }, { translate: '0 0' }], { duration: ms, easing: 'ease-out', id: 'beat-bob' });
+  });
+}
+
 export function LabScreen() {
   const tracks = useApp((s) => s.project.tracks);
   const selectedId = useApp((s) => s.selectedTrackId);
   const selected = tracks.find((t) => t.id === selectedId) ?? tracks[0];
   const stageRef = useRef<HTMLDivElement>(null);
   useLookAt(stageRef);
+
+  // Move with the music: one small imperative animation set per beat, never React state.
+  useEffect(() => {
+    let lastBeat = -1;
+    return onFrame((p) => {
+      const stage = stageRef.current;
+      if (!p.playing || p.beat < 0 || !stage) {
+        lastBeat = -1;
+        return;
+      }
+      const beat = Math.floor(p.beat);
+      if (beat === lastBeat) return;
+      lastBeat = beat;
+      if (!isReducedMotion()) beatDance(stage, beat);
+    });
+  }, []);
 
   // Computer keyboards (Chromebooks, desktops): A–K play, 1–6 pick a monster.
   useEffect(() => {
@@ -82,6 +121,7 @@ export function LabScreen() {
         {tracks.map((t) => (
           <MonsterPod key={t.id} track={t} selected={t.id === selected.id} />
         ))}
+        <PodTools track={selected} className="pod-tools stage-tools" />
         <button className="add-seat" aria-label="Add Monster" onClick={() => setOverlay('tray')}>
           <Icon name="plus" />
         </button>

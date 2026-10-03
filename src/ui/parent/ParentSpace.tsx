@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { micSupported } from '../../audio/mic';
-import type { MotionPreference, ProjectMeta } from '../../model/types';
+import type { MotionPreference, NoteNameStyle, ProjectMeta } from '../../model/types';
 import { deleteEverything, deleteSong, duplicateSong, openSong, renameSong, setOverlay, updateSettings } from '../../store/actions';
 import { loadProject } from '../../store/persistence';
 import { SESSION_CHOICES } from '../../model/schema';
@@ -233,6 +233,14 @@ export function ParentSpace() {
               <option value="full">Full bounce</option>
             </select>
           </div>
+          <div className="ps-field">
+            <label htmlFor="ps-note-names">Names on the keys</label>
+            <select id="ps-note-names" value={settings.noteNames} onChange={(e) => updateSettings({ noteNames: e.target.value as NoteNameStyle })}>
+              <option value="letters">Letters (C D E)</option>
+              <option value="solfege">Do re mi</option>
+              <option value="off">None (pictures only)</option>
+            </select>
+          </div>
           <label className="ps-toggle">
             <input type="checkbox" checked={settings.highContrast} onChange={(e) => updateSettings({ highContrast: e.target.checked })} />
             <span>High contrast panels and outlines</span>
@@ -241,6 +249,11 @@ export function ParentSpace() {
             <input type="checkbox" checked={settings.hints} onChange={(e) => updateSettings({ hints: e.target.checked })} />
             <span>Show gentle picture hints (a pointing hand) for new players</span>
           </label>
+          <p className="ps-note">
+            Key stickers name each note so you can say “play the E!” and find it on a real piano. They follow the song’s mood; do re mi
+            always starts on do. Drums show pictures (and drum words for Monster Makers). The picture on each key also shrinks and climbs as
+            the notes go higher, so names are never needed to play.
+          </p>
           <p className="ps-note">
             Keyboard: A–K play the keys, 1–6 choose a monster, Space plays or stops, R records, Ctrl/⌘+Z undoes. Nothing flashes rapidly.
           </p>

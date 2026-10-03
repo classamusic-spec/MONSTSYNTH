@@ -9,11 +9,10 @@ import { studio } from '../../studio/studio';
 import { onNote } from '../../studio/visualBus';
 import { FxBuddy } from '../monsters/FxBuddy';
 import { MonsterArt } from '../monsters/MonsterArt';
-import { reactToNote } from '../monsters/react';
+import { reactToNote, spawnNoteSprite } from '../monsters/react';
 import { Icon } from '../icons/Icon';
 import { isReducedMotion, useCaps } from '../hooks/useCaps';
 import { getSize, onSize, setSize } from './expression';
-import { PodTools } from './PodTools';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SQUISH THE MONSTER — the signature interaction.
@@ -78,7 +77,10 @@ export const MonsterPod = memo(function MonsterPod({ track, selected }: { track:
     () =>
       onNote((v) => {
         if (v.trackId !== track.id || !rootRef.current) return;
+        // Read at note time: switching motion in Parent Space does not re-render pods.
+        reactOpts.current.reduced = isReducedMotion();
         reactToNote(rootRef.current, v, reactOpts.current);
+        spawnNoteSprite(rootRef.current, v, reactOpts.current.reduced);
       }),
     [track.id],
   );
@@ -253,6 +255,7 @@ export const MonsterPod = memo(function MonsterPod({ track, selected }: { track:
     <div
       ref={rootRef}
       className="pod"
+      data-track={track.id}
       data-monster={track.monster}
       data-selected={selected}
       data-sleeping={track.sleeping}
@@ -316,8 +319,6 @@ export const MonsterPod = memo(function MonsterPod({ track, selected }: { track:
           <Icon name={track.sleeping ? 'zzz' : 'loop'} />
         </button>
       )}
-
-      {selected && <PodTools track={track} />}
     </div>
   );
 });

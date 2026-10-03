@@ -89,7 +89,15 @@ for (const v of VIEWS) {
   await shot('8-parent');
   await page.keyboard.press('Escape');
 
-  // Songs shelf with songs
+  // Songs shelf with songs: each saved song wears a picture from its name
+  // (and a song kept from Learn keeps its Learn picture).
+  await page.evaluate(async () => {
+    const m = window.__monster;
+    for (const name of ['The Zippy Banana', 'Cosmic Spaceship', 'Hot Cross Buns']) {
+      await m.actions.newSong('blank');
+      await m.actions.renameSong(m.getState().project.id, name);
+    }
+  });
   await page.locator('.dock-btn[data-screen="songs"]').click();
   await page.waitForTimeout(400);
   await shot('9-songs');

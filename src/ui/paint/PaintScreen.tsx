@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { laneForY, PAINT_LANES, RAINBOW_CYCLE, yForLane } from '../../magic/painting';
 import { addStroke, eraseStrokes, newStrokeId } from '../../model/edits';
 import { MONSTERS } from '../../model/monsters';
@@ -8,7 +8,9 @@ import { commit, getState, useApp, type PaintTool } from '../../store/store';
 import { studio } from '../../studio/studio';
 import { onFrame, onNote } from '../../studio/visualBus';
 import { isReducedMotion } from '../hooks/useCaps';
+import { useKeyNames } from '../hooks/useKeyNames';
 import { Icon, type IconName } from '../icons/Icon';
+import { DRUM_COLORS, NoteText } from '../lab/glyphs';
 import { MonsterArt } from '../monsters/MonsterArt';
 import { star5 } from '../monsters/shapes';
 import { say } from '../shell/bubbles';
@@ -39,6 +41,19 @@ function strokeColor(brush: PaintBrush, i: number): string {
 function brushMonster(brush: PaintBrush, n: number): MonsterKind {
   return brush === 'rainbow' ? RAINBOW_CYCLE[n % RAINBOW_CYCLE.length] : brush;
 }
+
+/**
+ * The band of the canvas each lane really covers. laneForY rounds, so the top
+ * and bottom lanes are half as tall as the others; the guides follow the sound.
+ */
+const LANE_BANDS = Array.from({ length: PAINT_LANES }, (_, lane) => {
+  const half = 0.5 / (PAINT_LANES - 1);
+  const top = Math.max(0, yForLane(lane) - half);
+  const bottom = Math.min(1, yForLane(lane) + half);
+  return { lane, top: top * 100, height: (bottom - top) * 100, centre: ((top + bottom) / 2) * 100 };
+});
+/** Lane boundaries: where laneForY switches from one lane to the next. */
+const LANE_LINES = Array.from({ length: PAINT_LANES - 1 }, (_, k) => ((k + 0.5) / (PAINT_LANES - 1)) * 100);
 
 interface Burst {
   x: number;
@@ -127,7 +142,15 @@ export function PaintScreen() {
   const tracks = useApp((s) => s.project.tracks);
   const tool = useApp((s) => s.paint.tool);
   const brush = useApp((s) => s.paint.brush);
+  const loopBeats = useApp((s) => s.project.loopBeats);
+  const beatsPerBar = useApp((s) => s.project.beatsPerBar);
+  const { names, style } = useKeyNames(PAINT_LANES);
+  // Letters only where height means pitch: not for Boom's drum lanes, nor for a
+  // recorded Mimic voice (it plays at the child's own pitch).
+  const recordedMimic = tracks.some((t) => t.monster === 'mimic' && t.sampleId !== null);
+  const laneNames = style !== 'off' && brush !== 'boom' && !(brush === 'mimic' && recordedMimic);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const ribbonRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fxRef = useRef<HTMLCanvasElement>(null);
   const live = useRef<{ pointerId: number; stroke: Stroke; lastLane: number; lastX: number; lastNoteAt: number; notes: number } | null>(null);
@@ -179,6 +202,21 @@ export function PaintScreen() {
 
   const hiddenRef = useRef(hidden);
   hiddenRef.current = hidden;
+
+  /** The ribbon segment of a lane lights up whenever that lane sounds. */
+  const flashLane = (lane: number) => {
+    if (isReducedMotion()) return;
+    const seg = ribbonRef.current?.querySelector<HTMLElement>(`[data-lane="${lane}"]`);
+    seg?.animate?.(
+      [
+        { opacity: 1, transform: 'scaleX(1.7)', filter: 'brightness(1.3)' },
+        { opacity: 0.75, transform: 'scaleX(1)', filter: 'brightness(1)' },
+      ],
+      { duration: 220, easing: 'ease-out' },
+    );
+  };
+  const flashRef = useRef(flashLane);
+  flashRef.current = flashLane;
   useEffect(redraw, [painting, hidden]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Playhead + note bursts on the effects layer.
@@ -223,6 +261,7 @@ export function PaintScreen() {
       if (v.source !== 'paint' || isReducedMotion()) return;
       // A ring pops where the note sits: x at the playhead, y at its pitch lane.
       bursts.current.push({ x: beatFrac, y: yForLane(v.step), color: colorOf(v.monster), t0: performance.now() });
+      flashRef.current(v.step);
     });
     return () => {
       offFrame();
@@ -236,6 +275,7 @@ export function PaintScreen() {
   };
 
   const singAt = (y: number, n: number, weight: number) => {
+    flashLane(laneForY(y));
     const monster = brushMonster(brush, n);
     const track = tracks.find((t) => t.monster === monster);
     if (track) studio.hit(track.id, laneForY(y), { vel: 0.55 + weight * 0.4 }, { record: false });
@@ -339,15 +379,41 @@ export function PaintScreen() {
         aria-label={`Painting with ${painting.strokes.length} marks. Draw to make music: higher is higher notes, left to right is time.`}
       >
         <div className="paint-lanes" aria-hidden>
-          {Array.from({ length: PAINT_LANES }, (_, i) => (
-            <span key={i} />
+          {LANE_LINES.map((top) => (
+            <span key={top} style={{ top: `${top}%` }} />
           ))}
         </div>
         <div className="paint-beats" aria-hidden>
-          {Array.from({ length: 8 }, (_, i) => (
-            <span key={i} />
+          {Array.from({ length: loopBeats }, (_, i) => (
+            <span key={i} data-bar={(i + 1) % beatsPerBar === 0} />
           ))}
         </div>
+        {/* Higher on the canvas = higher note: the keys' colours (and names) down the left
+            edge, lane for lane. Boom's lanes are its drum pads, so they wear the pads' colours. */}
+        <div className="paint-ribbon" ref={ribbonRef} aria-hidden>
+          {LANE_BANDS.map((b) => (
+            <i
+              key={b.lane}
+              data-lane={b.lane}
+              style={
+                {
+                  top: `max(6px, ${b.top}%)`,
+                  bottom: `max(6px, ${100 - b.top - b.height}%)`,
+                  '--k': `var(--key-${brush === 'boom' ? DRUM_COLORS[b.lane] : b.lane})`,
+                } as CSSProperties
+              }
+            />
+          ))}
+        </div>
+        {laneNames && (
+          <div className="paint-lane-names" aria-hidden>
+            {LANE_BANDS.map((b) => (
+              <span key={b.lane} className="paint-lane-name" style={{ top: `${b.centre}%` }}>
+                <NoteText name={names[b.lane]} style={style} />
+              </span>
+            ))}
+          </div>
+        )}
         <canvas ref={canvasRef} />
         <canvas ref={fxRef} className="paint-fx" />
         {painting.strokes.length === 0 && (

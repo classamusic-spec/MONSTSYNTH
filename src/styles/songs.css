@@ -31,6 +31,14 @@
   touch-action: pan-x;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
+  /* A shelf with only a few songs sits in the middle (it scrolls from the start once full). */
+  justify-content: safe center;
+}
+
+@supports not (justify-content: safe center) {
+  .song-shelf {
+    justify-content: start;
+  }
 }
 
 .song-shelf::-webkit-scrollbar {
@@ -107,6 +115,9 @@
   min-height: 60px;
   border-radius: calc(var(--radius-l) - 6px);
   overflow: hidden;
+  /* Everything on a cover is sized from the cover itself, so nothing clips on
+     any card shape (one tall row on phones, two wide rows on tablets). */
+  container-type: size;
 }
 
 .portrait-sky {
@@ -130,10 +141,11 @@
 
 .portrait-cluster {
   position: absolute;
-  inset: 12% 6% 10%;
+  inset: 18% 6% 6%;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-content: center;
+  grid-auto-rows: minmax(0, 1fr);
+  align-items: end;
   justify-items: center;
   gap: 2% 0;
 }
@@ -148,17 +160,81 @@
 }
 
 .portrait-monster {
-  width: 100%;
-  max-width: 120px;
+  position: relative;
+  width: min(44cqw, 38cqh);
   aspect-ratio: 1;
+  container-type: inline-size;
 }
 
-.portrait-cluster .portrait-monster:nth-child(even) {
-  transform: translateY(8%);
+/* Starter cards with one or two big monsters (saved songs keep their row). */
+.portrait-cluster:not(.portrait-row)[data-count='1'] .portrait-monster,
+.portrait-cluster:not(.portrait-row)[data-count='2'] .portrait-monster {
+  width: min(44cqw, 62cqh);
+}
+
+/* A saved song: its picture as a big sticker at the top… */
+.cover-sticker {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 7cqh;
+  width: min(46cqh, 70cqw);
+  aspect-ratio: 1;
+  translate: -50% 0;
+  rotate: -4deg;
+  border-radius: 18%;
+  box-shadow:
+    0 0 0 3px #fff,
+    0 6px 14px rgba(0, 0, 0, 0.35);
+}
+
+.cover-sticker > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* A Learn picture sits on the sticker's own backdrop (its shared one is hidden). */
+.cover-sticker > .song-art {
+  position: absolute;
+  inset: 0;
+}
+
+.cover-sticker > .song-art > rect {
+  display: none;
+}
+
+/* …and its monsters standing in a row along the bottom, huddled together. */
+.portrait-cluster.portrait-row {
+  inset: auto 4% 4%;
+  height: 42cqh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0;
+}
+
+.portrait-row .portrait-monster {
+  flex: 0 1 auto;
+  min-width: 0;
+  width: min(42cqh, 34cqw);
+  margin-inline: -1.5cqw;
+}
+
+/* One or two monsters stand a little bigger, but never taller than the row
+   (so they never reach up under the sticker). */
+.portrait-row[data-count='1'] .portrait-monster,
+.portrait-row[data-count='2'] .portrait-monster {
+  width: min(42cqh, 40cqw);
+}
+
+.portrait-row .portrait-monster:nth-child(even) {
+  translate: 0 4%;
 }
 
 .starter-ribbon {
   position: absolute;
+  z-index: 2;
   left: 8px;
   top: 8px;
   padding: 3px 10px;
@@ -181,14 +257,29 @@
 }
 
 .portrait-monster[data-awake='false'] {
-  filter: saturate(0.55) brightness(0.8);
+  filter: saturate(0.85) brightness(0.92);
 }
 
+/* Dozing, not broken: a small "z" over each monster without a loop yet. */
+.portrait-monster[data-awake='false']::after {
+  content: 'z';
+  position: absolute;
+  right: 8%;
+  top: 2%;
+  font-size: max(9px, 24cqw);
+  font-weight: 700;
+  line-height: 1;
+  color: #e3e6ff;
+}
+
+/* One dot per monster with a loop, down the left edge. */
 .portrait-notes {
   position: absolute;
+  z-index: 2;
   left: 8px;
-  bottom: 8px;
+  top: 8px;
   display: flex;
+  flex-direction: column;
   gap: 4px;
 }
 
@@ -225,6 +316,7 @@
 
 .band-notes {
   position: absolute;
+  z-index: 2;
   right: 8px;
   top: 8px;
   display: flex;

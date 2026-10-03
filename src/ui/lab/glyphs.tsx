@@ -1,9 +1,13 @@
-import type { ReactElement } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
+import type { NoteName } from '../../magic/noteNames';
 import type { KeyGlyph } from '../../model/monsters';
+import type { NoteNameStyle } from '../../model/types';
 import { star5 } from '../monsters/shapes';
 
 // Key glyphs never rely on colour alone: their shape tells you which monster is
 // on the keys, and they shrink and rise as the pitch goes up (big & low → tiny & high).
+// The height comes from CSS (--stair = 0 lowest … 1 highest; its own name, not
+// the --t timing token), so the staircase can make room for a name sticker.
 
 export function KeyGlyph({ glyph, index, count }: { glyph: KeyGlyph; index: number; count: number }) {
   const t = count > 1 ? index / (count - 1) : 0;
@@ -32,11 +36,56 @@ export function KeyGlyph({ glyph, index, count }: { glyph: KeyGlyph; index: numb
       );
   }
   return (
-    <svg className="glyph glyph-stair" viewBox="0 0 100 100" fill="#fff" style={{ ['--glyph-y' as string]: `${70 - t * 42}%` }}>
+    <svg className="glyph glyph-stair" viewBox="0 0 100 100" fill="#fff" style={{ '--stair': t } as CSSProperties}>
       <g transform={transform}>{shape}</g>
     </svg>
   );
 }
+
+/**
+ * A sharp or a flat, drawn: the app's rounded font has no ♯/♭, and a fallback
+ * font would sit at the wrong weight and height next to the letter.
+ */
+export function Accidental({ dir }: { dir: 1 | -1 }) {
+  return (
+    <svg className="acc" data-dir={dir === 1 ? 'sharp' : 'flat'} viewBox="0 0 12 20" aria-hidden>
+      {dir === 1 ? (
+        <path d="M4.6 2.5 V18.5 M8.4 1.5 V17.5 M1.6 8.2 L10.6 5.8 M1.6 14.2 L10.6 11.8" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" />
+      ) : (
+        <path d="M3 1.5 V18 C7 16.6 10.4 13.6 10 11 C9.6 8.4 6 8.6 3 11.6" fill="none" stroke="currentColor" strokeWidth={2.7} strokeLinecap="round" strokeLinejoin="round" />
+      )}
+    </svg>
+  );
+}
+
+/** A note's name as drawn text: a letter plus a drawn accidental, or a do-re-mi syllable. */
+export function NoteText({ name, style }: { name: NoteName; style: NoteNameStyle }) {
+  if (style === 'off') return null;
+  if (style === 'solfege') return <>{name.solfege}</>;
+  return (
+    <>
+      {name.letter}
+      {name.accidental !== 0 && <Accidental dir={name.accidental} />}
+    </>
+  );
+}
+
+/**
+ * The name sticker at the bottom of a key, like the letter stickers on a toy
+ * xylophone. Notes that are black keys on a piano get an inverted, dark sticker.
+ * Hidden from screen readers: the key's own label says the name out loud.
+ */
+export function KeyName({ name, style, className = 'key-name' }: { name: NoteName; style: NoteNameStyle; className?: string }) {
+  if (style === 'off') return null;
+  return (
+    <span className={className} data-acc={name.accidental ? (name.accidental > 0 ? 'sharp' : 'flat') : undefined} aria-hidden>
+      <NoteText name={name} style={style} />
+    </span>
+  );
+}
+
+/** Drum pad colours (key colour index per pad), chosen so neighbouring pads never look alike. */
+export const DRUM_COLORS = [0, 1, 2, 6, 4, 3, 5, 7];
 
 /** One picture per drum, so kids find "the clap" without reading. */
 export function DrumIcon({ pad }: { pad: number }) {

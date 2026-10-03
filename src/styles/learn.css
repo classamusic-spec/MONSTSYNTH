@@ -272,7 +272,7 @@
 .lesson-teacher {
   flex: 0 1 auto;
   height: 100%;
-  max-height: 220px;
+  max-height: min(320px, 100%);
   aspect-ratio: 1;
   min-width: 0;
   display: grid;
@@ -346,17 +346,73 @@
   margin: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.15em 0.45em;
+  align-items: flex-end;
+  gap: 0.25em 0.5em;
+  /* Room above the first row for the lit tag's pulse and ring, clear of the cue. */
+  padding-top: 0.4em;
   font-size: clamp(18px, 5.2vmin, 40px);
   font-weight: 700;
   line-height: 1.25;
   color: var(--ink-3);
 }
 
+/* Each syllable stands under a tag in its key's colour (and name). */
 .lesson-word {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
   transition:
     color var(--t-fast),
     transform var(--t-fast) var(--ease-pop);
+}
+
+.word-note {
+  /* Sized in the tag's own font size (about half the lyric size, never tiny). */
+  min-width: 2.1em;
+  height: 2.1em;
+  margin-bottom: 0.3em;
+  padding: 0 0.35em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--k);
+  /* Dark ink on the key colour: at least 4.5:1 on every key. */
+  color: #0b0d30;
+  font: 700 max(12px, 0.5em) / 1 var(--font);
+  font-style: normal;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--k) 55%, black);
+  transition:
+    transform var(--t-fast) var(--ease-pop),
+    box-shadow var(--t-fast);
+}
+
+/* Coming up: a touch smaller, never faded, so the ink keeps its contrast. */
+.lesson-word[data-state='todo'] .word-note {
+  transform: scale(0.9);
+}
+
+.lesson-word[data-state='next'] .word-note,
+.lesson-word[data-now='true'] .word-note {
+  transform: scale(1.15);
+  box-shadow:
+    0 0 0 3px #fff,
+    0 0 16px var(--k);
+}
+
+.lesson-word[data-state='next'] .word-note {
+  animation: tag-call 1s var(--ease-in-out) infinite;
+}
+
+/* A pulse in place (no hop), so the lit tag never jumps up over the cue. */
+@keyframes tag-call {
+  50% {
+    transform: scale(1.25);
+  }
+}
+
+.app[data-contrast='high'] .word-note {
+  outline: 2px solid #fff;
 }
 
 .lesson-word[data-state='sung'] {
@@ -398,7 +454,11 @@
   }
 }
 
-/* The song is finished. */
+/* The song is finished: the stars panel replaces the words bubble. */
+.lesson[data-phase='done'] .lesson-bubble {
+  visibility: hidden;
+}
+
 .lesson-done {
   position: absolute;
   inset: 0;
@@ -438,7 +498,7 @@
   background: var(--panel-2);
   border: 2px solid var(--edge-strong);
   color: var(--ink);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-s);
   font-weight: 700;
   transition: transform var(--t-fast) var(--ease-out);
 }
@@ -507,13 +567,16 @@
     0 0 34px 10px color-mix(in srgb, var(--k) 70%, white);
 }
 
-.lesson-key-num {
-  position: absolute;
-  bottom: 8px;
-  font-size: var(--fs-s);
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.8);
-  pointer-events: none;
+/* Learn keys share the Lab's key face (keys.css): the teacher's glyph
+   staircase plus a name sticker. The staircase tops out a little lower here,
+   so the pointing hand above the next key stays clear of the picture; with
+   names on, its low end leaves the same room above the sticker as the Lab. */
+.lesson-keys .glyph-stair {
+  top: calc(72% - var(--stair, 0.5) * 36%);
+}
+
+.lesson-keys[data-names='true'] .glyph-stair {
+  top: calc(60% - var(--stair, 0.5) * 26%);
 }
 
 .lesson-hand {
@@ -538,6 +601,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .lesson-key[data-next='true'],
+  .lesson-word[data-state='next'] .word-note,
   .lesson-hand,
   .lesson-cue[data-phase='play'],
   .lesson[data-phase='cheer'] .lesson-teacher,
@@ -550,10 +614,22 @@
 }
 
 .app[data-motion='reduce'] .lesson-key[data-next='true'],
+.app[data-motion='reduce'] .lesson-word[data-state='next'] .word-note,
 .app[data-motion='reduce'] .lesson-hand,
 .app[data-motion='reduce'] .lesson-cue,
 .app[data-motion='reduce'] .lesson-teacher {
   animation: none;
+}
+
+/* Tablets sideways: the teacher and the words share the width, so a six-to-
+   eight-syllable phrase stays on one row (no word left alone on a second line). */
+@media (orientation: landscape) and (min-height: 461px) {
+  .lesson-teacher {
+    max-height: min(320px, 100%, 29vw);
+  }
+  .lesson-words {
+    font-size: clamp(18px, min(5.2vmin, 3.2vw), 40px);
+  }
 }
 
 /* Phones sideways: the stage shrinks, the keys stay big. */
@@ -563,6 +639,9 @@
   }
   .lesson-words {
     font-size: clamp(16px, 5.4vmin, 26px);
+  }
+  .lesson-bubble {
+    gap: 4px;
   }
 }
 
@@ -574,10 +653,41 @@
   .lesson-stage {
     flex-direction: column;
   }
+  /* The words come first: the teacher takes only the height they leave (up to
+     its 320px cap), so a long verse never slips under the stage's edge. */
+  .lesson-teacher {
+    flex: 1 1 0;
+    height: auto;
+    min-height: 0;
+  }
   .lesson-bubble {
+    flex: 0 0 auto;
     align-items: center;
   }
   .lesson-words {
     justify-content: center;
+  }
+}
+
+/* Tall portrait tablets: all the songs fit in a 3-column shelf, no scrolling.
+   Rows are only as tall as their cards (no stretched dead space), and on a
+   shorter iPad the pictures shrink a little so every card still fits. */
+@media (orientation: portrait) and (min-height: 1000px) {
+  .lesson-shelf {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: none;
+    grid-auto-rows: auto;
+    grid-auto-columns: auto;
+    align-content: start;
+    /* Fits on iPad-sized portrait screens; scrolls rather than clips if not. */
+    overflow-x: hidden;
+    overflow-y: auto;
+    scroll-snap-type: none;
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
+  }
+  .lesson-card-title {
+    margin-top: auto;
   }
 }

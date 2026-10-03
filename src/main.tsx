@@ -4,6 +4,7 @@ import './styles/tokens.css';
 import './styles/base.css';
 import './styles/shell.css';
 import './styles/lab.css';
+import './styles/keys.css';
 import './styles/monsters.css';
 import './styles/overlays.css';
 import './styles/blocks.css';
