@@ -16,6 +16,7 @@ import { flushSave } from './store/persistence';
 import * as actions from './store/actions';
 import { getState, setState } from './store/store';
 import { studio } from './studio/studio';
+import * as bus from './studio/visualBus';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -39,4 +40,4 @@ if (import.meta.env.VITE_DEMO !== '1' && import.meta.env.PROD && 'serviceWorker'
 }
 
 // Test hook for automated browser checks (no production behaviour depends on it).
-(window as unknown as { __monster: unknown }).__monster = { studio, getState, setState, actions };
+(window as unknown as { __monster: unknown }).__monster = { studio, getState, setState, actions, bus };

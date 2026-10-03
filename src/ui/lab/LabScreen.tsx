@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { surfaceSize } from '../../model/monsters';
 import { selectTrack, setOverlay } from '../../store/actions';
 import { getState, useApp } from '../../store/store';
 import { studio } from '../../studio/studio';
@@ -31,10 +32,11 @@ export function LabScreen() {
       const key = e.key.toLowerCase();
       const idx = KEY_ROW.indexOf(key);
       const track = s.project.tracks.find((t) => t.id === s.selectedTrackId) ?? s.project.tracks[0];
-      if (idx >= 0) {
+      // Only the keys on screen play (Little mode shows six drums: J and K rest).
+      if (idx >= 0 && idx < surfaceSize(track.monster, s.settings.ageMode)) {
         e.preventDefault();
         if (e.repeat || held.has(key)) return;
-        const id = studio.press(track.id, idx, { vel: 0.85 });
+        const id = studio.press(track.id, idx, { vel: 0.85 }, { at: e.timeStamp });
         if (id >= 0) held.set(key, id);
         return;
       }
@@ -53,7 +55,7 @@ export function LabScreen() {
       const key = e.key.toLowerCase();
       const id = held.get(key);
       if (id !== undefined) {
-        studio.release(id);
+        studio.release(id, e.timeStamp);
         held.delete(key);
       }
     };

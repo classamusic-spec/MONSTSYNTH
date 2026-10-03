@@ -15,7 +15,7 @@ Flows are written as what the child does → what the product does. Every step p
 
 1. Child taps **●** (Record). Nothing is playing and the song is empty, so Record *arms*: the button blinks and its label reads "Play!".
 2. The first note the child plays **becomes the downbeat**: the loop starts exactly there. The loop ring around ▶ begins to turn.
-3. Child keeps playing. Notes are pulled onto the beat (soft quantize) and placed into Bloop's loop. A soft tick marks each beat while there is no drum loop.
+3. Child keeps playing. Notes are pulled onto the beat (soft quantize; drums snap exactly onto it) and placed into Bloop's loop. A soft woodblock tick marks each beat for the whole take when it began without a drum loop.
 4. Child taps ● again (or stops playing for two loops, and recording switches off by itself). The loop keeps playing — the child immediately hears their music repeat.
 5. Undo removes the whole take in one step.
 

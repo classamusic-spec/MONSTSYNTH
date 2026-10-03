@@ -37,7 +37,7 @@ Monster Synth is a React + TypeScript single-page PWA built with Vite. The code 
 | `src/model/schema.ts` | Versioned migrations + sanitising loaders for projects and settings |
 | `src/model/edits.ts` | Pure, immutable edits (record note, cycle fx, add/bench monster, strokes …) |
 | `src/magic/scales.ts` | Scale tables, step → MIDI, pad chords, Mimic transposition |
-| `src/magic/timing.ts` | wrap, soft quantize, grid slots, duration quantize |
+| `src/magic/timing.ts` | wrap, soft quantize, drum snap + bounce test, grid slots, note-end snapping, grid lines / next occurrence |
 | `src/magic/recorder.ts` | Looper placement and "replace, don't pile up" insertion rules |
 | `src/magic/sequence.ts` | `collectEvents(project, from, to, mode)` — the sequencer's brain |
 | `src/magic/arrange.ts` | Monster Blocks operations and Magic auto-arrangement |

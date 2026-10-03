@@ -1,5 +1,6 @@
 // Real touch events (no autoplay bypass): first tap unlocks audio, touch keys,
-// glissando, monster squish drag, multi-finger chord, performance under CPU throttle.
+// glissando, monster squish drag, multi-finger chord, hold-to-roll, performance
+// under CPU throttle.
 import { chromium } from 'playwright';
 
 const url = process.argv[2] || 'http://127.0.0.1:5173/';
@@ -82,6 +83,39 @@ await page.waitForTimeout(700);
 const after = await dbg();
 check('dragging up on a monster stretches it', Number(stretched) > 1.05, `drag-y ${stretched}`);
 check('releasing the monster releases its note (no stuck voice)', after.held === 0 && after.live === 0, `${after.held} held, ${after.live} live`);
+
+// 5b. Hold Boom: a roll on the beat grid; letting go stops it (nothing keeps running).
+const boomPod = await page.locator('.pod[data-monster="boom"] .pod-hit').boundingBox();
+const bx = boomPod.x + boomPod.width / 2;
+const by = boomPod.y + boomPod.height * 0.85;
+await page.evaluate(() => {
+  const eng = window.__monster.studio.engine;
+  window.__rollHits = 0;
+  if (!eng.__countHits) {
+    eng.__countHits = true;
+    const trigger = eng.trigger.bind(eng);
+    eng.trigger = (req, when, dur) => {
+      if (req.pad === 0) window.__rollHits++;
+      return trigger(req, when, dur);
+    };
+  }
+});
+await touch('touchStart', [{ x: bx, y: by, id: 1 }]);
+await page.waitForTimeout(1100);
+const rolling = await dbg();
+const rollHits = await page.evaluate(() => window.__rollHits);
+await touch('touchEnd', []);
+await page.waitForTimeout(250);
+const hitsAtRelease = await page.evaluate(() => window.__rollHits);
+await page.waitForTimeout(500);
+const rollEnd = await dbg();
+const hitsLater = await page.evaluate(() => window.__rollHits);
+check('holding Boom rolls on its own clock', rolling.rolls === 1 && rolling.soloRoll && rollHits >= 2, `${rollHits} hits`);
+check(
+  'letting go of Boom stops the roll (no roll, no clock, no stuck voice)',
+  rollEnd.rolls === 0 && !rollEnd.soloRoll && hitsLater === hitsAtRelease && rollEnd.live === 0 && rollEnd.held === 0,
+  `${rollEnd.rolls} rolls, ${hitsLater - hitsAtRelease} late hits`,
+);
 
 // 6. Performance with a 4× slower CPU: band playing, frames and audio keep going.
 await page.evaluate(async () => {

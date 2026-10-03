@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { chordSteps, midiToHz, mimicSemitones, stepToMidi, stepToSemitone } from '../src/magic/scales';
-import { gridSlot, quantizeDuration, softQuantize, wrap } from '../src/magic/timing';
+import {
+  gridLinesIn,
+  gridSlot,
+  isBounce,
+  nextLine,
+  nextOccurrence,
+  snapDrum,
+  snapDuration,
+  softQuantize,
+  wrap,
+  type DrumSnap,
+} from '../src/magic/timing';
+import { MODE_CAPS } from '../src/model/monsters';
 import { insertRecordedNote, MAX_NOTES_PER_CLIP, placeNote, setNoteDuration } from '../src/magic/recorder';
 import type { Clip, NoteEvent } from '../src/model/types';
 
@@ -75,11 +87,105 @@ describe('timing', () => {
     expect(softQuantize(7.9, 0.5, 1)).toBe(8);
   });
 
-  it('computes grid slots and durations', () => {
+  it('computes grid slots', () => {
     expect(gridSlot(1.49, 0.5)).toBe(3);
-    expect(quantizeDuration(0.1, 0.25, 8)).toBe(0.25);
-    expect(quantizeDuration(1.3, 0.25, 8)).toBe(1.25);
-    expect(quantizeDuration(20, 0.25, 8)).toBe(8);
+  });
+
+  it('snaps note ends to the grid, measured from the snapped start', () => {
+    expect(snapDuration(0, 1.0, 8)).toBe(1);
+    expect(snapDuration(0.5, 0.05, 8)).toBe(0.25);
+    expect(snapDuration(6, 5, 8)).toBe(5);
+    expect(snapDuration(0, 20, 8)).toBe(8);
+    // A soft-quantised start: the end still lands on a sixteenth.
+    expect(snapDuration(0.024, 0.9, 8) + 0.024).toBeCloseTo(1, 9);
+    // Released before the (late-snapped) start: still the minimum length.
+    expect(snapDuration(1, -0.05, 8)).toBe(0.25);
+  });
+});
+
+describe('drum snap', () => {
+  const little = MODE_CAPS.little.drumSnap;
+  const maker = MODE_CAPS.maker.drumSnap;
+
+  it('pulls late and early taps onto the beat in Little mode', () => {
+    expect(snapDrum(1.3, little)).toBe(1);
+    expect(snapDrum(0.7, little)).toBe(1);
+    expect(snapDrum(1.4, little)).toBe(1.5);
+    expect(snapDrum(7.8, little)).toBe(8);
+  });
+
+  it('snaps to sixteenths in Maker mode, with a magnet to the eighths', () => {
+    expect(snapDrum(0.26, maker)).toBe(0.25);
+    expect(snapDrum(0.45, maker)).toBe(0.5);
+    expect(snapDrum(0.62, maker)).toBe(0.5);
+    expect(snapDrum(0.64, maker)).toBe(0.75);
+  });
+
+  it('always returns an exact grid multiple (never -0)', () => {
+    let seed = 7;
+    const rand = () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    for (const s of [little, maker] as DrumSnap[]) {
+      for (let i = 0; i < 1000; i++) {
+        const beat = rand() * 40 - 4;
+        const q = snapDrum(beat, s);
+        expect(q % s.grid === 0 || q % s.grid === -0).toBe(true);
+        expect(Math.abs(q - beat)).toBeLessThanOrEqual(Math.max(s.strongWindow, s.grid / 2) + 1e-9);
+      }
+    }
+    expect(Object.is(snapDrum(-0.1, little), 0)).toBe(true);
+  });
+
+  it('places drum hits exactly, wrapping the loop end to beat 0', () => {
+    const opts = { loopBeats: 8, grid: 0.5, strength: 0.9, snap: little };
+    expect(placeNote(7.8, opts)).toEqual({ beat: 0, absBeat: 8 });
+    expect(placeNote(10.27, opts)).toEqual({ beat: 2, absBeat: 10 });
+    expect(placeNote(3.27, { ...opts, grid: 0.25, snap: maker }).beat).toBe(3.25);
+  });
+
+  it('spots finger bounces', () => {
+    expect(isBounce(1, 1.1, 100)).toBe(true);
+    expect(isBounce(1, 1.2, 100)).toBe(false);
+    expect(isBounce(1, 0.95, 100)).toBe(false);
+  });
+});
+
+describe('grid lines', () => {
+  it('lists the lines inside a window', () => {
+    expect(gridLinesIn(0.9, 2.1, 0.5)).toEqual([1, 1.5, 2]);
+    expect(gridLinesIn(0, 1, 0.5, 0)).toEqual([0.5]);
+    expect(gridLinesIn(-1, 0.1, 0.5)).toEqual([-1, -0.5, 0]);
+    expect(gridLinesIn(2, 2, 0.5)).toEqual([]);
+  });
+
+  it('never repeats or skips a line across adjacent windows', () => {
+    expect([...gridLinesIn(0, 0.3, 0.25), ...gridLinesIn(0.3, 1, 0.25)]).toEqual([0, 0.25, 0.5, 0.75]);
+    // Windows like the transport's: tempo-based edges full of floating-point dust.
+    const spb = 60 / 137;
+    const lines: number[] = [];
+    let from = 0;
+    for (let i = 1; i <= 400; i++) {
+      const to = (i * 0.025) / spb;
+      lines.push(...gridLinesIn(from, to, 0.25));
+      from = to;
+    }
+    expect(lines).toEqual(Array.from({ length: lines.length }, (_, i) => i * 0.25));
+    expect(lines.length).toBe(Math.ceil(from / 0.25 - 1e-9));
+  });
+
+  it('finds the next time a loop note comes round', () => {
+    expect(nextOccurrence(2.5, 8, 10.6)).toBe(18.5);
+    expect(nextOccurrence(2.5, 8, 10.5)).toBe(10.5);
+    expect(nextOccurrence(7, 8, -1)).toBe(-1);
+    expect(nextOccurrence(0, 8, -0.5)).toBe(0);
+  });
+
+  it('finds the next grid line', () => {
+    expect(nextLine(3.01, 0.25)).toBe(3.25);
+    expect(nextLine(3, 0.25)).toBe(3);
+    expect(nextLine(-0.3, 0.5)).toBe(0);
   });
 });
 
@@ -138,6 +244,12 @@ describe('loop recording', () => {
     expect(next.notes.some((n) => n.id === 'first')).toBe(false);
     expect(next.notes.some((n) => n.id === 'n1')).toBe(true);
     expect(next.notes[next.notes.length - 1].id).toBe('new');
+  });
+
+  it('honours a per-monster clip cap', () => {
+    const clip = clipOf(Array.from({ length: 4 }, (_, i) => note(`n${i}`, i, 1)));
+    const next = insertRecordedNote(clip, note('new', 6, 2), { grid: 0.5, isDrum: false, protectedIds: new Set(), maxNotes: 4 });
+    expect(next.notes.map((n) => n.id)).toEqual(['n1', 'n2', 'n3', 'new']);
   });
 
   it('treats the last slot and slot zero as different slots', () => {

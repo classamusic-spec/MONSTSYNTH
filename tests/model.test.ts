@@ -3,7 +3,9 @@ import { paintingNotes, strokeToNotes } from '../src/magic/painting';
 import { songName } from '../src/magic/names';
 import { createProject, projectMeta } from '../src/model/project';
 import { migrateProject, migrateSettings, DEFAULT_SETTINGS } from '../src/model/schema';
-import { nextFxLevel, nextPreset } from '../src/model/monsters';
+import { MONSTERS, nextFxLevel, nextPreset } from '../src/model/monsters';
+import { recordNote } from '../src/model/edits';
+import { activeClip } from '../src/model/project';
 import type { Stroke } from '../src/model/types';
 import { PAINT_ROW } from '../src/model/types';
 
@@ -62,6 +64,30 @@ describe('schema migration', () => {
     expect(p.arrangement.rows[p.tracks[0].id]).toEqual([null, null, null, null]);
     expect(p.painting.strokes).toHaveLength(1);
     expect(p.painting.strokes[0].points).toEqual([0.1, 0.2]);
+  });
+
+  it('keeps notes in recording order, so a full loop still drops the oldest recording after a reload', () => {
+    let p = createProject({ seed: 4 });
+    const boom = p.tracks.find((t) => t.monster === 'boom')!;
+    const cap = MONSTERS.boom.maxClipNotes;
+    // A fine grid gives every note its own slot, so only the clip cap can drop one.
+    const opts = { grid: 0.05, isDrum: true, protectedIds: new Set<string>(), maxNotes: cap };
+    // Recorded in the order beat 3, beat 1, beat 2, then hats until the loop is full.
+    const n = (id: string, beat: number, step: number) => ({ id, beat, step, dur: 0.5, vel: 0.8, tone: 0 });
+    for (const [id, beat] of [['b3', 3], ['b1', 1], ['b2', 2]] as const) p = recordNote(p, boom.id, n(id, beat, 0), opts);
+    for (let i = 0; i < cap - 3; i++) p = recordNote(p, boom.id, n(`h${i}`, i * 0.05, 1), opts);
+    expect(activeClip(p.tracks[1])!.notes).toHaveLength(cap);
+    const loaded = migrateProject(JSON.parse(JSON.stringify(p)))!;
+    const clipBefore = activeClip(p.tracks[1])!;
+    const clipAfter = activeClip(loaded.tracks[1])!;
+    expect(clipAfter.notes.map((x) => x.id)).toEqual(clipBefore.notes.map((x) => x.id));
+    // One more note overfills the loop: the first recording (beat 3) goes, not the earliest beat.
+    const next = recordNote(loaded, boom.id, n('new', 7.5, 7), opts);
+    const ids = activeClip(next.tracks[1])!.notes.map((x) => x.id);
+    expect(ids).toHaveLength(cap);
+    expect(ids).not.toContain('b3');
+    expect(ids).toContain('b1');
+    expect(ids[ids.length - 1]).toBe('new');
   });
 
   it('rejects non-objects', () => {

@@ -104,12 +104,12 @@ export const MonsterPod = memo(function MonsterPod({ track, selected }: { track:
     el.style.filter = filter;
   };
 
-  const endGesture = () => {
+  const endGesture = (at?: number) => {
     const g = gesture.current;
     if (!g) return;
     if (g.holdTimer) clearTimeout(g.holdTimer);
     if (g.rollId !== null) studio.stopRoll(g.rollId);
-    studio.release(g.liveId);
+    studio.release(g.liveId, at);
     if (g.wiggling) studio.setLiveWiggle(track.id, false);
     gesture.current = null;
     shape(1, 1, '', true);
@@ -139,7 +139,7 @@ export const MonsterPod = memo(function MonsterPod({ track, selected }: { track:
     const rel = Math.min(1, Math.max(0, 1 - (e.clientY - rect.top) / rect.height));
     const step = track.monster === 'boom' ? drumPadFor(rel) : Math.round(rel * 7);
     const vel = e.pointerType === 'pen' && e.pressure > 0 ? 0.5 + e.pressure * 0.5 : 0.88;
-    const liveId = studio.press(track.id, step, { vel, size: getSize(track.id) });
+    const liveId = studio.press(track.id, step, { vel, size: getSize(track.id) }, { at: e.timeStamp });
     const g: Gesture = {
       pointerId: e.pointerId,
       liveId,
@@ -156,6 +156,7 @@ export const MonsterPod = memo(function MonsterPod({ track, selected }: { track:
       moved: false,
     };
     if (info.percussive) {
+      // Holding on: a roll, locked to the beat grid (its first hit is on the next grid line).
       g.holdTimer = setTimeout(() => {
         if (gesture.current === g && !g.moved) g.rollId = studio.startRoll(track.id, step, { vel: 0.8, size: getSize(track.id) });
       }, HOLD_MS);
@@ -218,10 +219,10 @@ export const MonsterPod = memo(function MonsterPod({ track, selected }: { track:
   const onPointerUp = (e: ReactPointerEvent<HTMLButtonElement>) => {
     pointers.current.delete(e.pointerId);
     if (pinch.current && pinch.current.ids.includes(e.pointerId)) pinch.current = null;
-    if (gesture.current?.pointerId === e.pointerId) endGesture();
+    if (gesture.current?.pointerId === e.pointerId) endGesture(e.timeStamp);
   };
 
-  useEffect(() => endGesture, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => endGesture(), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Loop badge: tap = sleep/wake, hold 1 s = clear the loop (undo brings it back).
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

@@ -356,6 +356,12 @@ export const MIMIC_SINGER: SynthPatch = {
   formant: true,
 };
 
+/**
+ * The metronome: Boom's plain kit playing the woodblock tick (drum TICK_PAD),
+ * on a quiet channel so it guides without covering the child's drums.
+ */
+export const METRONOME = { preset: 'stompy-kit', volume: 0.28, vel: 0.6, accentVel: 0.9, accentBend: 3 } as const;
+
 export function patchFor(presetId: string): Patch {
   return PATCHES[presetId] ?? PATCHES['bubble-lead'];
 }

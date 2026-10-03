@@ -28,6 +28,11 @@ export interface ChannelSpec {
   fx: FxLevels;
   volume: number;
   maxVoices: number;
+  /**
+   * Channels the song does not own (the metronome, lessons, painting, previews):
+   * syncChannels() leaves them alone, so a costume change never cuts them off.
+   */
+  persistent?: boolean;
 }
 
 export interface NoteRequest extends VoiceParams {
@@ -46,6 +51,7 @@ export class AudioEngine {
   private gloopIn: GainNode;
   private channels = new Map<string, Channel>();
   private channelLimits = new Map<string, number>();
+  private persistent = new Set<string>();
   private voices: Voice[] = [];
   private tempo = 100;
   private level = 0.8;
@@ -134,10 +140,11 @@ export class AudioEngine {
 
   // ── Channels ──────────────────────────────────────────────────────────────
 
+  /** Make the channel set match the song's tracks (persistent channels stay). */
   syncChannels(specs: ChannelSpec[]) {
     const keep = new Set(specs.map((s) => s.id));
     for (const [id, ch] of this.channels) {
-      if (!keep.has(id) && !id.startsWith('paint:')) {
+      if (!keep.has(id) && !this.persistent.has(id)) {
         ch.dispose();
         this.channels.delete(id);
       }
@@ -164,6 +171,8 @@ export class AudioEngine {
       ch.setVolume(spec.volume);
     }
     this.channelLimits.set(spec.id, spec.maxVoices);
+    if (spec.persistent) this.persistent.add(spec.id);
+    else this.persistent.delete(spec.id);
     return ch;
   }
 
@@ -251,11 +260,15 @@ export class AudioEngine {
     return this.createVoice(req, when, true, durSec);
   }
 
-  /** Transport stop: fade out and cancel everything the sequencer scheduled. */
-  stopSequenced(fade = 0.06) {
+  /**
+   * Transport stop: fade out and cancel everything the sequencer scheduled
+   * (only what starts before `startedBefore`, so a finale already queued survives).
+   */
+  stopSequenced(fade = 0.06, startedBefore = Infinity) {
     const now = this.ctx.currentTime;
-    for (const v of this.voices) if (v.sequenced) v.kill(now, fade);
-    this.voices = this.voices.filter((v) => !v.sequenced);
+    const stops = (v: Voice) => v.sequenced && v.startTime < startedBefore;
+    for (const v of this.voices) if (stops(v)) v.kill(now, fade);
+    this.voices = this.voices.filter((v) => !stops(v));
   }
 
   allNotesOff() {

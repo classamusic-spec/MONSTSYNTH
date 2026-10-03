@@ -18,6 +18,7 @@ import { recordLessonStars, saveLessonAsSong } from '../../store/actions';
 import { getState, useApp } from '../../store/store';
 import { studio, type LessonEvent } from '../../studio/studio';
 import { onNote } from '../../studio/visualBus';
+import { glow } from '../common/glow';
 import { isReducedMotion } from '../hooks/useCaps';
 import { Icon } from '../icons/Icon';
 import { MonsterArt } from '../monsters/MonsterArt';
@@ -200,10 +201,7 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
       const [p, i] = v.noteId.slice(7).split(':').map(Number);
       if (p !== phraseRef.current) setPhrase(p);
       const key = keyEls.current[v.step];
-      if (key) {
-        key.dataset.glow = 'true';
-        setTimeout(() => (key.dataset.glow = 'false'), Math.min(450, Math.max(140, v.dur * 1000)));
-      }
+      if (key) glow(key, Math.min(450, Math.max(140, v.dur * 1000)));
       requestAnimationFrame(() => {
         wordEls.current.forEach((w, j) => {
           if (w) w.dataset.now = String(j === i);
@@ -222,9 +220,7 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
 
   const flash = (k: number, attr: 'down' | 'wrong' | 'hint', ms: number) => {
     const el = keyEls.current[k];
-    if (!el) return;
-    el.dataset[attr] = 'true';
-    setTimeout(() => (el.dataset[attr] = 'false'), ms);
+    if (el) glow(el, ms, attr);
   };
 
   const finish = () => {

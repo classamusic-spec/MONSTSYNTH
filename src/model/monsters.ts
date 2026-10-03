@@ -1,3 +1,4 @@
+import type { DrumSnap } from '../magic/timing';
 import type { AgeMode, FxKind, FxLevels, MonsterKind } from './types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -42,6 +43,8 @@ export interface MonsterInfo {
   /** MIDI note of scale step 0 when the song is in C. */
   baseMidi: number;
   maxVoices: number;
+  /** Notes one loop can hold; recording beyond it lets go of the oldest recording. */
+  maxClipNotes: number;
   glyph: KeyGlyph;
   presets: PresetInfo[];
   defaultFx: FxLevels;
@@ -64,6 +67,7 @@ export const MONSTERS: Record<MonsterKind, MonsterInfo> = {
     percussive: false,
     baseMidi: 60,
     maxVoices: 6,
+    maxClipNotes: 96,
     glyph: 'bubble',
     presets: [
       { id: 'bubble-lead', name: 'Bubble Lead', accessory: 'none' },
@@ -87,6 +91,7 @@ export const MONSTERS: Record<MonsterKind, MonsterInfo> = {
     percussive: true,
     baseMidi: 36,
     maxVoices: 10,
+    maxClipNotes: 160,
     glyph: 'drum',
     presets: [
       { id: 'stompy-kit', name: 'Stompy Kit', accessory: 'none' },
@@ -109,6 +114,7 @@ export const MONSTERS: Record<MonsterKind, MonsterInfo> = {
     percussive: false,
     baseMidi: 36,
     maxVoices: 3,
+    maxClipNotes: 96,
     glyph: 'blob',
     presets: [
       { id: 'big-belly-bass', name: 'Big Belly Bass', accessory: 'none' },
@@ -131,6 +137,7 @@ export const MONSTERS: Record<MonsterKind, MonsterInfo> = {
     percussive: true,
     baseMidi: 72,
     maxVoices: 8,
+    maxClipNotes: 96,
     glyph: 'star',
     presets: [
       { id: 'star-bells', name: 'Star Bells', accessory: 'none' },
@@ -153,6 +160,7 @@ export const MONSTERS: Record<MonsterKind, MonsterInfo> = {
     percussive: false,
     baseMidi: 48,
     maxVoices: 3,
+    maxClipNotes: 96,
     glyph: 'cloud',
     presets: [
       { id: 'cloud-nap', name: 'Cloud Nap', accessory: 'none' },
@@ -175,6 +183,7 @@ export const MONSTERS: Record<MonsterKind, MonsterInfo> = {
     percussive: false,
     baseMidi: 60,
     maxVoices: 4,
+    maxClipNotes: 96,
     glyph: 'heart',
     presets: [
       { id: 'mimic-me', name: 'Just Me', accessory: 'none' },
@@ -232,8 +241,12 @@ export interface ModeCaps {
   redo: boolean;
   magicPanel: boolean;
   showNames: boolean;
+  /** Melodic monsters: soft pull towards this grid (beats) … */
   quantizeGrid: number;
+  /** … by this much (1 = exactly on the grid). */
   quantizeStrength: number;
+  /** Boom: hard snap with an on-beat magnet (see snapDrum). */
+  drumSnap: DrumSnap;
   rowMuteSolo: boolean;
 }
 
@@ -248,6 +261,7 @@ export const MODE_CAPS: Record<AgeMode, ModeCaps> = {
     showNames: false,
     quantizeGrid: 0.5,
     quantizeStrength: 0.9,
+    drumSnap: { grid: 0.5, strongGrid: 1, strongWindow: 0.3 },
     rowMuteSolo: false,
   },
   maker: {
@@ -260,6 +274,7 @@ export const MODE_CAPS: Record<AgeMode, ModeCaps> = {
     showNames: true,
     quantizeGrid: 0.25,
     quantizeStrength: 0.75,
+    drumSnap: { grid: 0.25, strongGrid: 0.5, strongWindow: 0.1 },
     rowMuteSolo: true,
   },
 };

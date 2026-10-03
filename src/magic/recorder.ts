@@ -1,5 +1,5 @@
 import type { Clip, NoteEvent } from '../model/types';
-import { gridSlot, softQuantize, wrap } from './timing';
+import { gridSlot, snapDrum, softQuantize, wrap, type DrumSnap } from './timing';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MONSTER MAGIC · loop recording rules.
@@ -7,22 +7,27 @@ import { gridSlot, softQuantize, wrap } from './timing';
 // Recording is a looper: while the red button is on, the loop keeps circling and
 // everything a child plays is dropped into it. Rules that keep loops musical:
 //
-//  • Soft quantisation pulls each note towards the grid.
+//  • Soft quantisation pulls each note towards the grid; drums snap exactly
+//    onto it (with a magnet towards the strong beats).
 //  • "Replace, don't pile up": a new note replaces notes recorded on an *earlier*
 //    pass in the same grid slot. Notes played together on this pass (chords,
 //    drum layers) are kept. Loops stay clean however long a child keeps playing.
 //  • Drums only replace the same drum in a slot, so kick + snare can layer.
 //  • Hard caps on notes per slot and per clip protect the mix and the CPU.
-//    Notes are kept in the order they were recorded (the sequencer sorts by
-//    time itself), so a cap always lets go of the oldest notes first.
+//    Notes are kept in the order they were recorded, also across saving and
+//    loading (the sequencer sorts by time itself), so a cap always lets go of
+//    the oldest recording first.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Default cap on notes in one loop (each monster has its own, see MONSTERS[m].maxClipNotes). */
 export const MAX_NOTES_PER_CLIP = 96;
 
 export interface PlacementOptions {
   loopBeats: number;
   grid: number;
   strength: number;
+  /** Drums: snap exactly with an on-beat magnet instead of the soft pull. */
+  snap?: DrumSnap;
 }
 
 export interface Placement {
@@ -34,7 +39,7 @@ export interface Placement {
 
 /** Where a note played at transport beat `absBeat` lands in the loop. */
 export function placeNote(absBeat: number, opts: PlacementOptions): Placement {
-  const q = softQuantize(absBeat, opts.grid, opts.strength);
+  const q = opts.snap ? snapDrum(absBeat, opts.snap) : softQuantize(absBeat, opts.grid, opts.strength);
   return { beat: wrap(q, opts.loopBeats), absBeat: q };
 }
 
@@ -45,6 +50,8 @@ export interface InsertOptions {
   /** Notes recorded on the current pass. They are never replaced (chords, layers). */
   protectedIds: ReadonlySet<string>;
   maxPerSlot?: number;
+  /** Cap on notes in the clip (default MAX_NOTES_PER_CLIP). */
+  maxNotes?: number;
 }
 
 export function insertRecordedNote(clip: Clip, note: NoteEvent, opts: InsertOptions): Clip {
@@ -70,9 +77,10 @@ export function insertRecordedNote(clip: Clip, note: NoteEvent, opts: InsertOpti
   }
 
   notes.push(note);
-  if (notes.length > MAX_NOTES_PER_CLIP) {
+  const maxNotes = opts.maxNotes ?? MAX_NOTES_PER_CLIP;
+  if (notes.length > maxNotes) {
     // Keep the newest material; drop the oldest unprotected recordings first.
-    const excess = notes.length - MAX_NOTES_PER_CLIP;
+    const excess = notes.length - maxNotes;
     const removable = notes.filter((n) => n.id !== note.id && !opts.protectedIds.has(n.id)).slice(0, excess);
     const drop = new Set(removable.map((n) => n.id));
     notes = notes.filter((n) => !drop.has(n.id));

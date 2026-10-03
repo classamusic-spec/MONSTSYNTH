@@ -27,8 +27,8 @@ export interface StudioPosition {
   beat: number;
   loopBeats: number;
   songBeats: number;
-  /** 0..1 output level. */
-  level: number;
+  /** 0..1 output level (measured when read). */
+  readonly level: number;
 }
 
 export type StudioEvent =
@@ -56,12 +56,20 @@ export function emitNote(v: NoteVisual) {
   for (const l of noteListeners) l(v);
 }
 
+let lastFrame: StudioPosition | null = null;
+
+/**
+ * Frames come every animation frame while the band plays; when it is stopped
+ * they rest. A new listener gets the latest frame at once, so it never waits.
+ */
 export function onFrame(l: FrameListener): () => void {
   frameListeners.add(l);
+  if (lastFrame) l(lastFrame);
   return () => frameListeners.delete(l);
 }
 
 export function emitFrame(p: StudioPosition) {
+  lastFrame = p;
   for (const l of frameListeners) l(p);
 }
 

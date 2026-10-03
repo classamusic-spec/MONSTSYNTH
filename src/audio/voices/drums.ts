@@ -193,7 +193,31 @@ const boing: Hit = (ctx, bag, out, t, k) => {
   return t + dur + 0.1;
 };
 
-export const DRUM_HITS: Hit[] = [kick, snare, hat, clap, tom, crash, cowbell, boing];
+/** The metronome: a dry little woodblock, unlike any drum a child plays. */
+const tick: Hit = (ctx, bag, out, t, k) => {
+  const amp = bag.add(ctx.createGain());
+  amp.gain.setValueAtTime(0, t);
+  amp.gain.linearRampToValueAtTime(1, t + 0.002);
+  amp.gain.setTargetAtTime(0, t + 0.004, 0.012 * k.decay);
+  for (const [f, g] of [
+    [1700, 0.7],
+    [2600, 0.35],
+  ]) {
+    const o = bag.source(ctx.createOscillator());
+    o.type = 'triangle';
+    o.frequency.value = f * k.ratio;
+    const pg = bag.add(ctx.createGain());
+    pg.gain.value = g;
+    o.connect(pg).connect(amp);
+  }
+  amp.connect(out);
+  return t + 0.1 * k.decay + 0.03;
+};
+
+export const DRUM_HITS: Hit[] = [kick, snare, hat, clap, tom, crash, cowbell, boing, tick];
+
+/** The metronome's voice. It sits after the eight pads, so no pad can reach it. */
+export const TICK_PAD = 8;
 
 /** Which drums get the kit's drive/"tin can" resonance (cymbals stay clean). */
 const BODY_DRUMS = new Set([0, 1, 3, 4]);

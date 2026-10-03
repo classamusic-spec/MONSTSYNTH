@@ -1,17 +1,19 @@
 import { audibleTime, audioSupported, getAudioContext, inputCompensation, unlockAudio } from '../audio/context';
 import { AudioEngine, type ChannelSpec } from '../audio/engine';
 import { MicCapture, micSupported } from '../audio/mic';
+import { METRONOME } from '../audio/presets';
 import { Transport } from '../audio/transport';
 import type { Voice } from '../audio/voices/base';
+import { TICK_PAD } from '../audio/voices/drums';
 import { audioBufferToWav, blobToAudioBuffer } from '../audio/wav';
 import { placeNote } from '../magic/recorder';
 import { collectEvents, type PlayMode, type SeqEvent } from '../magic/sequence';
-import { quantizeDuration } from '../magic/timing';
+import { gridLinesIn, isBounce, nextLine, snapDuration, wrap } from '../magic/timing';
 import { recordNote, setRecordedDuration, setTrackSample } from '../model/edits';
 import { newId } from '../model/ids';
 import { MODE_CAPS, MONSTERS } from '../model/monsters';
 import { projectHasMusic, songBeats, trackHasLoop } from '../model/project';
-import type { MonsterKind, Project, Settings, Track } from '../model/types';
+import type { MonsterKind, NoteEvent, Project, Settings, Track } from '../model/types';
 import { flushSave, loadSample, saveSample } from '../store/persistence';
 import { beginGroup, commit, endGroup, getState, redo, setState, undo, useApp, type TransportFlags } from '../store/store';
 import { noteRequest, type Expression } from './notes';
@@ -34,6 +36,9 @@ interface LiveNote {
   size: number;
   bend: number;
   voice: Voice | null;
+  /** AudioContext time the finger came down (from the touch's own timestamp when known). */
+  t0: number;
+  /** The note being recorded; `startAbs` is its snapped (unwrapped) start. */
   rec: { noteId: string; startAbs: number } | null;
   /** Feedback sounds (buddy taps, painting, previews) are heard but never recorded. */
   recordable: boolean;
@@ -45,6 +50,10 @@ interface RecordSession {
   lastActivityBeat: number;
   notes: number;
   firstLoopFor: Set<string>;
+  /** The click plays for the whole take when it began without an awake drum loop. */
+  click: boolean;
+  /** Last recorded hit of each drum (`trackId:pad`), for the bounce filter. */
+  lastHit: Map<string, number>;
 }
 
 interface ClickEvent {
@@ -53,7 +62,27 @@ interface ClickEvent {
   accent: boolean;
 }
 
-type Scheduled = SeqEvent | ClickEvent;
+/** One hit of a held roll, on a grid line. */
+interface RollEvent {
+  absBeat: number;
+  roll: number;
+}
+
+type Scheduled = SeqEvent | ClickEvent | RollEvent;
+
+/** Holding Boom or Spark: repeated hits on the beat grid. */
+interface Roll {
+  trackId: string;
+  monster: MonsterKind;
+  step: number;
+  vel: number;
+  tone: number;
+  size: number;
+  /** The clock it rides: the band's transport, or its own when nothing else plays. */
+  clock: 'main' | 'solo';
+  /** Grid lines up to here (beats on that clock) have been scheduled. */
+  after: number;
+}
 
 /** A note in a song lesson (a phrase the teacher sings, or the whole song with its band). */
 export interface LessonEvent {
@@ -75,10 +104,41 @@ export interface LessonPlayback {
   onEnd?: () => void;
 }
 
-const CLICK_CHANNEL = 'metronome';
+/** The metronome: a woodblock tick on a channel of its own that no song change touches. */
+const CLICK: ChannelSpec = {
+  id: 'metronome',
+  monster: 'boom',
+  preset: METRONOME.preset,
+  fx: { echo: 0, gloop: 0, chomper: 0, wiggle: 0 },
+  volume: METRONOME.volume,
+  maxVoices: 4,
+  persistent: true,
+};
+
+/** A live drum hit this close to the loop playing the same drum is left to the loop (no flam). */
+const FLAM_WINDOW = 0.06;
+/** Frames keep coming this long after the band stops, so last animations can finish. */
+const IDLE_SETTLE_MS = 600;
+/** Touch timestamps older than this are not trusted (seconds). */
+const MAX_TOUCH_LAG = 0.15;
+/** A roll's first hit is at least this far ahead (seconds), so it is scheduled on time. */
+const ROLL_LEAD = 0.02;
 
 function isClick(e: Scheduled): e is ClickEvent {
   return (e as ClickEvent).click === true;
+}
+
+function isRoll(e: Scheduled): e is RollEvent {
+  return (e as RollEvent).roll !== undefined;
+}
+
+/**
+ * How long ago a touch happened, from its event timestamp (performance.now()
+ * milliseconds): the handler may run tens of ms late on a busy tablet.
+ */
+function touchLag(at?: number): number {
+  if (at === undefined) return 0;
+  return Math.min(MAX_TOUCH_LAG, Math.max(0, (performance.now() - at) / 1000));
 }
 
 function setTransport(patch: Partial<TransportFlags>) {
@@ -108,7 +168,16 @@ class Studio {
   private channelSample = new Map<string, string | null>();
   private tempo = 0;
   private mic: MicCapture | null = null;
-  private rolls = new Map<number, ReturnType<typeof setInterval>>();
+  private rolls = new Map<number, Roll>();
+  /** Plays held rolls when the band is not playing. */
+  private rollTransport: Transport<Scheduled> | null = null;
+  /** When the loop plays each drum (`channelId:pad` → AudioContext times), for the flam guard. */
+  private seqHits = new Map<string, number[]>();
+  /** Start of the finale, while a song is ending (its voices outlive the tail fade). */
+  private finaleAt = Infinity;
+  /** What the last idle frame showed; frames rest while nothing changes. */
+  private idleKey = '';
+  private idleSince = 0;
 
   get ready(): boolean {
     return !!this.engine;
@@ -144,7 +213,12 @@ class Studio {
     this.transport = new Transport<Scheduled>(ctx, {
       provide: (from, to) => this.provide(from, to),
       schedule: (e, when) => this.schedule(e, when),
+      ending: (when) => this.finale(when),
       ended: () => this.songEnded(),
+    });
+    this.rollTransport = new Transport<Scheduled>(ctx, {
+      provide: (from, to) => this.rollEvents('solo', from, to),
+      schedule: (e, when) => this.schedule(e, when),
     });
     useApp.subscribe((state, prev) => {
       if (state.project !== prev.project) this.syncProject(state.project);
@@ -214,6 +288,7 @@ class Studio {
       this.tempo = p.tempo;
       engine.setTempo(p.tempo);
       this.transport?.setTempo(p.tempo);
+      this.rollTransport?.setTempo(p.tempo);
     }
     for (const t of p.tracks) {
       if (t.monster !== 'mimic') continue;
@@ -263,9 +338,14 @@ class Studio {
 
   // ── Live performance ──────────────────────────────────────────────────────
 
-  press(trackId: string, step: number, expr: Partial<Expression> = {}, opts: { record?: boolean } = {}): number {
+  /**
+   * A finger goes down. `opts.at` is the touch's own timestamp (event.timeStamp):
+   * recording measures from it, so a busy main thread does not make notes late.
+   */
+  press(trackId: string, step: number, expr: Partial<Expression> = {}, opts: { record?: boolean; at?: number } = {}): number {
     const engine = this.engine;
-    if (!engine) return -1;
+    const ctx = this.ctx;
+    if (!engine || !ctx) return -1;
     const s = getState();
     if (s.resting) return -1;
     const track = s.project.tracks.find((t) => t.id === trackId);
@@ -275,10 +355,14 @@ class Studio {
     const size = expr.size ?? 0;
     const bend = expr.bend ?? 0;
     const req = noteRequest(s.project, track.monster, track.id, step, { vel, tone, size, bend });
-    const voice = engine.noteOn(req);
+    // Flam guard: playing along with a drum the loop is hitting right now, the
+    // loop's hit is the one heard (it is on the beat). The touch still shows and records.
+    const flam = track.monster === 'boom' && s.transport.playing && this.seqHitNear(track.id, step, ctx.currentTime);
+    const voice = flam ? null : engine.noteOn(req);
     const id = ++this.liveSeq;
     const recordable = opts.record !== false;
-    const live: LiveNote = { id, trackId, monster: track.monster, step, vel, tone, size, bend, voice, rec: null, recordable };
+    const t0 = ctx.currentTime - touchLag(opts.at);
+    const live: LiveNote = { id, trackId, monster: track.monster, step, vel, tone, size, bend, voice, t0, rec: null, recordable };
     this.live.set(id, live);
     emitNote({ trackId, monster: track.monster, step, vel, dur: 0.35, source: 'live' });
     if (recordable && (s.transport.recording || s.transport.armed)) this.recordStart(live);
@@ -311,16 +395,18 @@ class Studio {
     const t = getState().transport;
     if (t.recording && live.recordable) {
       this.finishRecNote(live);
+      live.t0 = now;
       this.recordStart(live);
     }
   }
 
-  release(id: number) {
+  /** A finger lifts; `at` is its event timestamp, as for press(). */
+  release(id: number, at?: number) {
     const live = this.live.get(id);
     if (!live) return;
     this.live.delete(id);
     this.engine?.noteOff(live.voice);
-    this.finishRecNote(live);
+    this.finishRecNote(live, touchLag(at));
   }
 
   releaseAll() {
@@ -342,26 +428,119 @@ class Studio {
     const id = `paint:${monster}`;
     const info = MONSTERS[monster];
     if (!engine.hasChannel(id)) {
-      engine.ensureChannel({ id, monster, preset: info.presets[0].id, fx: info.defaultFx, volume: 0.75, maxVoices: info.maxVoices });
+      engine.ensureChannel({ id, monster, preset: info.presets[0].id, fx: info.defaultFx, volume: 0.75, maxVoices: info.maxVoices, persistent: true });
     }
     engine.trigger(noteRequest(getState().project, monster, id, step, { vel }), ctx.currentTime, 0.25);
     emitNote({ trackId: null, monster, step, vel, dur: 0.25, source: 'live' });
   }
 
-  /** Holding Boom or Spark: a roll of repeated hits, eighth notes at the song tempo. */
+  /**
+   * Holding Boom or Spark: a roll of repeated hits locked to the beat grid
+   * (eighths in Little mode, sixteenths in Maker), starting on the next grid
+   * line. While the band plays it rides the band's clock (and records); when
+   * nothing plays it gets a little clock of its own at the song's tempo.
+   */
   startRoll(trackId: string, step: number, expr: Partial<Expression> = {}): number {
-    const tempo = getState().project.tempo;
-    const period = (60 / tempo / 2) * 1000;
+    const s = getState();
+    const track = s.project.tracks.find((t) => t.id === trackId);
+    if (!this.engine || !track || s.resting) return -1;
     const id = ++this.liveSeq;
-    const timer = setInterval(() => this.hit(trackId, step, { ...expr, vel: (expr.vel ?? 0.8) * 0.85 }), period);
-    this.rolls.set(id, timer);
+    const roll: Roll = {
+      trackId,
+      monster: track.monster,
+      step,
+      vel: (expr.vel ?? 0.8) * 0.85,
+      tone: expr.tone ?? 0,
+      size: expr.size ?? 0,
+      clock: 'main',
+      after: -Infinity,
+    };
+    this.rolls.set(id, roll);
+    this.homeRoll(id, roll);
     return id;
   }
 
+  /** Letting go ends the roll. A hit already in the look-ahead window (≤ 120 ms) still sounds. */
   stopRoll(id: number) {
-    const timer = this.rolls.get(id);
-    if (timer) clearInterval(timer);
     this.rolls.delete(id);
+    if (![...this.rolls.values()].some((r) => r.clock === 'solo')) this.rollTransport?.stop();
+  }
+
+  private rollGrid(): number {
+    return MODE_CAPS[getState().settings.ageMode].drumSnap.grid;
+  }
+
+  /** Put a roll on the clock that runs now; its next hit is the next grid line. */
+  private homeRoll(id: number, roll: Roll) {
+    const ctx = this.ctx;
+    const main = this.transport;
+    const solo = this.rollTransport;
+    if (!ctx || !main || !solo) return;
+    const grid = this.rollGrid();
+    if (!main.playing && !solo.playing) {
+      roll.clock = 'solo';
+      roll.after = -grid / 2;
+      solo.setTempo(getState().project.tempo);
+      solo.start({ atTime: ctx.currentTime + ROLL_LEAD, fromBeat: 0 });
+      return;
+    }
+    const clock = main.playing ? main : solo;
+    roll.clock = main.playing ? 'main' : 'solo';
+    const first = nextLine(clock.beatAt(ctx.currentTime + ROLL_LEAD), grid);
+    roll.after = first - grid / 2;
+    // Lines the clock has already handed out would be skipped: schedule them now.
+    for (const line of gridLinesIn(first, clock.scheduledUntil, grid)) {
+      roll.after = line;
+      this.schedule({ absBeat: line, roll: id }, clock.timeAt(line));
+    }
+  }
+
+  /** The band started or stopped: held rolls move to the clock that runs now. */
+  private rehomeRolls() {
+    this.rollTransport?.stop();
+    for (const [id, roll] of this.rolls) this.homeRoll(id, roll);
+  }
+
+  private rollEvents(clock: 'main' | 'solo', from: number, to: number): RollEvent[] {
+    const out: RollEvent[] = [];
+    if (this.rolls.size === 0) return out;
+    const grid = this.rollGrid();
+    for (const [id, roll] of this.rolls) {
+      if (roll.clock !== clock) continue;
+      for (const line of gridLinesIn(from, to, grid, roll.after)) {
+        out.push({ absBeat: line, roll: id });
+        roll.after = line;
+      }
+    }
+    return out;
+  }
+
+  private playRoll(e: RollEvent, when: number) {
+    const engine = this.engine;
+    const roll = this.rolls.get(e.roll);
+    if (!engine || !roll) return;
+    const p = getState().project;
+    if (!p.tracks.some((t) => t.id === roll.trackId)) return;
+    // The loop already hits this drum on this line: one hit, not two.
+    if (roll.monster !== 'boom' || !this.seqHitNear(roll.trackId, roll.step, when)) {
+      engine.trigger(noteRequest(p, roll.monster, roll.trackId, roll.step, roll), when, 0.12);
+    }
+    this.queueVisual(when, { trackId: roll.trackId, monster: roll.monster, step: roll.step, vel: roll.vel, dur: 0.35, source: 'live' });
+    if (roll.clock === 'main' && getState().transport.recording) this.recordAt(roll, e.absBeat);
+  }
+
+  /** Did the loop schedule this drum within the flam window of `at`? */
+  private seqHitNear(channelId: string, pad: number, at: number): boolean {
+    const times = this.seqHits.get(`${channelId}:${pad}`);
+    return !!times && times.some((t) => Math.abs(t - at) < FLAM_WINDOW);
+  }
+
+  private noteSeqHit(channelId: string, pad: number, when: number) {
+    const key = `${channelId}:${pad}`;
+    const now = this.ctx?.currentTime ?? 0;
+    const times = (this.seqHits.get(key) ?? []).filter((t) => t > now - 0.25);
+    times.push(when);
+    this.seqHits.set(key, times);
   }
 
   /** Shaking a monster makes its sound wobble (vibrato) while the shake lasts. */
@@ -401,59 +580,101 @@ class Studio {
   private recordStart(live: LiveNote) {
     const ctx = this.ctx;
     const transport = this.transport;
-    if (!ctx || !transport || !this.session) return;
+    const session = this.session;
+    if (!ctx || !transport || !session) return;
     const s = getState();
     const p = s.project;
     const caps = MODE_CAPS[s.settings.ageMode];
+    // Where the child heard themselves play: the touch time, minus output latency and touch delay.
+    const heard = live.t0 - inputCompensation(ctx);
     let abs: number;
     if (s.transport.armed) {
-      // Monster Magic: the first note of a new song *is* the downbeat.
-      transport.setTempo(p.tempo);
-      this.mode = 'loop';
-      this.skipBefore.clear();
-      setTransport({ playing: true, recording: true, armed: false, mode: 'loop' });
-      transport.start({ atTime: ctx.currentTime, fromBeat: 0 });
+      // Monster Magic: the first note of a new song *is* the downbeat. The loop
+      // starts where the finger landed, so every later note is measured alike.
+      setTransport({ recording: true, armed: false });
+      this.startTransport('loop', 0, heard);
       abs = 0;
     } else {
-      abs = transport.beatAt(ctx.currentTime - inputCompensation(ctx));
+      abs = transport.beatAt(heard);
     }
-    const place = placeNote(abs, { loopBeats: p.loopBeats, grid: caps.quantizeGrid, strength: caps.quantizeStrength });
-    const noteId = newId('n');
+    const drum = live.monster === 'boom';
+    if (drum) {
+      // A finger bouncing on a drum is one hit (it still sounded, it is just not recorded twice).
+      const key = `${live.trackId}:${live.step}`;
+      const prev = session.lastHit.get(key);
+      if (prev !== undefined && isBounce(prev, abs, p.tempo)) return;
+      session.lastHit.set(key, abs);
+    }
+    const grid = drum ? caps.drumSnap.grid : caps.quantizeGrid;
+    const place = placeNote(abs, {
+      loopBeats: p.loopBeats,
+      grid: caps.quantizeGrid,
+      strength: caps.quantizeStrength,
+      snap: drum ? caps.drumSnap : undefined,
+    });
     const info = MONSTERS[live.monster];
-    const track = p.tracks.find((t) => t.id === live.trackId);
-    const hadLoop = track ? trackHasLoop(track) : false;
-    const protectedIds = this.protectedIds(abs, p.loopBeats);
-    commit(
-      (proj) =>
-        recordNote(
-          proj,
-          live.trackId,
-          { id: noteId, beat: place.beat, dur: info.sustain ? 0.25 : 0.5, step: live.step, vel: live.vel, tone: live.tone },
-          { grid: caps.quantizeGrid, isDrum: live.monster === 'boom', protectedIds },
-        ),
-      { undoable: false },
-    );
-    // The child just heard this note live: don't play it again on this pass.
-    this.skipBefore.set(noteId, place.absBeat + caps.quantizeGrid * 0.5);
-    this.session.recent.set(noteId, abs);
-    this.session.lastActivityBeat = Math.max(this.session.lastActivityBeat, abs);
-    this.session.notes++;
-    live.rec = { noteId, startAbs: abs };
-    if (!hadLoop && !this.session.firstLoopFor.has(live.trackId)) {
-      this.session.firstLoopFor.add(live.trackId);
-      emitStudioEvent({ type: 'loop-created', trackId: live.trackId });
-    }
+    const note = { beat: place.beat, dur: info.sustain ? 0.25 : 0.5, step: live.step, vel: live.vel, tone: live.tone };
+    const noteId = this.commitRecorded(live.trackId, live.monster, note, place.absBeat, abs, grid);
+    live.rec = { noteId, startAbs: place.absBeat };
   }
 
-  private finishRecNote(live: LiveNote) {
+  /** A roll hit lands in the loop exactly on its grid line (it was played by the clock, not a finger). */
+  private recordAt(roll: Roll, absBeat: number) {
+    const session = this.session;
+    if (!session) return;
+    const s = getState();
+    const caps = MODE_CAPS[s.settings.ageMode];
+    const grid = roll.monster === 'boom' ? caps.drumSnap.grid : caps.quantizeGrid;
+    const note = { beat: wrap(absBeat, s.project.loopBeats), dur: 0.5, step: roll.step, vel: roll.vel, tone: roll.tone };
+    this.commitRecorded(roll.trackId, roll.monster, note, absBeat, absBeat, grid);
+    if (roll.monster === 'boom') session.lastHit.set(`${roll.trackId}:${roll.step}`, absBeat);
+  }
+
+  /**
+   * Drop a played note into the loop. `placedAbs` is its (snapped) transport
+   * beat, `heardAbs` when it was actually played.
+   */
+  private commitRecorded(
+    trackId: string,
+    monster: MonsterKind,
+    note: Omit<NoteEvent, 'id'>,
+    placedAbs: number,
+    heardAbs: number,
+    grid: number,
+  ): string {
+    const session = this.session!;
+    const p = getState().project;
+    const noteId = newId('n');
+    const track = p.tracks.find((t) => t.id === trackId);
+    const hadLoop = track ? trackHasLoop(track) : false;
+    const protectedIds = this.protectedIds(heardAbs, p.loopBeats);
+    commit(
+      (proj) =>
+        recordNote(proj, trackId, { id: noteId, ...note }, { grid, isDrum: monster === 'boom', protectedIds, maxNotes: MONSTERS[monster].maxClipNotes }),
+      { undoable: false },
+    );
+    // The child just heard this note: don't play it again on this pass.
+    this.skipBefore.set(noteId, placedAbs + grid * 0.5);
+    session.recent.set(noteId, heardAbs);
+    session.lastActivityBeat = Math.max(session.lastActivityBeat, heardAbs);
+    session.notes++;
+    if (!hadLoop && !session.firstLoopFor.has(trackId)) {
+      session.firstLoopFor.add(trackId);
+      emitStudioEvent({ type: 'loop-created', trackId });
+    }
+    return noteId;
+  }
+
+  /** A held note ends: its end snaps to the grid, measured from its snapped start. */
+  private finishRecNote(live: LiveNote, lag = 0) {
     const rec = live.rec;
     live.rec = null;
     const ctx = this.ctx;
     const transport = this.transport;
     if (!rec || !ctx || !transport || !MONSTERS[live.monster].sustain) return;
     const p = getState().project;
-    const endAbs = transport.beatAt(ctx.currentTime - inputCompensation(ctx));
-    const dur = quantizeDuration(Math.max(0.05, endAbs - rec.startAbs), 0.25, p.loopBeats);
+    const endAbs = transport.beatAt(ctx.currentTime - lag - inputCompensation(ctx));
+    const dur = snapDuration(rec.startAbs, endAbs - rec.startAbs, p.loopBeats);
     commit((proj) => setRecordedDuration(proj, live.trackId, rec.noteId, dur), { undoable: false });
     if (this.session) this.session.lastActivityBeat = Math.max(this.session.lastActivityBeat, endAbs);
   }
@@ -470,13 +691,23 @@ class Studio {
     if (!ctx || !transport) return;
     const s = getState();
     if (s.screen !== 'lab' || s.resting) return;
-    this.session = { token: beginGroup('record'), recent: new Map(), lastActivityBeat: 0, notes: 0, firstLoopFor: new Set() };
+    this.session = {
+      token: beginGroup('record'),
+      recent: new Map(),
+      lastActivityBeat: 0,
+      notes: 0,
+      firstLoopFor: new Set(),
+      // Decided once: a take that makes the drum loop keeps its click to the end.
+      click: !s.project.tracks.some((t) => t.monster === 'boom' && trackHasLoop(t) && !t.sleeping),
+      lastHit: new Map(),
+    };
     if (s.transport.playing && s.transport.mode === 'loop') {
       this.session.lastActivityBeat = transport.beatAt(ctx.currentTime);
       setTransport({ recording: true });
     } else if (projectHasMusic(s.project)) {
-      this.startTransport('loop');
+      // Flags first: the transport schedules its first window (and click) at once.
       setTransport({ recording: true });
+      this.startTransport('loop');
     } else {
       setTransport({ armed: true });
     }
@@ -522,14 +753,15 @@ class Studio {
     if (s.resting) return;
     if (s.transport.armed) {
       // Pressing play while waiting for the first note starts the loop with recording on.
-      this.startTransport('loop');
       setTransport({ armed: false, recording: true });
+      this.startTransport('loop');
       return;
     }
     this.startTransport(s.screen === 'blocks' ? 'song' : 'loop');
   }
 
-  private startTransport(mode: 'loop' | 'song') {
+  /** Start the band at `fromBeat`, by default 40 ms from now (`atTime` may lie in the past). */
+  private startTransport(mode: 'loop' | 'song', fromBeat = 0, atTime?: number) {
     const ctx = this.ctx;
     const transport = this.transport;
     const engine = this.engine;
@@ -539,42 +771,66 @@ class Studio {
     engine.setTempo(p.tempo);
     transport.setTempo(p.tempo);
     this.visuals = [];
+    this.seqHits.clear();
+    this.finaleAt = Infinity;
     // Mode and guards are set *before* start(): the transport schedules its first window immediately.
     this.mode = mode;
     this.skipBefore.clear();
     setTransport({ playing: true, mode });
-    transport.start({ atTime: ctx.currentTime + 0.04, fromBeat: 0, endBeat: mode === 'song' ? songBeats(p) : null });
+    transport.start({ atTime: atTime ?? ctx.currentTime + 0.04, fromBeat, endBeat: mode === 'song' ? songBeats(p) : null });
+    this.rehomeRolls();
   }
 
   stop() {
     this.stopRecording();
+    const wasPlaying = !!this.transport?.playing;
     this.transport?.stop();
     this.engine?.stopSequenced();
     this.visuals = [];
     this.skipBefore.clear();
+    this.seqHits.clear();
+    this.finaleAt = Infinity;
     const t = getState().transport;
     if (t.playing || t.recording || t.armed) setTransport({ playing: false, recording: false, armed: false });
+    if (wasPlaying) this.rehomeRolls();
   }
 
-  private songEnded() {
-    this.engine?.stopSequenced(0.8);
-    setTransport({ playing: false, recording: false, armed: false });
-    emitStudioEvent({ type: 'finale' });
-    this.tada();
-  }
-
-  /** A little "ta-da!" when a song finishes: the band takes a bow. */
-  private tada() {
+  /**
+   * The song's last downbeat is coming (the transport tells us ahead of time):
+   * Boom crashes and Spark sings "ta-da!" exactly on it. The band takes a bow.
+   */
+  private finale(when: number) {
     const ctx = this.ctx;
     const engine = this.engine;
     if (!ctx || !engine) return;
+    const at = Math.max(ctx.currentTime, when);
+    this.finaleAt = at;
     const p = getState().project;
-    const spark = p.tracks.find((t) => t.monster === 'spark') ?? p.tracks[0];
+    const boom = p.tracks.find((t) => t.monster === 'boom');
+    if (boom) {
+      for (const [pad, vel] of [
+        [5, 0.75],
+        [0, 0.9],
+      ]) {
+        engine.trigger(noteRequest(p, 'boom', boom.id, pad, { vel }), at, 0.5);
+        this.queueVisual(at, { trackId: boom.id, monster: 'boom', step: pad, vel, dur: 0.5, source: 'loop' });
+      }
+    }
+    const singer = p.tracks.find((t) => t.monster === 'spark') ?? p.tracks.find((t) => t.monster !== 'boom') ?? p.tracks[0];
     [0, 2, 4, 7].forEach((step, i) => {
-      const when = ctx.currentTime + 0.1 + i * 0.09;
-      engine.trigger(noteRequest(p, spark.monster, spark.id, step, { vel: 0.7 }), when, 0.4);
-      this.queueVisual(when, { trackId: spark.id, monster: spark.monster, step, vel: 0.7, dur: 0.4, source: 'loop' });
+      const t = at + i * 0.09;
+      engine.trigger(noteRequest(p, singer.monster, singer.id, step, { vel: 0.7 }), t, 0.4);
+      this.queueVisual(t, { trackId: singer.id, monster: singer.monster, step, vel: 0.7, dur: 0.4, source: 'loop' });
     });
+  }
+
+  private songEnded() {
+    // Tails of the last block fade; the finale (already playing) rings on.
+    this.engine?.stopSequenced(0.8, this.finaleAt);
+    this.finaleAt = Infinity;
+    setTransport({ playing: false, recording: false, armed: false });
+    this.rehomeRolls();
+    emitStudioEvent({ type: 'finale' });
   }
 
   private provide(from: number, to: number): Scheduled[] {
@@ -590,13 +846,16 @@ class Studio {
         return false;
       },
     });
-    // A soft pulse while recording, until there is a beat to play along with.
-    if (s.transport.recording && !p.tracks.some((t) => t.monster === 'boom' && trackHasLoop(t) && !t.sleeping)) {
+    const n = events.length;
+    // A soft woodblock tick on every beat of a take that began without a drum loop.
+    if (s.transport.recording && this.session?.click) {
       for (let b = Math.ceil(from - 1e-9); b < to - 1e-9; b++) {
         events.push({ absBeat: b, click: true, accent: b % p.beatsPerBar === 0 });
       }
-      events.sort((a, b) => a.absBeat - b.absBeat);
     }
+    events.push(...this.rollEvents('main', from, to));
+    // A stable sort: on a shared line the loop's notes come first (the roll's flam guard needs them).
+    if (events.length > n) events.sort((a, b) => a.absBeat - b.absBeat);
     return events;
   }
 
@@ -605,15 +864,14 @@ class Studio {
     if (!engine) return;
     const p = getState().project;
     if (isClick(e)) {
-      engine.ensureChannel({
-        id: CLICK_CHANNEL,
-        monster: 'boom',
-        preset: 'pillow-drums',
-        fx: { echo: 0, gloop: 0, chomper: 0, wiggle: 0 },
-        volume: 0.28,
-        maxVoices: 4,
-      });
-      engine.trigger({ channelId: CLICK_CHANNEL, midi: [], pad: 2, bend: e.accent ? 3 : 0, vel: e.accent ? 0.9 : 0.6, tone: 0, size: -0.5 }, when, 0.1);
+      engine.ensureChannel(CLICK);
+      const bend = e.accent ? METRONOME.accentBend : 0;
+      const vel = e.accent ? METRONOME.accentVel : METRONOME.vel;
+      engine.trigger({ channelId: CLICK.id, midi: [], pad: TICK_PAD, bend, vel, tone: 0, size: 0 }, when, 0.1);
+      return;
+    }
+    if (isRoll(e)) {
+      this.playRoll(e, when);
       return;
     }
     if (!engine.hasChannel(e.channelId)) {
@@ -625,8 +883,11 @@ class Studio {
         fx: info.defaultFx,
         volume: 0.75,
         maxVoices: info.maxVoices,
+        // Painting's own channels (a monster that is not on stage) belong to the studio.
+        persistent: e.trackId === null,
       });
     }
+    if (e.monster === 'boom') this.noteSeqHit(e.channelId, e.note.step, when);
     const spb = 60 / p.tempo;
     const durSec = Math.max(0.05, e.note.dur * spb);
     engine.trigger(noteRequest(p, e.monster, e.channelId, e.note.step, { vel: e.note.vel, tone: e.note.tone }), when, durSec);
@@ -641,8 +902,17 @@ class Studio {
     });
   }
 
+  /** Queue a visual for when it is heard. The queue stays in time order (frame() pops from the front). */
   private queueVisual(time: number, v: NoteVisual) {
-    this.visuals.push({ time, v });
+    const q = this.visuals;
+    let lo = 0;
+    let hi = q.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (q[mid].time <= time) lo = mid + 1;
+      else hi = mid;
+    }
+    q.splice(lo, 0, { time, v });
   }
 
   private frame() {
@@ -666,15 +936,29 @@ class Studio {
       if (nowBeat - this.session.lastActivityBeat > p.loopBeats * 2 + 0.5) this.stopRecording();
     }
     if (this.mic && this.micRecording) emitStudioEvent({ type: 'mic-level', level: this.mic.level() });
+    const playing = flags.playing && transport.playing;
+    if (!playing) {
+      // Stopped: after a short settle (so last animations finish), frames rest until something changes.
+      const key = `${flags.recording}|${flags.armed}|${flags.mode}|${p.loopBeats}|${p.arrangement.length}`;
+      const now = performance.now();
+      if (key !== this.idleKey) {
+        this.idleKey = key;
+        this.idleSince = now;
+      } else if (now - this.idleSince > IDLE_SETTLE_MS) return;
+    } else this.idleKey = '';
+    const engine = this.engine;
     emitFrame({
-      playing: flags.playing && transport.playing,
+      playing,
       recording: flags.recording,
       armed: flags.armed,
       mode: flags.mode,
       beat: transport.playing ? transport.beatAt(t) : 0,
       loopBeats: p.loopBeats,
       songBeats: songBeats(p),
-      level: this.engine?.meter() ?? 0,
+      // Measured only if someone reads it.
+      get level() {
+        return engine?.meter() ?? 0;
+      },
     });
   }
 
@@ -688,7 +972,7 @@ class Studio {
     const id = `lesson:${monster}`;
     if (!engine.hasChannel(id)) {
       const info = MONSTERS[monster];
-      engine.ensureChannel({ id, monster, preset: info.presets[0].id, fx: info.defaultFx, volume: 0.8, maxVoices: info.maxVoices });
+      engine.ensureChannel({ id, monster, preset: info.presets[0].id, fx: info.defaultFx, volume: 0.8, maxVoices: info.maxVoices, persistent: true });
     }
     return id;
   }
@@ -843,6 +1127,10 @@ class Studio {
       level: this.engine?.meter() ?? 0,
       beat: this.transport && this.ctx ? this.transport.beatAt(this.ctx.currentTime) : 0,
       playing: this.transport?.playing ?? false,
+      /** The transport has handed out every event before this beat. */
+      scheduledUntil: this.transport?.scheduledUntil ?? 0,
+      rolls: this.rolls.size,
+      soloRoll: this.rollTransport?.playing ?? false,
     };
   }
 }

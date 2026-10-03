@@ -83,10 +83,11 @@ function sanitizeNote(raw: unknown, lengthBeats: number): NoteEvent | null {
 function sanitizeClip(raw: unknown, loopBeats: number): Clip | null {
   if (!isObject(raw)) return null;
   const lengthBeats = num(raw.lengthBeats, loopBeats, 1, 64);
+  // Notes keep their stored (recording) order: a full loop lets go of the oldest
+  // recording first, also after a reload. The sequencer sorts by time itself.
   const notes = Array.isArray(raw.notes)
     ? raw.notes.map((n) => sanitizeNote(n, lengthBeats)).filter((n): n is NoteEvent => n !== null)
     : [];
-  notes.sort((a, b) => a.beat - b.beat);
   return { id: str(raw.id, newId('c')), lengthBeats, notes };
 }
 

@@ -44,15 +44,31 @@ const report = await page.evaluate(async () => {
       rows.push({ monster: m.kind, preset: p.id, peakDb: db(peak), rmsDb: db(rms) });
     }
   }
+  // The metronome's woodblock against a child's kick (track volume 0.8): it must sit underneath.
+  const { METRONOME } = await import('/src/audio/presets.ts');
+  const { TICK_PAD } = await import('/src/audio/voices/drums.ts');
+  const single = async (spec, req) => {
+    const sr = 44100;
+    const ctx = new OfflineAudioContext(2, sr * 1, sr);
+    const e = new AudioEngine(ctx);
+    e.setOutputLevel(1, 1);
+    e.ensureChannel({ id: 'c', monster: 'boom', fx: fx0, maxVoices: 4, ...spec });
+    e.trigger({ channelId: 'c', midi: [], tone: 0, size: 0, bend: 0, pad: 0, ...req }, 0.05, 0.1);
+    return measure(await ctx.startRendering());
+  };
+  const tick = await single({ preset: METRONOME.preset, volume: METRONOME.volume }, { pad: TICK_PAD, vel: METRONOME.accentVel, bend: METRONOME.accentBend });
+  const kick = await single({ preset: METRONOME.preset, volume: 0.8 }, { pad: 0, vel: 0.85 });
+  const click = { tickPeakDb: db(tick.peak), kickPeakDb: db(kick.peak), tickQuieter: tick.peak < kick.peak };
   const band = await renderSong(monsterBandProject(3));
   const b = measure(band);
   // Worst case: every monster with every effect cranked.
   const loud = monsterBandProject(4);
   loud.tracks = loud.tracks.map((t) => ({ ...t, fx: { echo: 0.8, gloop: 0.8, chomper: 0.8, wiggle: 0.8 }, volume: 1 }));
   const w = measure(await renderSong(loud));
-  return { rows, band: { peakDb: db(b.peak), rmsDb: db(b.rms), seconds: band.duration.toFixed(1) }, worst: { peakDb: db(w.peak), rmsDb: db(w.rms) } };
+  return { rows, click, band: { peakDb: db(b.peak), rmsDb: db(b.rms), seconds: band.duration.toFixed(1) }, worst: { peakDb: db(w.peak), rmsDb: db(w.rms) } };
 });
 console.table(report.rows);
+console.log('Metronome tick (accent) vs kick:', report.click);
 console.log('Monster Band song:', report.band);
 console.log('Worst case (all fx max):', report.worst);
 await browser.close();

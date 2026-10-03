@@ -15,7 +15,7 @@ A tablet-first creative music toy for children aged about 3–10. It is built fr
 
 * **Monster Lab**: every monster on one stage. Touch a monster to play it and put it on the 8 big keys. Squish it: drag up and down for pitch, sideways for Dark ↔ Sparkly, hold for sustain or a roll, shake for wobble, pinch to squish or stretch.
 * **Four core monsters**: Bloop (lead), Boom (drums), Grumble (bass), Spark (bells). **Puff** (pads) and **Mimic** (voice sampler) join through *Add Monster*. There are 25 synthesised sounds, and each one is a monster costume.
-* **Monster Magic**: scale locking (pentatonic by default), soft quantisation, "first note is the downbeat" looping, replace-don't-pile-up overdubs, auto-stop, and automatic song arrangement.
+* **Monster Magic**: scale locking (pentatonic by default), soft quantisation (drums snap exactly onto the beat), "first note is the downbeat" looping, replace-don't-pile-up overdubs, auto-stop, and automatic song arrangement.
 * **Loops**: record, play, stop and undo. Every monster shares one clock, so loops always line up.
 * **Monster Blocks**: the song as rows of blocks. Tap, swipe or drag to change it, then play it through to a finale ("You made a song!").
 * **Sound Painting**: draw music. Colour picks the monster, height is pitch, and left-to-right is time.

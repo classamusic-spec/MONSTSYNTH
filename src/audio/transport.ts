@@ -7,6 +7,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const LOOKAHEAD_SECONDS = 0.12;
+/**
+ * After a stall (GC, a heavy render) the window can reach far into the past.
+ * Events later than this are dropped rather than all played at once in a burst.
+ */
+export const MAX_LATE_SECONDS = 0.05;
 const TICK_MS = 25;
 
 interface Clock {
@@ -47,6 +52,8 @@ export interface TransportCallbacks<E extends { absBeat: number }> {
   provide(fromBeat: number, toBeat: number): E[];
   /** Schedule one event at an AudioContext time. */
   schedule(event: E, when: number): void;
+  /** Called once, as soon as a finite playback's last beat enters the look-ahead window, with its exact time. */
+  ending?(when: number): void;
   /** Called once when a finite (song) playback reaches its end. */
   ended?(): void;
 }
@@ -59,6 +66,8 @@ export class Transport<E extends { absBeat: number }> {
   private tempo = 100;
   private clock: Clock;
   private endNotified = false;
+  private endingNotified = false;
+  private firstTick = true;
 
   constructor(
     private ctx: BaseAudioContext,
@@ -88,6 +97,15 @@ export class Transport<E extends { absBeat: number }> {
     return this.endBeat;
   }
 
+  /** Every event before this beat has been handed to `schedule` (the provider never sees it again). */
+  get scheduledUntil(): number {
+    return this.scheduledBeat;
+  }
+
+  /**
+   * `atTime` may lie in the past (a take that starts on the child's tap): the
+   * first window still schedules `fromBeat`, at once.
+   */
   start(opts: { atTime?: number; fromBeat?: number; endBeat?: number | null } = {}) {
     const at = opts.atTime ?? this.ctx.currentTime + 0.03;
     const from = opts.fromBeat ?? 0;
@@ -95,6 +113,8 @@ export class Transport<E extends { absBeat: number }> {
     this.scheduledBeat = from;
     this.endBeat = opts.endBeat ?? null;
     this.endNotified = false;
+    this.endingNotified = false;
+    this.firstTick = true;
     this.playing = true;
     this.clock.start();
     this.tick();
@@ -121,10 +141,18 @@ export class Transport<E extends { absBeat: number }> {
     const now = this.ctx.currentTime;
     let to = this.beatAt(now + LOOKAHEAD_SECONDS);
     if (this.endBeat !== null) to = Math.min(to, this.endBeat);
-    if (to > this.scheduledBeat) {
-      const events = this.cb.provide(this.scheduledBeat, to);
+    // Drop (never bunch up) what is already too late, except in the first window.
+    const floor = this.firstTick ? -Infinity : this.beatAt(now - MAX_LATE_SECONDS);
+    this.firstTick = false;
+    const from = Math.max(this.scheduledBeat, floor);
+    if (to > from) {
+      const events = this.cb.provide(from, to);
       for (const e of events) this.cb.schedule(e, Math.max(now, this.timeAt(e.absBeat)));
       this.scheduledBeat = to;
+    }
+    if (this.endBeat !== null && !this.endingNotified && this.timeAt(this.endBeat) <= now + LOOKAHEAD_SECONDS) {
+      this.endingNotified = true;
+      this.cb.ending?.(this.timeAt(this.endBeat));
     }
     if (this.endBeat !== null && !this.endNotified && now >= this.timeAt(this.endBeat)) {
       this.endNotified = true;

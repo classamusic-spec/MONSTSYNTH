@@ -85,13 +85,20 @@ function touchSongList(p: Project) {
   setState({ songs: next.sort((a, b) => b.modifiedAt - a.modifiedAt) });
 }
 
+/**
+ * The checkpoint of the undo group that is open (a take), if any. Every edit
+ * made while it is open joins it, so one Undo removes the whole take, including
+ * a costume or effect tapped in the middle of it.
+ */
+let openGroup: Project | null = null;
+
 export function commit(mutate: (p: Project) => Project, opts: CommitOptions = {}): boolean {
   const s = getState();
   const before = s.project;
   const after = mutate(before);
   if (after === before) return false;
   const next: Project = { ...after, modifiedAt: Date.now() };
-  const undoable = opts.undoable !== false;
+  const undoable = opts.undoable !== false && !openGroup;
   let past = s.past;
   if (undoable) {
     const now = Date.now();
@@ -114,11 +121,13 @@ export function beginGroup(key: string): Project {
   const s = getState();
   // Redo survives until something is actually recorded (commit clears it then).
   setState({ past: [...s.past, { project: s.project, key, at: Date.now() }].slice(-MAX_HISTORY) });
+  openGroup = s.project;
   return s.project;
 }
 
 /** Close an undo group; if nothing changed, the empty step is removed. */
 export function endGroup(token: Project) {
+  if (openGroup === token) openGroup = null;
   const s = getState();
   if (s.project === token) {
     const last = s.past[s.past.length - 1];
@@ -131,6 +140,8 @@ function fixSelection(p: Project, selected: string): string {
 }
 
 export function undo(): boolean {
+  // Undo closes any open group: what follows is a new step.
+  openGroup = null;
   const s = getState();
   const last = s.past[s.past.length - 1];
   if (!last) return false;
@@ -147,6 +158,7 @@ export function undo(): boolean {
 }
 
 export function redo(): boolean {
+  openGroup = null;
   const s = getState();
   const next = s.future[0];
   if (!next) return false;
@@ -164,6 +176,7 @@ export function redo(): boolean {
 
 /** Replace the open song (opening from the shelf, new song): history starts fresh. */
 export function setProject(p: Project) {
+  openGroup = null;
   const s = getState();
   setState({
     project: p,

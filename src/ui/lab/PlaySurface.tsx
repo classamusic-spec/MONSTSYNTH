@@ -4,6 +4,7 @@ import type { Track } from '../../model/types';
 import { useApp } from '../../store/store';
 import { studio } from '../../studio/studio';
 import { onNote } from '../../studio/visualBus';
+import { glow } from '../common/glow';
 import { DrumIcon, KeyGlyph } from './glyphs';
 import { getSize } from './expression';
 import { PodTools } from './PodTools';
@@ -59,7 +60,8 @@ export function PlaySurface({ track }: { track: Track }) {
     keysRef.current?.setPointerCapture?.(e.pointerId);
     rect.current = keysRef.current?.getBoundingClientRect() ?? null;
     const k = keyAt(e.clientX);
-    const liveId = studio.press(track.id, k, { vel: velocity(e), size: getSize(track.id) });
+    // The touch's own timestamp: recording measures from when the finger landed.
+    const liveId = studio.press(track.id, k, { vel: velocity(e), size: getSize(track.id) }, { at: e.timeStamp });
     fingers.current.set(e.pointerId, { key: k, liveId });
     setDown(k, 1);
   };
@@ -70,9 +72,9 @@ export function PlaySurface({ track }: { track: Track }) {
     const k = keyAt(e.clientX);
     if (k === f.key) return;
     // Glissando: every key the finger slides onto plays.
-    studio.release(f.liveId);
+    studio.release(f.liveId, e.timeStamp);
     setDown(f.key, -1);
-    const liveId = studio.press(track.id, k, { vel: velocity(e) * 0.92, size: getSize(track.id) });
+    const liveId = studio.press(track.id, k, { vel: velocity(e) * 0.92, size: getSize(track.id) }, { at: e.timeStamp });
     fingers.current.set(e.pointerId, { key: k, liveId });
     setDown(k, 1);
   };
@@ -81,7 +83,7 @@ export function PlaySurface({ track }: { track: Track }) {
     const f = fingers.current.get(e.pointerId);
     if (!f) return;
     fingers.current.delete(e.pointerId);
-    studio.release(f.liveId);
+    studio.release(f.liveId, e.timeStamp);
     setDown(f.key, -1);
   };
 
@@ -101,11 +103,7 @@ export function PlaySurface({ track }: { track: Track }) {
       onNote((v) => {
         if (v.trackId !== track.id || v.source === 'live') return;
         const el = keyEls.current[v.step];
-        if (!el) return;
-        el.dataset.glow = 'true';
-        setTimeout(() => {
-          el.dataset.glow = 'false';
-        }, Math.min(400, Math.max(120, v.dur * 1000)));
+        if (el) glow(el, Math.min(400, Math.max(120, v.dur * 1000)));
       }),
     [track.id],
   );
