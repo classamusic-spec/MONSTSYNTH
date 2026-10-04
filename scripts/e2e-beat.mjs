@@ -102,7 +102,7 @@ await page.evaluate(async () => {
   // What the UI hands the studio: each touch's own timestamp (performance.now() ms).
   const press = st.press.bind(st);
   st.press = (trackId, step, expr, opts) => {
-    T.presses.push({ at: opts?.at, now: performance.now() });
+    T.presses.push({ at: opts?.at, now: performance.now(), ct: ac.currentTime, comp: T.comp(), beat: st.transport.playing ? st.transport.beatAt(ac.currentTime) : null });
     return press(trackId, step, expr, opts);
   };
   const release = st.release.bind(st);
@@ -696,7 +696,11 @@ check(
 );
 
 // ── 13. The finale lands exactly on the last downbeat ──────────────────────
-/** Play a one-block band song at full speed to its end; `sleepBoom` puts Boom to sleep first. */
+/**
+ * Play a one-block band song at full speed to its end; `sleepBoom` puts Boom to
+ * sleep first. A song with nothing to hear gets no finale (no false praise), so
+ * the sleepy run keeps a block where another monster still plays.
+ */
 const playFinale = (sleepBoom) =>
   page.evaluate(async (sleepBoom) => {
     const T = window.__t;
@@ -704,9 +708,18 @@ const playFinale = (sleepBoom) =>
     const st = M.studio;
     const eng = st.engine;
     const p = M.getState().project;
-    // A one-block song at full speed keeps the wait short.
-    const rows = Object.fromEntries(Object.entries(p.arrangement.rows).map(([k, v]) => [k, v.slice(0, 1)]));
     const tracks = p.tracks.map((t) => (sleepBoom && t.monster === 'boom' ? { ...t, sleeping: true } : t));
+    const awake = tracks.filter((t) => !t.sleeping);
+    const sings = (col) =>
+      awake.some((t) => {
+        const id = p.arrangement.rows[t.id]?.[col];
+        return !!id && (t.clips.find((c) => c.id === id)?.notes.length ?? 0) > 0;
+      });
+    let col = 0;
+    while (col < p.arrangement.length && !sings(col)) col++;
+    if (col >= p.arrangement.length) throw new Error('band song has no block an awake monster plays');
+    // A one-block song at full speed keeps the wait short.
+    const rows = Object.fromEntries(Object.entries(p.arrangement.rows).map(([k, v]) => [k, v.slice(col, col + 1)]));
     M.setState({ project: { ...p, tempo: 140, tracks, arrangement: { ...p.arrangement, length: 1, rows } } });
     M.actions.setScreen('blocks');
     await T.sleep(100);
@@ -818,36 +831,55 @@ await page.evaluate(() => window.__monster.studio.stop());
 check('the "Play something!" bubble goes as soon as the take starts', asked === 1 && hushed.bubbles === 0 && hushed.recording, JSON.stringify({ asked, ...hushed }));
 
 // ── 15. Under a 4× CPU throttle, real touches still record on whole beats ──
-await fresh('maker', 'boom');
-await page.evaluate(() => {
-  const M = window.__monster;
-  M.setState({ project: { ...M.getState().project, tempo: 100 } });
-  M.studio.startRecording();
-});
-const kickAt = await centre('.keys .key', 0);
-await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
-const tapsFrom = Date.now() + 100;
-for (let k = 0; k < 16; k++) {
-  const wait = tapsFrom + k * 600 - Date.now();
-  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-  await touch('touchStart', [{ x: kickAt.x, y: kickAt.y, id: 1 }]);
-  await new Promise((r) => setTimeout(r, 50));
-  await touch('touchEnd', []);
-}
-await page.waitForTimeout(300);
-await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
-const throttled = await page.evaluate(() => {
-  const T = window.__t;
-  const st = window.__monster.studio;
-  st.stopRecording();
-  st.stop();
-  const lags = T.presses.map((e) => e.now - e.at);
-  return { beats: T.notes('boom').map((n) => n.beat).sort((a, b) => a - b), presses: lags.length, maxLag: Math.max(...lags) };
-});
+// The app can only know when the browser stamped a touch (event.timeStamp). On
+// a loaded test machine the browser itself sometimes stamps a CDP touch 100+ ms
+// after it was sent: that finger *was* late, as far as any app could tell. Such
+// a take does not measure the app, so it is taken again (at most 3 takes). The
+// app's own handler lag (stamp to handler) is what the check is about.
+const STAMP_SLACK_MS = 50;
+const throttledTake = async () => {
+  await fresh('maker', 'boom');
+  await page.evaluate(() => {
+    const M = window.__monster;
+    M.setState({ project: { ...M.getState().project, tempo: 100 } });
+    M.studio.startRecording();
+  });
+  const kickAt = await centre('.keys .key', 0);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+  const tapsFrom = Date.now() + 100;
+  for (let k = 0; k < 16; k++) {
+    const wait = tapsFrom + k * 600 - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    await touch('touchStart', [{ x: kickAt.x, y: kickAt.y, id: 1 }]);
+    await new Promise((r) => setTimeout(r, 50));
+    await touch('touchEnd', []);
+  }
+  await page.waitForTimeout(300);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+  return page.evaluate(() => {
+    const T = window.__t;
+    const st = window.__monster.studio;
+    st.stopRecording();
+    st.stop();
+    const lags = T.presses.map((e) => e.now - e.at);
+    // How far each stamp is from its beat, measured from the first touch (which starts the loop).
+    const a0 = T.presses[0]?.at ?? 0;
+    const skew = Math.max(...T.presses.map((e, k) => Math.abs(e.at - a0 - k * 600)));
+    globalThis.__dbg = T.presses.map((e, k) => ({ k, lag: Math.round(e.now - e.at), comp: Math.round(e.comp * 1000), ctErr: Math.round(((e.ct - (e.now - e.at) / 1000) - (T.presses[0].ct - (T.presses[0].now - T.presses[0].at) / 1000) - k * 0.6) * 1000), stampErr: Math.round(e.at - T.presses[0].at - k * 600), beatNow: e.beat?.toFixed(2) }));
+    return { dbg: globalThis.__dbg, beats: T.notes('boom').map((n) => n.beat).sort((a, b) => a - b), presses: lags.length, maxLag: Math.max(...lags), skew };
+  });
+};
+let throttled;
+let takes = 0;
+do {
+  throttled = await throttledTake();
+  takes++;
+} while (throttled.skew > STAMP_SLACK_MS && takes < 3);
+console.log('DBG', JSON.stringify(throttled.dbg));
 check(
   'under a 4× CPU throttle, 16 real touches on the kick (one per beat) record on whole beats',
-  throttled.presses === 16 && throttled.beats.length === 8 && throttled.beats.every((b, i) => b === i),
-  `beats ${throttled.beats.join(' ')}; handler lag up to ${throttled.maxLag.toFixed(0)} ms`,
+  throttled.presses === 16 && throttled.skew <= STAMP_SLACK_MS && throttled.beats.length === 8 && throttled.beats.every((b, i) => b === i),
+  `beats ${throttled.beats.join(' ')}; handler lag up to ${throttled.maxLag.toFixed(0)} ms; stamps within ${throttled.skew.toFixed(0)} ms of the beat; take ${takes}`,
 );
 
 check('no console errors', errors.length === 0, errors.slice(0, 3).join(' | '));

@@ -43,7 +43,7 @@ Touching a monster on stage plays it directly:
 1. Child opens **Blocks**. Every monster with a loop already fills its row (the first recording auto-fills the row), so the song exists immediately.
 2. Every touch is heard, and none ever changes a loop's notes:
    * Tap an empty spot → the loop returns: the monster sings a hello note at once (a swipe across empty spots climbs the scale), and when the finger lifts, the loop placed there plays its first two beats.
-   * Press a block → its loop plays (two beats, on a preview channel dressed like the monster). Lift without moving → the block goes away with a soft *pop*.
+   * Hold a block → its loop plays (two beats, on a preview channel dressed like the monster). Lift without moving → the block goes away with a soft *pop*; a quick tap is just the pop (no cut-off bit of the loop first).
    * Drag a block → it moves (dropping on another block swaps them) and lands with a hello.
    * While the song plays, the song is what you hear: pressing a block adds no preview on top.
 3. A song kept from **Learn** has one phrase per block (A B C A …). Filling a gap there continues the tune: the block gets the phrase to its left.
@@ -52,7 +52,7 @@ Touching a monster on stage plays it directly:
 
 ## F5b · Make it a song in one tap (Little Monsters)
 
-1. Once two monsters have loops, a **Song** button (the wand over a stack of blocks) appears in the rail under Undo, where Monster Makers have their Magic panel button. It never covers Play, Record, Undo or Beat Hop's Surprise wand.
+1. Once two awake monsters have loops, a **Song** button (a stack of blocks with a play badge, at least 52 px) appears in the rail under Undo, where Monster Makers have their Magic panel button. It never covers Play, Record, Undo or Beat Hop's Surprise wand, and has no wand of its own, so the two never look alike. With hints on, the coach hand points at it once, when a second monster gets a loop (a re-take on the same monster does not count).
 2. One tap → Monster Magic arranges every loop into a song (the beat first, when there is one), Monster Blocks opens and the song plays from block 1.
 3. One Undo takes the arrangement back.
 
@@ -95,19 +95,19 @@ Play (or Space, or Magic) on a song with nothing to hear never runs a silent loo
 |---|---|---|
 | Lab | no loop yet | Record (*"Record a loop first!"*) |
 | Lab | every loop asleep | a sleeping loop badge (*"Wake a monster!"*) |
-| Blocks | no loop yet | the Lab button (*"Make a loop in the Lab first!"*) |
+| Blocks | no loop yet | the screen's big *Go to the Lab* button (*"Make a loop in the Lab first!"*) |
 | Blocks | loops, but no blocks | an empty block of a monster with a loop (*"Tap a block!"*) |
 | Blocks | every looped monster asleep | a sleeping row's monster (*"Wake a monster!"*) |
 | Paint | nothing drawn | the canvas (*"Draw your music!"*) |
 
 Beat Hop's grid always has its pulse, so Play there always starts.
 
-Every bubble has a voice: its monster chirps as it appears (*"yay!"* for good news, *"huh?"* otherwise).
+Every bubble has a voice: its monster chirps as it appears (*"yay!"* for good news, *"huh?"* when something is missing). *"Play something!"* after Record is not a dead end, so it stays silent: *"huh?"* always means "nothing here yet". Upright tablets show bubbles just below the top dock, so a bubble never hides what the hand points at. Once-a-session hints that come due while a *"huh?"* is being answered wait and appear right after it.
 
 ## F12 · Keyboards, switches and screen readers
 
 * **Lab:** every key is a real button in the Tab order, named by its note (*"Bloop: E"*); Enter or Space plays it (and records during a take). Fingers still glide across keys (the keys let touches through to the keyboard behind them). A–K play too, 1–6 pick a monster.
-* **Blocks:** all the blocks are one tab stop. Arrows move between blocks and monsters, Enter or Space fills an empty spot (and plays it) or clears a block, Shift+← / → carries a block along its row.
+* **Blocks:** all the blocks are one tab stop (none while the empty card covers them: Tab goes straight to *Go to the Lab*). Arrows move between blocks and monsters, Enter or Space fills an empty spot (and plays it) or clears a block, Shift+← / → carries a block along its row.
 * **Reduced motion** (Parent Space, or the device setting): no blinking, no echo ghosts, no jumps or bounces; celebrations become a soft glow and the Blocks dot stays still.
 * An axe-core pass over every screen is part of the browser checks and fails on any violation.
 

@@ -1259,6 +1259,23 @@ await page.evaluate(() => window.__monster.studio.stop());
   await page.waitForTimeout(80);
   const back = await page.evaluate(() => window.__t.notes('grumble').find((n) => n.beat === 1).step);
   check('a drag that pauses for 2 s on the way is still one undo step', paused === 5 && p1 - p0 === 1 && back === 3, JSON.stringify({ paused, steps: p1 - p0, back }));
+  // A fast drag through many keys: auditions keep at least 60 ms apart, and the key the bead stops on is heard last.
+  const ys = await Promise.all([2, 1, 0, 1, 2, 3, 4, 5, 6, 7].map((k) => spotCentre(page, k, 1).then((c) => c[1])));
+  await page.evaluate(() => window.__t.reset());
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (const yy of ys) await page.mouse.move(x, yy);
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const fast = await page.evaluate(() => {
+    const T = window.__t;
+    const on = T.on.filter((x) => x.ch === T.track('grumble').id);
+    return { midis: on.map((x) => x.midi), gaps: on.slice(1).map((x, i) => Math.round((x.at - on[i].at) * 1000)), step: T.notes('grumble').find((n) => n.beat === 1).step };
+  });
+  const m7 = await midiOf(page, 'grumble', 7);
+  check('a fast drag through 10 keys: auditions at least 60 ms apart (fewer than the keys passed), the final key heard last, no key twice in a row', fast.step === 7 && fast.midis.at(-1) === m7 && fast.midis.length < 10 && fast.gaps.every((g) => g >= 54) && fast.midis.every((m, i) => i === 0 || m !== fast.midis[i - 1]), JSON.stringify(fast));
+  await page.evaluate(() => window.__monster.studio.undo());
+  await page.waitForTimeout(80);
 }
 
 // A tap on a bead pops it away (one undo step); Little Monsters: another height in a full beat makes the bead jump there.
@@ -1775,7 +1792,7 @@ for (const v of VIEWS) {
     // The mini keys wear the monster's picture; on phones a key with a name sticker shows the sticker only (docs/03).
     const wantGlyphs = phone && geo.names ? 0 : 8;
     check(
-      `${v.name} ${mode} ${monster}: mini keys show ${wantGlyphs ? "the monster's picture" : 'their name stickers in place of the picture'}${geo.names ? ' and name stickers' : ''}`,
+      `${v.name} ${mode} ${monster}: mini keys show ${wantGlyphs ? `the monster's picture${geo.names ? ' and name stickers' : ''}` : "name stickers in place of the monster's picture"}`,
       geo.glyphs === wantGlyphs && geo.stickers === (geo.names ? 8 : 0),
       JSON.stringify({ glyphs: geo.glyphs, stickers: geo.stickers, names: geo.names }),
     );

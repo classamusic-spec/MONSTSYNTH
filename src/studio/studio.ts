@@ -176,8 +176,11 @@ const CLICK: ChannelSpec = {
 const FLAM_WINDOW = 0.06;
 /** Frames keep coming this long after the band stops, so last animations can finish. */
 const IDLE_SETTLE_MS = 600;
-/** Touch timestamps older than this are not trusted (seconds). */
-const MAX_TOUCH_LAG = 0.15;
+/**
+ * Touch timestamps older than this are not trusted (seconds). A slow tablet
+ * (a 4× CPU throttle in the tests) runs a handler up to ~200 ms after the touch.
+ */
+const MAX_TOUCH_LAG = 0.25;
 /** A roll's first hit is at least this far ahead (seconds), so it is scheduled on time. */
 const ROLL_LEAD = 0.02;
 /** Moving to another clock, a roll's next hit is at least this many grid steps after its last one. */

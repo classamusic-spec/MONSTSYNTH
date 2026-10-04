@@ -21,9 +21,51 @@ function anim(el: Element | null, frames: Keyframe[], opts: KeyframeAnimationOpt
   (el as HTMLElement).animate(frames, opts);
 }
 
+// ── Frame budget ─────────────────────────────────────────────────────────────
+// Animating parts inside the SVG (lids, antennae, mouths) repaints on the main
+// thread. Fast devices don't notice; slow tablets drop frames. A tiny sampler
+// watches frame times and switches to a lite mode (one compositor-friendly
+// bounce of the whole monster per note, no note sprites) while frames are slow,
+// and back again once they recover.
+
+let slowness = 0; // smoothed share of frames over budget, 0..1
+let lite = false;
+let sampling = false;
+
+function startSampler() {
+  if (sampling || typeof requestAnimationFrame !== 'function') return;
+  sampling = true;
+  let last = performance.now();
+  const tick = (now: number) => {
+    const dt = now - last;
+    last = now;
+    // Ignore long gaps (tab hidden, debugger): they say nothing about load.
+    if (dt < 250) {
+      slowness = slowness * 0.85 + (dt > 24 ? 1 : 0) * 0.15;
+      if (!lite && slowness > 0.35) lite = true;
+      else if (lite && slowness < 0.05) lite = false;
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+/** True while frames are slow: per-note visuals stay cheap. */
+export function liteVisuals(): boolean {
+  startSampler();
+  return lite;
+}
+
 export function reactToNote(root: HTMLElement, v: NoteVisual, o: ReactOptions) {
   const svg = root.querySelector('.monster-svg');
   if (!svg) return;
+  if (liteVisuals()) {
+    // One transform on an HTML box: composited, no SVG repaint.
+    const box = root.querySelector('.squish') ?? root.querySelector('.monster-wrap') ?? root;
+    const s = (o.reduced ? 0.02 : 0.06) * (0.6 + v.vel * 0.4);
+    anim(box, [{ scale: '1 1' }, { scale: `${1 + s} ${1 - s}` }, { scale: '1 1' }], { duration: 180, easing: 'ease-out' });
+    return;
+  }
   const a = o.reduced ? 0.25 : 1;
   const body = svg.querySelector('.m-body');
   const t = Math.min(1, Math.max(0, v.step / 7));
@@ -180,7 +222,7 @@ function spriteNode(kind: keyof typeof SPRITE_SVG): HTMLElement {
  * size), so a note never has to measure the page.
  */
 export function spawnNoteSprite(root: HTMLElement, v: NoteVisual, reduced: boolean) {
-  if (reduced) return;
+  if (reduced || liteVisuals()) return;
   const wrap = root.querySelector<HTMLElement>('.monster-wrap');
   if (!wrap || typeof wrap.animate !== 'function') return;
   if (wrap.querySelectorAll(':scope > .note-sprite').length >= MAX_NOTE_SPRITES) return;

@@ -9,7 +9,7 @@ import { studio } from '../../studio/studio';
 import { onNote } from '../../studio/visualBus';
 import { FxBuddy } from '../monsters/FxBuddy';
 import { MonsterArt } from '../monsters/MonsterArt';
-import { reactToNote, spawnNoteSprite } from '../monsters/react';
+import { liteVisuals, reactToNote, spawnNoteSprite } from '../monsters/react';
 import { Icon } from '../icons/Icon';
 import { isReducedMotion, useCaps } from '../hooks/useCaps';
 import { getSize, onSize, setSize } from './expression';
@@ -71,6 +71,9 @@ export const MonsterPod = memo(function MonsterPod({ track, selected }: { track:
   const hasLoop = trackHasLoop(track);
   const reactOpts = useRef({ monster: track.monster, echo: track.fx.echo, gloop: track.fx.gloop, tempo, reduced: false });
   reactOpts.current = { monster: track.monster, echo: track.fx.echo, gloop: track.fx.gloop, tempo, reduced: isReducedMotion() };
+
+  // Start watching the frame budget as soon as a monster is on stage.
+  useEffect(() => void liteVisuals(), []);
 
   // Sound → animation.
   useEffect(

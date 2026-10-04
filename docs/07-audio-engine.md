@@ -61,7 +61,7 @@ Plain **Web Audio API** — no audio libraries, no sample packs. Every sound is 
 * `AudioContext({ latencyHint: 'interactive' })`.
 * Live notes start at `ctx.currentTime` from the `pointerdown` handler — before any React work.
 * `touch-action: none` on playing surfaces (no gesture delay, no double-tap zoom), pointer capture for drags.
-* Recording measures each touch from its own `event.timeStamp` (the handler can run tens of ms later on a busy tablet; at most 150 ms is trusted), then subtracts **input compensation** = output latency + ~25 ms touch delay (capped at 200 ms), so notes land where the child heard them.
+* Recording measures each touch from its own `event.timeStamp` (the handler can run tens of ms later on a busy tablet; at most 250 ms is trusted), then subtracts **input compensation** = output latency + ~25 ms touch delay (capped at 200 ms), so notes land where the child heard them.
 
 ## Protecting ears and the mix
 

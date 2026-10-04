@@ -173,9 +173,16 @@ export function Coach() {
   useEffect(() => {
     if (!target) return;
     let raf = 0;
+    // Measuring every frame forces a layout while the stage animates; targets
+    // barely move, so re-measure about 5 times a second and only write changes.
+    let measuredAt = -Infinity;
+    let lastKey = '';
     const place = () => {
       raf = requestAnimationFrame(place);
-      if (performance.now() > target.until) {
+      const now = performance.now();
+      if (now - measuredAt < 200) return;
+      measuredAt = now;
+      if (now > target.until) {
         setTarget(null);
         return;
       }
@@ -188,6 +195,9 @@ export function Coach() {
       const glow = glowRef.current;
       if (!hand || !glow) return;
       const r = el.getBoundingClientRect();
+      const key = `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)}`;
+      if (key === lastKey) return;
+      lastKey = key;
       const size = Math.min(r.width, r.height, 140);
       hand.style.left = `${r.left + r.width / 2}px`;
       hand.style.top = `${r.top + r.height / 2}px`;

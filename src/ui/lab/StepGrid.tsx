@@ -221,7 +221,7 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
   /** Beads a finger is moving right now: they follow it (no glide). */
   const held = useRef(new Set<string>());
   /** The drag's glissando: the last key heard, and the latest key waiting to be heard. */
-  const gliss = useRef<{ last: number; step: number; timer: ReturnType<typeof setTimeout> | null }>({ last: -Infinity, step: 0, timer: null });
+  const gliss = useRef<{ last: number; heard: number; step: number; timer: ReturnType<typeof setTimeout> | null }>({ last: -Infinity, heard: -1, step: 0, timer: null });
   /**
    * The undo step of the gesture(s) under the fingers: opened at touch-down and
    * closed when the last finger of that gesture lifts, so a drag that pauses to
@@ -365,12 +365,16 @@ function LaneGrid({ track, lane }: { track: Track; lane: GridLane }) {
       if (g.timer) clearTimeout(g.timer);
       g.timer = null;
       g.last = performance.now();
+      g.heard = step;
       studio.auditionStep(track.id, step, GLISS_VEL);
       return;
     }
     g.timer ??= setTimeout(() => {
       g.timer = null;
+      // The bead went away and came back within the wait: that key was just heard.
+      if (g.step === g.heard) return;
       g.last = performance.now();
+      g.heard = g.step;
       studio.auditionStep(track.id, g.step, GLISS_VEL);
     }, wait);
   };
