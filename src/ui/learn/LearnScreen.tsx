@@ -15,7 +15,7 @@ import {
 } from '../../magic/lessons';
 import { keyNames } from '../../magic/noteNames';
 import { MONSTERS } from '../../model/monsters';
-import { recordLessonStars, saveLessonAsSong } from '../../store/actions';
+import { recordLessonStars, saveLessonAsSong, startFirstBeat } from '../../store/actions';
 import { getState, useApp } from '../../store/store';
 import { studio, type LessonEvent } from '../../studio/studio';
 import { onNote } from '../../studio/visualBus';
@@ -62,6 +62,23 @@ function SongPicker({ onPick }: { onPick: (id: string) => void }) {
         <h1 className="learn-title">Learn a song</h1>
       </header>
       <div className="lesson-shelf" role="group" aria-label="Songs to learn">
+        <button
+          className="lesson-card lesson-first-beat"
+          data-song="first-beat"
+          aria-label={`My first beat with Boom. ${stars['first-beat'] ? '3 of 3 stars.' : 'New!'}`}
+          onClick={() => void startFirstBeat()}
+        >
+          <span className="first-beat-art" aria-hidden>
+            <MonsterArt kind="boom" />
+          </span>
+          <span className="lesson-card-title">My first beat</span>
+          <span className="lesson-card-foot">
+            <span className="lesson-level" aria-hidden>
+              <Icon name="note" />
+            </span>
+            <Stars count={stars['first-beat'] ?? 0} />
+          </span>
+        </button>
         {TEACH_SONGS.map((song) => {
           const earned = stars[song.id] ?? 0;
           return (

@@ -393,7 +393,7 @@ if (!existsSync(axePath)) {
   await axe('the Songs shelf');
   await M(() => window.__monster.actions.setScreen('learn'));
   await axe('the Learn shelf');
-  await page.locator('.lesson-shelf button').first().click();
+  await page.locator('.lesson-shelf button:not(.lesson-first-beat)').first().click();
   await axe('a lesson');
   await page.locator('.lesson-bar .lesson-btn').first().click();
   await M(() => window.__monster.actions.setScreen('lab'));

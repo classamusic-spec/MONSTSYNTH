@@ -398,3 +398,57 @@
     font-size: 1em;
   }
 }
+
+/* "My first beat": Boom with a tapping hand over a little grid of stones. */
+.first-beat-portrait {
+  --hue: 32;
+}
+
+.first-beat-portrait .portrait-cluster {
+  inset: 26% 44% 6% 4%;
+}
+
+.first-beat-hand {
+  position: absolute;
+  z-index: 2;
+  right: 18%;
+  bottom: 8%;
+  font-size: clamp(22px, 7cqmin, 40px);
+  color: #fff;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.45));
+  animation: guide-tap 1.1s var(--ease-in-out) infinite;
+}
+
+.song-first-beat[data-done='false'] {
+  border-color: #ffe066;
+  box-shadow:
+    0 0 0 3px rgba(255, 224, 102, 0.35),
+    var(--shadow);
+}
+
+/* Demo songs: the band on the song's colour, with a big play badge. */
+.demo-play {
+  position: absolute;
+  z-index: 2;
+  right: 8px;
+  top: 8px;
+  width: clamp(30px, 9cqmin, 44px);
+  height: clamp(30px, 9cqmin, 44px);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff;
+  color: hsl(var(--hue) 60% 35%);
+  font-size: clamp(14px, 4cqmin, 20px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+}
+
+.app[data-motion='reduce'] .first-beat-hand {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .first-beat-hand {
+    animation: none;
+  }
+}

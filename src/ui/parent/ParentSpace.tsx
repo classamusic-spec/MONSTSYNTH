@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { micSupported } from '../../audio/mic';
 import type { MotionPreference, NoteNameStyle, ProjectMeta } from '../../model/types';
-import { deleteEverything, deleteSong, duplicateSong, openSong, renameSong, setOverlay, updateSettings } from '../../store/actions';
+import { deleteEverything, deleteSong, duplicateSong, openSong, renameSong, setOverlay, startFirstBeat, updateSettings } from '../../store/actions';
 import { loadProject } from '../../store/persistence';
 import { SESSION_CHOICES } from '../../model/schema';
 import { getState, useApp } from '../../store/store';
@@ -249,6 +249,20 @@ export function ParentSpace() {
             <input type="checkbox" checked={settings.hints} onChange={(e) => updateSettings({ hints: e.target.checked })} />
             <span>Show gentle picture hints (a pointing hand) for new players</span>
           </label>
+          <button
+            className="btn-secondary"
+            onClick={() => {
+              setOverlay(null);
+              void startFirstBeat();
+            }}
+          >
+            <Icon name="hand" /> Show the first-beat guide now
+          </button>
+          <p className="ps-note">
+            “My first beat” is a wordless guide on Boom’s drum stones: a hand points at one stone at a time (big drum on beats 1 and 5,
+            snappy drum on 3 and 7, a tss-tss on every other beat). The beat starts playing at the first tap, so your child hears it
+            grow. It is offered once on the very first visit (when hints are on), and it is always on the Songs shelf and in Learn.
+          </p>
           <p className="ps-note">
             Key stickers name each note so you can say “play the E!” and find it on a real piano. They follow the song’s mood; do re mi
             always starts on do. Drums show pictures (and drum words for Monster Makers). The picture on each key also shrinks and climbs as

@@ -14,6 +14,7 @@ import { SongsScreen } from '../songs/SongsScreen';
 import { BubbleLayer } from './BubbleLayer';
 import { Cheer } from './Cheer';
 import { Coach } from './Coach';
+import { FirstBeatGuide, FirstBeatOffer } from './FirstBeatGuide';
 import { Finale } from './Finale';
 import { NavDock } from './NavDock';
 import { ParentGate } from './ParentGate';
@@ -88,6 +89,8 @@ export function AppShell() {
       <BubbleLayer />
       <Cheer />
       <Coach />
+      <FirstBeatGuide />
+      <FirstBeatOffer />
       <Finale />
       {overlay === 'tray' && <MonsterTray />}
       {overlay === 'magic' && <MagicPanel />}

@@ -111,6 +111,18 @@ Every bubble has a voice: its monster chirps as it appears (*"yay!"* for good ne
 * **Reduced motion** (Parent Space, or the device setting): no blinking, no echo ghosts, no jumps or bounces; celebrations become a soft glow and the Blocks dot stays still.
 * An axe-core pass over every screen is part of the browser checks and fails on any violation.
 
+## F13 · My first beat (guided)
+
+1. From the *My first beat* card (Songs or Learn), from Parent Space, or by tapping Boom when it drums at a brand-new player, the Lab opens on Boom's stones.
+2. Every other row dims. A hand and a ring point at one stone; a bubble says the drum's name and Boom plays how it sounds.
+3. Big drum on beats 1 and 5, snappy drum on 3 and 7, then a double tss-tss on 2, 4, 6 and 8. Progress is read from the loop itself, so Undo, the wand or leaving and coming back never confuse it.
+4. Done: the beat plays, stars burst, three stars are kept, and three wordless choices appear: a friend (Grumble gets a groove), make it a song (Blocks), or keep drumming. The × on the guide bar always ends it.
+
+## F14 · Listen to a demo song
+
+1. Tap a demo card (ribbon *Listen*) on the Songs shelf. It opens in Monster Blocks and plays the whole song.
+2. The demo is a copy: tapping it again reopens the same untouched copy, and it only joins *My songs* once the child changes something.
+
 ## Recovery flows (no destructive mistakes)
 
 | Accident | Recovery |

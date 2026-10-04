@@ -1,7 +1,8 @@
+import { demoProject, findDemo } from '../magic/demos';
 import { lessonProject, type TeachSong } from '../magic/lessons';
 import { monsterBandProject } from '../magic/templates';
 import { newId } from '../model/ids';
-import { createProject, projectMeta } from '../model/project';
+import { createProject, projectHasMusic, projectMeta } from '../model/project';
 import type { Project, Settings } from '../model/types';
 import {
   deleteProject,
@@ -120,7 +121,7 @@ async function switchTo(project: Project) {
   await flushSave();
   setProject(project);
   updateSettings({ lastProjectId: project.id });
-  setState({ screen: 'lab', overlay: null, selectedTrackId: project.tracks[0].id, labView: 'keys', newBlocks: [] });
+  setState({ screen: 'lab', overlay: null, selectedTrackId: project.tracks[0].id, labView: 'keys', newBlocks: [], guide: null });
 }
 
 export async function openSong(id: string) {
@@ -133,6 +134,55 @@ export async function openSong(id: string) {
 }
 
 /** A new song: blank, the Monster Band, or "Make a beat" (opens straight onto Boom's grid). */
+// ── Demo songs ───────────────────────────────────────────────────────────────
+// A demo opens as the child's own editable copy (id "<demo id>~…"). While a copy
+// is untouched, opening the demo again reopens it instead of making another.
+
+export const DEMO_COPY = '~';
+
+export function isDemoCopy(id: string): boolean {
+  return id.startsWith('demo-') && id.includes(DEMO_COPY);
+}
+
+/** An untouched copy of a demo shows on the shelf as the demo card, not as a song of its own. */
+export function isUntouchedDemo(meta: { id: string; createdAt: number; modifiedAt: number }): boolean {
+  return isDemoCopy(meta.id) && meta.modifiedAt === meta.createdAt;
+}
+
+export async function openDemo(demoId: string): Promise<boolean> {
+  const demo = findDemo(demoId);
+  if (!demo) return false;
+  const existing = getState().songs.find((m) => m.id.startsWith(`${demo.id}${DEMO_COPY}`) && isUntouchedDemo(m));
+  const loaded = existing ? await loadProject(existing.id) : null;
+  const p = loaded ?? { ...demoProject(demo), id: `${demo.id}${DEMO_COPY}${newId('p')}` };
+  if (!loaded) {
+    await saveProjectNow(p);
+    setState({ songs: [projectMeta(p), ...getState().songs] });
+  }
+  await switchTo(p);
+  // Demos are heard as whole songs first.
+  setState({ screen: 'blocks' });
+  return true;
+}
+
+// ── "My first beat" ──────────────────────────────────────────────────────────
+
+/** Start the guided first beat on Boom's stones: reuse an untouched open song, else a fresh beat song. */
+export async function startFirstBeat() {
+  const s = getState();
+  const p = s.project;
+  const boom = p.tracks.find((t) => t.monster === 'boom');
+  if (!boom || projectHasMusic(p) || s.past.length > 0 || p.loopBeats !== 8) await newSong('beat');
+  const after = getState();
+  const track = after.project.tracks.find((t) => t.monster === 'boom');
+  if (!track) return;
+  setState({ screen: 'lab', overlay: null, selectedTrackId: track.id, labView: 'grid', guide: { kind: 'first-beat', trackId: track.id, projectId: after.project.id } });
+}
+
+export function endGuide() {
+  if (getState().guide) setState({ guide: null });
+}
+
 export async function newSong(kind: 'blank' | 'band' | 'beat' = 'blank') {
   const p = kind === 'band' ? monsterBandProject() : createProject();
   await saveProjectNow(p);

@@ -77,6 +77,8 @@ export function Coach() {
     const timers: ReturnType<typeof setTimeout>[] = [];
     const show = (id: string, selector: string, ms: number) => {
       if (done.current.has(id)) return;
+      // The first-beat guide has its own hand: the Coach waits (the hint is not used up).
+      if (getState().guide || document.querySelector('.guide-hand')) return;
       const now = performance.now();
       // A "nothing to play" answer is on screen: this hint comes right after it.
       if (now < answering.current) {

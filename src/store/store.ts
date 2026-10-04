@@ -52,6 +52,8 @@ export interface AppState {
    * (a dot on the Blocks button until it is visited). UI only, never saved.
    */
   newBlocks: string[];
+  /** The "My first beat" guide, while it runs (this session only, never saved). */
+  guide: { kind: 'first-beat'; trackId: string; projectId: string } | null;
   past: HistoryEntry[];
   future: Project[];
 }
@@ -75,6 +77,7 @@ export const useApp = create<AppState>(() => ({
   overlay: null,
   paint: { tool: 'brush', brush: 'bloop' },
   newBlocks: [],
+  guide: null,
   past: [],
   future: [],
 }));

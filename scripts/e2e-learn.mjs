@@ -46,7 +46,9 @@ const contrastOf = (els) =>
 
 await page.locator('.dock-btn[data-screen="learn"]').click();
 await page.waitForTimeout(300);
-check('Learn shows the song shelf', (await page.locator('.lesson-card').count()) === 8, `${await page.locator('.lesson-card').count()} songs`);
+const lessonCards = page.locator('.lesson-card:not(.lesson-first-beat)');
+check('Learn shows the song shelf', (await lessonCards.count()) === 8, `${await lessonCards.count()} songs`);
+check('the first-beat card leads the shelf', (await page.locator('.lesson-shelf .lesson-card').first().getAttribute('data-song')) === 'first-beat');
 await shot('learn-shelf-tablet');
 
 await page.locator('.lesson-card[data-song="hot-cross-buns"]').click();
@@ -310,7 +312,7 @@ for (const [w, h] of [
     check('upright iPad: the songs sit in a 3-column shelf, nothing cut off', shelf.cols === 3 && shelf.fits, JSON.stringify(shelf));
   }
   const clipped = [];
-  for (const id of await page.$$eval('.lesson-card', (els) => els.map((e) => e.dataset.song))) {
+  for (const id of await page.$$eval('.lesson-card:not(.lesson-first-beat)', (els) => els.map((e) => e.dataset.song))) {
     await page.locator(`.lesson-card[data-song="${id}"]`).click();
     await page.waitForTimeout(120);
     await page.evaluate(() => window.__monster.studio.lessonStop());

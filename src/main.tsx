@@ -6,6 +6,7 @@ import './styles/shell.css';
 import './styles/lab.css';
 import './styles/keys.css';
 import './styles/steps.css';
+import './styles/guide.css';
 import './styles/monsters.css';
 import './styles/overlays.css';
 import './styles/blocks.css';

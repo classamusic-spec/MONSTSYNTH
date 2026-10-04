@@ -1,5 +1,8 @@
 import { useApp } from '../../store/store';
-import { newSong, openSong, setScreen } from '../../store/actions';
+import { DEMO_SONGS } from '../../magic/demos';
+import { ALL_MONSTERS } from '../../model/monsters';
+import { isUntouchedDemo, newSong, openDemo, openSong, setScreen, startFirstBeat } from '../../store/actions';
+import { studio } from '../../studio/studio';
 import { Icon } from '../icons/Icon';
 import { Logo } from '../shell/Logo';
 import { MonsterArt } from '../monsters/MonsterArt';
@@ -14,6 +17,9 @@ const BEAT_STONES: (string | null)[] = ['hat', 'hat', 'hat', 'hat', null, 'snare
 export function SongsScreen() {
   const songs = useApp((s) => s.songs);
   const currentId = useApp((s) => s.project.id);
+  const firstBeatDone = useApp((s) => !!s.settings.lessonStars['first-beat']);
+  // An untouched demo copy is the demo card itself; once changed it is the child's song.
+  const mine = songs.filter((m) => !isUntouchedDemo(m));
 
   return (
     <section className="songs" aria-label="My songs">
@@ -26,6 +32,26 @@ export function SongsScreen() {
             <Icon name="plus" />
           </span>
           <span className="song-name">New song</span>
+        </button>
+        <button className="song-card song-first-beat" data-done={firstBeatDone} aria-label="My first beat: Boom shows you how" onClick={() => void startFirstBeat()}>
+          <div className="portrait first-beat-portrait">
+            <div className="portrait-sky" />
+            <div className="portrait-cluster" data-count={1}>
+              <div className="portrait-monster" data-awake="true">
+                <MonsterArt kind="boom" />
+              </div>
+            </div>
+            <span className="first-beat-hand" aria-hidden>
+              <Icon name="hand" />
+            </span>
+            <span className="beat-stones first-beat-stones" aria-hidden>
+              {BEAT_STONES.map((on, i) => (
+                <i key={i} data-on={on || undefined} />
+              ))}
+            </span>
+            <span className="starter-ribbon">{firstBeatDone ? '★★★' : 'Start here'}</span>
+          </div>
+          <span className="song-name">My first beat</span>
         </button>
         <button className="song-card song-band" aria-label="Start with the Monster Band" onClick={() => void newSong('band')}>
           <div className="portrait band-portrait">
@@ -80,7 +106,35 @@ export function SongsScreen() {
           </div>
           <span className="song-name">Learn a song</span>
         </button>
-        {songs.map((meta) => (
+        {DEMO_SONGS.map((demo) => {
+          const band = ALL_MONSTERS.filter((m) => demo.band[m]);
+          return (
+            <button
+              key={demo.id}
+              className="song-card song-demo"
+              data-demo={demo.id}
+              aria-label={`Listen to ${demo.title}, a song the monsters made`}
+              onClick={() => void openDemo(demo.id).then((ok) => ok && studio.play())}
+            >
+              <div className="portrait demo-portrait" style={{ ['--hue' as string]: demo.hue }}>
+                <div className="portrait-sky" />
+                <div className="portrait-cluster" data-count={band.length}>
+                  {band.map((m) => (
+                    <div key={m} className="portrait-monster" data-awake="true">
+                      <MonsterArt kind={m} />
+                    </div>
+                  ))}
+                </div>
+                <span className="demo-play" aria-hidden>
+                  <Icon name="play" />
+                </span>
+                <span className="starter-ribbon">Listen</span>
+              </div>
+              <span className="song-name">{demo.title}</span>
+            </button>
+          );
+        })}
+        {mine.map((meta) => (
           <button
             key={meta.id}
             className="song-card"

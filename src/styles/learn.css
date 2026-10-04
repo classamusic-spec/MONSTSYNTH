@@ -691,3 +691,20 @@
     margin-top: auto;
   }
 }
+
+/* Learn's "My first beat" card: Boom on warm stones. */
+.lesson-first-beat .first-beat-art {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 18%;
+  background: radial-gradient(circle at 50% 35%, hsl(28 70% 42%), hsl(18 60% 22%));
+}
+
+.lesson-first-beat .first-beat-art .monster-svg {
+  width: 78%;
+  height: 78%;
+}
