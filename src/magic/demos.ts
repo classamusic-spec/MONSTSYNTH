@@ -16,8 +16,10 @@ import type { FxLevels, MonsterKind, NoteEvent, Project, ScaleId } from '../mode
 //   Cloud Castle             76  dreamy chill: Puff's big soft chords
 //
 // Every song is 8 blocks of 8 beats and four monsters (a Little Monsters stage
-// holds four; nobody needs a recording). The band comes in one monster at a
-// time, takes a breath in block 6 and plays all together in the last block.
+// holds four; nobody needs a recording). Each one starts with its own tune and
+// groove in the very first block, so a few seconds are enough to tell them
+// apart, and no two songs share a lead sound. More of the band joins, it takes
+// a breath in block 6 and plays all together in the last block.
 //
 // Melodic notes are scale steps 0..7 (the eight keys), so a song keeps working
 // in any mood. Puff's step is the root of its chord (it plays step, step+2 and
@@ -85,9 +87,9 @@ export function drumHits(chart: DrumChart): N[] {
 }
 
 // ── 1 · Jungle Drum Parade ───────────────────────────────────────────────────
-// Shows: Beat Hop. Block by block the beat grows the way a child builds one:
-// the big drum alone, then the tiny cymbal, then the snappy drum (the three rows
-// a Little Monster's grid starts with), then bongos and cowbell, then claps.
+// Shows: Beat Hop. A parade on the tin-can drums with Bloop's chant from the
+// first block. Boom keeps the beat a child builds one drum at a time (big drum,
+// tiny cymbal, snappy drum) as loops of its own, to open and play with.
 // Happy mood in D: 0 D · 1 E · 2 F♯ · 3 A · 4 B · 5 D · 6 E · 7 F♯.
 // Chords: D D | A A | Bm Bm | A D (I V vi V I). The big drum goes
 // "boom . boom-boom" and Grumble's oom-pah plays on every big drum.
@@ -96,14 +98,14 @@ const JUNGLE_DRUM_PARADE: DemoSong = {
   id: 'demo-jungle-drum-parade',
   title: 'Jungle Drum Parade',
   style: 'Drum parade',
-  shows: 'Beat Hop: a beat built one drum at a time',
+  shows: 'A tin-can drum parade with a chant to march to',
   tempo: 108,
   scale: 'pentatonicMajor',
   key: 2,
   hue: 28,
   band: {
     boom: {
-      preset: 'stompy-kit',
+      preset: 'tin-can-band',
       loops: {
         // Everything, with claps, a crash and a boing to finish.
         parade: {
@@ -191,10 +193,10 @@ const JUNGLE_DRUM_PARADE: DemoSong = {
     },
   },
   blocks: {
-    boom: ['big-drum', 'tss', 'beat', 'jungle', 'parade', 'bongos', 'fill', 'parade'],
+    boom: ['jungle', 'jungle', 'parade', 'bongos', 'parade', 'big-drum', 'fill', 'parade'],
     grumble: [null, 'oom-pah', 'oom-pah', 'oom-pah', 'oom-pah', null, 'oom-pah', 'oom-pah'],
     spark: [null, null, 'tinkle', 'tinkle', 'tinkle', 'tinkle', 'tinkle', 'tinkle'],
-    bloop: [null, null, null, 'chant', 'cheer', 'chant', 'chant', 'cheer'],
+    bloop: ['chant', 'chant', 'cheer', 'chant', 'cheer', null, 'chant', 'cheer'],
   },
 };
 
@@ -258,7 +260,7 @@ const DISCO_JELLYFISH: DemoSong = {
       },
     },
     bloop: {
-      preset: 'bubble-lead',
+      preset: 'rainbow-whistle',
       fx: { echo: 0.4, gloop: 0.4 },
       loops: {
         // "Dis-co, dis-co, jel-ly fish! / Wig-gle, wig-gle in the sea!"
@@ -275,10 +277,10 @@ const DISCO_JELLYFISH: DemoSong = {
     },
   },
   blocks: {
-    boom: ['intro', 'disco', 'disco', 'fill', 'big', null, 'fill', 'big'],
-    grumble: [null, 'bounce', 'bounce', 'bounce', 'bounce', 'bounce', 'bounce', 'bounce'],
+    boom: ['disco', 'disco', 'disco', 'fill', 'big', null, 'fill', 'big'],
+    grumble: ['bounce', 'bounce', 'bounce', 'bounce', 'bounce', 'bounce', 'bounce', 'bounce'],
     puff: [null, null, 'chords', 'chords', 'chords', 'chords', 'chords', 'chords'],
-    bloop: [null, null, null, 'hook', 'high', 'hook', 'hook', 'high'],
+    bloop: ['hook', 'hook', 'high', 'hook', 'high', 'hook', 'hook', 'high'],
   },
 };
 
@@ -372,14 +374,14 @@ const WIGGLE_WOBBLE_ROCKET: DemoSong = {
   blocks: {
     boom: ['countdown', 'engine', 'engine', 'race', 'race', null, 'liftoff', 'race'],
     grumble: [null, 'engine', 'engine', 'engine', 'engine', null, 'engine', 'engine'],
-    bloop: [null, null, 'countdown', 'countdown', 'zoom', 'countdown', 'countdown', 'zoom'],
+    bloop: ['countdown', 'countdown', 'zoom', 'countdown', 'zoom', 'countdown', 'countdown', 'zoom'],
     spark: ['stars', 'stars', 'stars', null, 'stars', 'stars', null, 'stars'],
   },
 };
 
 // ── 4 · Grumble's Tummy Rumble ───────────────────────────────────────────────
-// Shows: Grumble plays with the big drum. In block 1 it is just the two of
-// them, note for drum; the rest of the band joins on top.
+// Shows: Grumble plays with the big drum, note for drum, under a crunchy
+// (Chomper) old-school beat and Bloop's giggly hungry-tummy tune.
 // Bluesy mood in G: 0 G · 1 B♭ · 2 C · 3 D♭ (the blue note) · 4 D · 5 F · 6 G · 7 B♭.
 // Chords: G7 for a bar | C7, G7 (i iv i blues: steps 0 | 2 0).
 // Big drum and bass: "boom-b'boom . boom . boom" (0, ¾, 1½, 2½), then once more
@@ -397,6 +399,8 @@ const TUMMY_RUMBLE: DemoSong = {
   band: {
     boom: {
       preset: 'stompy-kit',
+      // Chomper makes the old-school beat crunchy.
+      fx: { chomper: 0.4 },
       loops: {
         // The main boom-bap: big drum, snappy drum on 2 and 4, tiny cymbal.
         bap: {
@@ -466,7 +470,7 @@ const TUMMY_RUMBLE: DemoSong = {
   blocks: {
     boom: ['big-drum', 'bap', 'bap', 'bap', 'bap-boing', 'big-drum', 'fill', 'bap-boing'],
     grumble: ['rumble', 'rumble', 'rumble', 'rumble', 'rumble', 'rumble', 'rumble', 'rumble'],
-    bloop: [null, null, 'hungry', 'hungry', 'yum', null, 'hungry', 'yum'],
+    bloop: ['hungry', 'hungry', 'yum', 'hungry', 'yum', null, 'hungry', 'yum'],
     spark: [null, null, null, 'drips', 'drips', 'drips', 'drips', 'drips'],
   },
 };
@@ -479,7 +483,7 @@ const SKELETON_TIPTOE: DemoSong = {
   id: 'demo-skeleton-tiptoe',
   title: 'Skeleton Tiptoe',
   style: 'Spooky mystery',
-  shows: 'A soft heartbeat beat and a whistle that asks and answers',
+  shows: 'A heartbeat, a ticking clock and a xylophone of icy bones',
   tempo: 96,
   scale: 'pentatonicMinor',
   key: 9,
@@ -528,9 +532,10 @@ const SKELETON_TIPTOE: DemoSong = {
         fog: [[0, 1, 3.9, 0.6], [4, 0, 3.9, 0.55]],
       },
     },
-    bloop: {
-      preset: 'rainbow-whistle',
-      fx: { echo: 0.8, gloop: 0.8 },
+    spark: {
+      // Icy bells, played like a skeleton's xylophone.
+      preset: 'ice-crystals',
+      fx: { echo: 0.4, gloop: 0.8 },
       loops: {
         // "Who's that creep-ing…?" (left hanging) / "down the hall-way… BOO!" (home).
         ghost: [
@@ -549,15 +554,15 @@ const SKELETON_TIPTOE: DemoSong = {
     boom: ['clock', 'clock', 'bones', 'bones', 'boo', 'clock', 'bones', 'boo'],
     grumble: [null, 'creep', 'creep', 'creep', 'creep', null, 'creep', 'creep'],
     puff: ['fog', 'fog', 'fog', 'fog', 'fog', 'fog', 'fog', 'fog'],
-    bloop: [null, null, 'ghost', 'ghost', 'high', 'ghost', 'high', 'high'],
+    spark: ['ghost', 'ghost', 'ghost', 'high', 'ghost', null, 'high', 'high'],
   },
 };
 
 // ── 6 · Cloud Castle ─────────────────────────────────────────────────────────
 // Shows: Puff. Big soft chords that change every two beats, first held long
 // ("clouds"), then breathing on every beat ("breathe"), in a choir of ooohs with
-// the Gloop buddy making it huge. Puff starts the song all alone; a soft
-// tick joins with the tune in block 2, so the beat never waits too long.
+// the Gloop buddy making it huge. Puff and the tune start the song
+// together; a soft tick joins in block 2.
 // Moody mood in E: 0 E · 1 F♯ · 2 G · 3 A · 4 B · 5 C · 6 D · 7 E.
 // Chords, two beats each: Em C G D (i VI III VII: steps 0 5 2 6).
 const LOFI_KICK = 'X... .... x.x. .... X... .... x.x. ....';
@@ -629,7 +634,7 @@ const CLOUD_CASTLE: DemoSong = {
   },
   blocks: {
     puff: ['clouds', 'clouds', 'clouds', 'breathe', 'clouds', 'breathe', 'clouds', 'breathe'],
-    bloop: [null, 'stars', 'stars', 'wish', 'stars', 'wish', 'stars', 'wish'],
+    bloop: ['stars', 'stars', 'stars', 'wish', 'stars', 'wish', 'stars', 'wish'],
     grumble: [null, null, 'roots', 'roots', 'roots', null, 'roots', 'roots'],
     boom: [null, 'tick', 'tick', 'soft', 'soft', 'tick', 'soft', 'soft'],
   },

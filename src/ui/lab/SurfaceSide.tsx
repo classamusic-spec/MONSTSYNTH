@@ -72,6 +72,9 @@ export function SurfaceSide({ track, face, extra }: { track: Track; face: LabVie
       }}
     >
       <Icon name={face === 'grid' ? 'keys' : 'grid'} />
+      <span className="flip-label" aria-hidden>
+        {face === 'grid' ? 'Keys' : 'Beats'}
+      </span>
     </button>
   );
   const magnet = untidy && (

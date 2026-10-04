@@ -161,6 +161,19 @@
   }
 }
 
+/* Six places on a short landscape screen: the buttons shrink to share the
+   height (labels included) instead of pushing Learn off the bottom. */
+@media (max-height: 600px) and (orientation: landscape) {
+  .dock {
+    --dock-btn: min(clamp(48px, 11.5vmin, 84px), calc((100dvh - 180px - var(--safe-t) - var(--safe-b)) / 6));
+  }
+}
+@media (max-height: 380px) and (orientation: landscape) {
+  .dock {
+    --dock-btn: min(48px, calc((100dvh - 84px - var(--safe-t) - var(--safe-b)) / 6));
+  }
+}
+
 /* A new loop waits in Monster Blocks: a dot in its monster's colour pulses on
    the Blocks button until Blocks is visited (a still dot with reduced motion). */
 .dock-btn .dock-icon {

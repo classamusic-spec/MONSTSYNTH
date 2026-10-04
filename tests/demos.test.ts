@@ -11,6 +11,35 @@ describe('demo songs', () => {
     expect(new Set(DEMO_SONGS.map((s) => s.title)).size).toBe(6);
   });
 
+  // Children decide in seconds: every song must sound like itself from block 1.
+  const projects = DEMO_SONGS.map((song) => demoProject(song, 5));
+  const openingSounds = (p: (typeof projects)[number]) =>
+    new Set(p.tracks.filter((t) => p.arrangement.rows[t.id][0]).map((t) => `${t.monster}:${t.preset}`));
+  const tunes = (p: (typeof projects)[number]) => p.tracks.filter((t) => t.monster !== 'boom' && t.monster !== 'grumble');
+
+  it('opens every song with its tune, not a lone drum', () => {
+    for (const p of projects) {
+      expect(openingSounds(p).size, p.name).toBeGreaterThanOrEqual(2);
+      expect(tunes(p).some((t) => p.arrangement.rows[t.id][0]), p.name).toBe(true);
+    }
+  });
+
+  it('gives every song its own lead sound and a different speed', () => {
+    const leads = projects.map((p) => tunes(p).filter((t) => p.arrangement.rows[t.id][0]).map((t) => t.preset));
+    const all = leads.flat();
+    expect(new Set(all).size, JSON.stringify(leads)).toBe(all.length);
+    expect(new Set(projects.map((p) => p.tempo)).size).toBe(projects.length);
+  });
+
+  it('never opens two songs with more than one sound in common', () => {
+    for (let a = 0; a < projects.length; a++) {
+      for (let b = a + 1; b < projects.length; b++) {
+        const shared = [...openingSounds(projects[a])].filter((x) => openingSounds(projects[b]).has(x));
+        expect(shared.length, `${projects[a].name} / ${projects[b].name}: ${shared}`).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
   for (const song of DEMO_SONGS) {
     describe(song.title, () => {
       const p = demoProject(song, 3);

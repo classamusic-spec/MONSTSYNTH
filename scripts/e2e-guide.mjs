@@ -136,6 +136,83 @@ const shot = async (page, name) => shots && (await page.screenshot({ path: `${sh
   await ctx.close();
 }
 
+// ── The sequencer is one tap away: Beats in the dock ───────────────────────
+for (const [w, h, tag] of [
+  [1024, 768, 'iPad'],
+  [844, 390, 'phone'],
+  [667, 375, 'small phone'],
+  [820, 1180, 'upright iPad'],
+]) {
+  const { ctx, page } = await open({ width: w, height: h });
+  await page.mouse.click(w / 2, h / 2);
+  await page.waitForTimeout(400);
+  await page.locator('.dock-btn[data-screen="songs"]').click();
+  const fits = await page.evaluate(() => {
+    const vh = innerHeight;
+    return [...document.querySelectorAll('.dock-btn')].every((b) => {
+      const r = b.getBoundingClientRect();
+      return r.bottom <= vh && r.height >= 40;
+    });
+  });
+  check(`${tag}: all six dock buttons fit, finger-sized`, fits);
+  await page.locator('.dock-btn[data-screen="beats"]').click();
+  await page.waitForTimeout(400);
+  let s = await S(page);
+  const sel = s.project.tracks.find((t) => t.id === s.selectedTrackId);
+  check(`${tag}: Beats opens Boom’s step grid`, s.screen === 'lab' && s.labView === 'grid' && sel?.monster === 'boom' && (await page.locator('.step-grid').count()) === 1);
+  check(`${tag}: Beats is the lit dock button`, (await page.locator('.dock-btn[aria-current="page"]').getAttribute('data-screen')) === 'beats');
+  await page.locator('.dock-btn[data-screen="lab"]').click();
+  await page.waitForTimeout(300);
+  s = await S(page);
+  check(`${tag}: Lab goes back to the keys`, s.screen === 'lab' && s.labView === 'keys' && (await page.locator('.keys').count()) === 1);
+  if (tag === 'iPad') {
+    await page.evaluate(() => {
+      const st = window.__monster.getState();
+      window.__monster.actions.selectTrack(st.project.tracks.find((t) => t.monster === 'boom').id);
+    });
+    await page.waitForTimeout(200);
+    check('the flip beside the keys says where it goes', (await page.locator('.surface-flip .flip-label').innerText()) === 'Beats');
+    // A song without Boom: Beats brings Boom to the stage.
+    await page.evaluate(async () => {
+      await window.__monster.actions.newSong('blank');
+      const st = window.__monster.getState();
+      const { removeMonster } = await import('/src/model/edits.ts');
+      const boom = st.project.tracks.find((t) => t.monster === 'boom');
+      const { commit } = await import('/src/store/store.ts');
+      if (boom) commit((p) => removeMonster(p, boom.id));
+    });
+    const before = (await S(page)).project.tracks.some((t) => t.monster === 'boom');
+    await page.locator('.dock-btn[data-screen="beats"]').click();
+    await page.waitForTimeout(300);
+    s = await S(page);
+    const boom = s.project.tracks.find((t) => t.monster === 'boom');
+    check('Beats brings Boom to a song that has no drums', !before && !!boom && s.selectedTrackId === boom.id && s.labView === 'grid');
+  }
+  await ctx.close();
+}
+
+// ── Demo songs sound like themselves from the first block ──────────────────
+{
+  const { ctx, page } = await open();
+  await page.mouse.click(512, 384);
+  await page.waitForTimeout(400);
+  const heard = [];
+  for (const id of ['demo-jungle-drum-parade', 'demo-disco-jellyfish', 'demo-skeleton-tiptoe']) {
+    await page.locator('.dock-btn[data-screen="songs"]').click();
+    await page.locator(`.song-demo[data-demo="${id}"]`).click();
+    await page.waitForTimeout(600);
+    heard.push(
+      await page.evaluate(() => {
+        const p = window.__monster.getState().project;
+        const first = p.tracks.filter((t) => p.arrangement.rows[t.id][0]);
+        return { tempo: p.tempo, sounds: first.map((t) => t.preset).sort().join(' '), tune: first.some((t) => t.monster !== 'boom' && t.monster !== 'grumble') };
+      }),
+    );
+  }
+  check('each demo opens with its own tune and sounds', heard.every((h) => h.tune) && new Set(heard.map((h) => h.sounds)).size === 3 && new Set(heard.map((h) => h.tempo)).size === 3, JSON.stringify(heard));
+  await ctx.close();
+}
+
 check('no console errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 await browser.close();
 const failed = results.filter((r) => !r.ok).length;

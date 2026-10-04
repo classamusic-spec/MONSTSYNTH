@@ -19,12 +19,16 @@ MONSTER SYNTH
 │
 ├── Child space  ─────────────────────────────────────────────────────────────
 │   ├── 🏠 My Songs          shelf of song pictures · New song · Start a band · Learn a song
+│   │                         · My first beat (guided) · six demo songs to listen to and open
 │   ├── 👾 Monster Lab       ← app opens here
 │   │     ├── Stage          every monster on the song, touch = sound + select
 │   │     │     └── + Add Monster → Monster friends tray (invite / send home)
 │   │     ├── Keys / Pads    8 keys (Boom: 6 or 8 drum pads) for the spotlight monster
 │   │     ├── Sound toys     costume (preset) · Echo · Gloop · (Maker: Chomper · Wiggle)
 │   │     └── Mimic          hold-to-talk voice button (when Mimic is on the keys)
+│   ├── ▦ Beats             the Lab's other face: the step sequencer (Beat Hop), one tap
+│   │                         from anywhere. Boom's drum stones (Boom joins if needed);
+│   │                         melody monsters get a bead lane. Lab always means the keys.
 │   ├── 🧱 Monster Blocks    the song: one row per monster, one column per loop
 │   │     └── ✨ Magic       "make it a song" auto-arrangement
 │   ├── 🖌 Sound Painting     draw music: colour = monster, height = pitch, left→right = time

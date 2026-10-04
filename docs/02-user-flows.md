@@ -123,6 +123,11 @@ Every bubble has a voice: its monster chirps as it appears (*"yay!"* for good ne
 1. Tap a demo card (ribbon *Listen*) on the Songs shelf. It opens in Monster Blocks and plays the whole song.
 2. The demo is a copy: tapping it again reopens the same untouched copy, and it only joins *My songs* once the child changes something.
 
+## F15 · Find the step sequencer
+
+1. The dock's *Beats* button (a grid of stones, between Lab and Blocks) opens the Lab on Boom's stones from any screen. If the song has no Boom, Boom joins first.
+2. *Lab* always shows the keys again. Beside the keys, the flip button carries the word of where it goes (*Beats* / *Keys*) on tablets.
+
 ## Recovery flows (no destructive mistakes)
 
 | Accident | Recovery |

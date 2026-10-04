@@ -1,6 +1,7 @@
 import { demoProject, findDemo } from '../magic/demos';
 import { lessonProject, type TeachSong } from '../magic/lessons';
 import { monsterBandProject } from '../magic/templates';
+import { addMonster } from '../model/edits';
 import { newId } from '../model/ids';
 import { createProject, projectHasMusic, projectMeta } from '../model/project';
 import type { Project, Settings } from '../model/types';
@@ -17,7 +18,7 @@ import {
   saveSettings,
 } from './persistence';
 import { idbDelete, idbKeys, requestPersistentStorage } from './idb';
-import { commit, getState, setProject, setState, type LabView, type Overlay, type PaintTool, type Screen } from './store';
+import { canGrid, commit, getState, setProject, setState, type LabView, type Overlay, type PaintTool, type Screen } from './store';
 import type { PaintBrush } from '../model/types';
 
 // App-level actions: booting, switching songs, settings, navigation.
@@ -92,6 +93,21 @@ export function selectTrack(trackId: string) {
 /** Flip the Lab's play surface between the keys and Beat Hop's grid. */
 export function setLabView(labView: LabView) {
   if (getState().labView !== labView) setState({ labView });
+}
+
+/**
+ * The dock's Beats button: the Lab on its step-sequencer face. Boom's drum grid
+ * when Boom is on stage (Boom joins if there is room); otherwise the spotlight
+ * monster's bead lane.
+ */
+export function openBeats() {
+  const before = getState();
+  if (!before.project.tracks.some((t) => t.monster === 'boom')) commit((p) => addMonster(p, 'boom'));
+  const s = getState();
+  const boom = s.project.tracks.find((t) => t.monster === 'boom');
+  const selected = s.project.tracks.find((t) => t.id === s.selectedTrackId);
+  const pick = canGrid(boom, s.project.loopBeats) ? boom : canGrid(selected, s.project.loopBeats) ? selected : boom;
+  setState({ screen: 'lab', overlay: null, labView: 'grid', ...(pick ? { selectedTrackId: pick.id } : {}) });
 }
 
 /** A monster's first loop is waiting in Monster Blocks (the Blocks button wears a dot until visited). */
