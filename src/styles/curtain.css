@@ -36,13 +36,18 @@
 }
 
 /* The curtain call's pictures sit over the screen's own area (never over the
-   dock or the transport rail), and only "again" takes touches. */
+   dock or the transport rail: anything poking out is clipped, touches too).
+   The pictures take their own touches, so a tap on them never reaches the
+   blocks underneath; the rest of the area lets touches through. */
 .curtain {
+  --again: clamp(84px, 22vmin, 150px);
+  --again-top: 66%;
   grid-area: screen;
   position: relative;
   z-index: 43;
   min-width: 0;
   min-height: 0;
+  overflow: clip;
   pointer-events: none;
 }
 
@@ -61,6 +66,9 @@
   --icon-hole: #8a4b00;
   filter: drop-shadow(0 6px 0 rgba(106, 63, 224, 0.75)) drop-shadow(0 12px 24px rgba(0, 0, 0, 0.35));
   animation: curtain-hands 1.7s var(--ease-pop) forwards;
+  /* A tap claps along (the halo counts too): it never reaches the blocks under the hands. */
+  pointer-events: auto;
+  touch-action: manipulation;
 }
 
 /* A soft night halo behind the hands, so they stand out on bright blocks. */
@@ -120,8 +128,8 @@
 .curtain-again {
   position: absolute;
   left: 50%;
-  top: 66%;
-  width: clamp(84px, 22vmin, 150px);
+  top: var(--again-top);
+  width: var(--again);
   aspect-ratio: 1;
   translate: -50% -50%;
   border-radius: 50%;
@@ -132,10 +140,32 @@
     curtain-again-breathe 1.6s 0.5s ease-in-out infinite;
 }
 
-/* Going away: it fades, and takes no touches from the first moment. */
+/* The sparkles and the glow ring round it count as the button: a child aiming
+   at a twinkly star gets the song, never the block under it. */
+.curtain-again::before {
+  content: '';
+  position: absolute;
+  inset: -24%;
+  border-radius: 50%;
+}
+
+/* Going away: it fades (still a button while it can be seen: a tap plays). */
 .curtain-again[data-leaving='true'] {
   animation: curtain-fade-out 0.25s ease-out forwards;
-  pointer-events: none;
+}
+
+/* Just tapped: for a moment its spot swallows a little one's second tap, so
+   the encore never starts with a block popping out of the song. */
+.curtain-shield {
+  position: absolute;
+  left: 50%;
+  top: var(--again-top);
+  width: calc(var(--again) * 1.48);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  pointer-events: auto;
+  touch-action: manipulation;
 }
 
 .curtain-again-face {
@@ -151,7 +181,7 @@
     0 10px 28px rgba(255, 122, 47, 0.5),
     inset 0 -5px 0 rgba(0, 0, 0, 0.16);
   color: #fff;
-  font-size: calc(clamp(84px, 22vmin, 150px) * 0.58);
+  font-size: calc(var(--again) * 0.58);
 }
 
 .curtain-again-face svg {
@@ -223,8 +253,8 @@
   .finale-clap {
     top: 30%;
   }
-  .curtain-again {
-    top: 68%;
+  .curtain {
+    --again-top: 68%;
   }
 }
 

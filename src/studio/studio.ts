@@ -8,7 +8,7 @@ import type { Voice } from '../audio/voices/base';
 import { TICK_PAD } from '../audio/voices/drums';
 import { audioBufferToWav, blobToAudioBuffer } from '../audio/wav';
 import { magicArrange } from '../magic/arrange';
-import { applauseHits } from '../magic/curtain';
+import { applauseHits, CLAP_TIMES, finaleSingers } from '../magic/curtain';
 import { wandPattern } from '../magic/grooves';
 import { placeNote } from '../magic/recorder';
 import { audibleTracks, collectEvents, songHasSound, type PlayMode, type SeqEvent } from '../magic/sequence';
@@ -1221,8 +1221,7 @@ class Studio {
     this.finaleAt = at;
     const p = getState().project;
     // Only monsters the child can hear take the bow (a sleeping Boom stays asleep).
-    const heard = audibleTracks(p);
-    const boom = heard.find((t) => t.monster === 'boom');
+    const { crash: boom, tada: singer } = finaleSingers(p);
     if (boom) {
       for (const [pad, vel] of [
         [5, 0.75],
@@ -1232,7 +1231,6 @@ class Studio {
         this.queueVisual(at, { trackId: boom.id, monster: 'boom', step: pad, vel, dur: 0.5, source: 'loop' });
       }
     }
-    const singer = heard.find((t) => t.monster === 'spark') ?? heard.find((t) => t.monster !== 'boom');
     if (!singer) return;
     [0, 2, 4, 7].forEach((step, i) => {
       const t = at + i * 0.09;
@@ -1250,6 +1248,39 @@ class Studio {
     // No false praise: a song that had nothing to hear just stops.
     if (this.songHadSound) emitStudioEvent({ type: 'finale' });
     this.songHadSound = false;
+  }
+
+  // ── The curtain call's applause ───────────────────────────────────────────
+
+  /**
+   * The audience claps for the band's bow (the curtain call after a song):
+   * "clap, clap, clap-clap-clap" on Boom's clap, every clap two pairs of hands
+   * tuned a little apart, on the crowd's own quiet channel. Never recorded, no
+   * monster animates. Silent while the band or a lesson plays, at rest time or
+   * while the app is hidden. `once`: a single clap layered over the applause
+   * (a child clapping along on the hands).
+   */
+  applause(seed = Math.floor(Math.random() * 1e6), once = false): boolean {
+    const ctx = this.ctx;
+    const engine = this.engine;
+    const s = getState();
+    if (!ctx || !engine || s.resting || document.hidden || this.transport?.playing || this.lessonTransport?.playing) return false;
+    if (!engine.hasChannel(CROWD_CHANNEL.id)) engine.ensureChannel(CROWD_CHANNEL);
+    if (once) this.crowdVoices = this.crowdVoices.filter((v) => v.endTime > ctx.currentTime);
+    else this.hushCrowd();
+    const t0 = ctx.currentTime + (once ? 0.005 : 0.02);
+    for (const h of applauseHits(seed, once ? [0] : CLAP_TIMES)) {
+      const voice = engine.trigger({ channelId: CROWD_CHANNEL.id, midi: [], pad: CROWD.pad, vel: h.vel, bend: h.bend, size: h.size, tone: 0 }, t0 + h.at, 0.3);
+      if (voice) this.crowdVoices.push(voice);
+    }
+    return true;
+  }
+
+  /** The band starts again: the applause stops at once. */
+  private hushCrowd() {
+    const now = this.ctx?.currentTime ?? 0;
+    for (const v of this.crowdVoices) if (v.endTime > now) v.kill(now, 0.04);
+    this.crowdVoices = [];
   }
 
   private provide(from: number, to: number): Scheduled[] {
@@ -1472,36 +1503,6 @@ class Studio {
       // Shown like a loop note: the monster sings it, but it never counts as the child playing.
       this.queueVisual(when, { trackId: track?.id ?? null, monster, step, vel, dur, source: 'loop' });
     }
-  }
-
-  // ── The curtain call's applause ───────────────────────────────────────────
-
-  /**
-   * The audience claps for the band's bow (the curtain call after a song):
-   * "clap, clap, clap-clap-clap" on Boom's clap, every clap two pairs of hands
-   * tuned a little apart, on the crowd's own quiet channel. Never recorded, no
-   * monster animates. Silent while the band or a lesson plays, or at rest time.
-   */
-  applause(seed = Math.floor(Math.random() * 1e6)): boolean {
-    const ctx = this.ctx;
-    const engine = this.engine;
-    const s = getState();
-    if (!ctx || !engine || s.resting || this.transport?.playing || this.lessonTransport?.playing) return false;
-    if (!engine.hasChannel(CROWD_CHANNEL.id)) engine.ensureChannel(CROWD_CHANNEL);
-    this.hushCrowd();
-    const t0 = ctx.currentTime + 0.02;
-    for (const h of applauseHits(seed)) {
-      const voice = engine.trigger({ channelId: CROWD_CHANNEL.id, midi: [], pad: CROWD.pad, vel: h.vel, bend: h.bend, size: h.size, tone: 0 }, t0 + h.at, 0.3);
-      if (voice) this.crowdVoices.push(voice);
-    }
-    return true;
-  }
-
-  /** The band starts again: the applause stops at once. */
-  private hushCrowd() {
-    const now = this.ctx?.currentTime ?? 0;
-    for (const v of this.crowdVoices) if (v.endTime > now) v.kill(now, 0.04);
-    this.crowdVoices = [];
   }
 
   // ── Song lessons ──────────────────────────────────────────────────────────

@@ -5,7 +5,9 @@ import {
   BOW_MS,
   CLAP_TIMES,
   curtainTimes,
+  curtainCast,
   CURTAIN_START_MS,
+  finaleSingers,
   HOP_MS,
   MAX_CLAP_VEL,
   noteRow,
@@ -97,6 +99,66 @@ describe('songPerformers · who takes the bow', () => {
   });
 });
 
+describe('finaleSingers and curtainCast · whoever sang the ending bows too', () => {
+  const kinds = (p: Project, ids: string[]) => ids.map((id) => (id === PAINT_ROW ? 'paint' : p.tracks.find((t) => t.id === id)?.monster));
+  const asleep = (p: Project, ...monsters: string[]): Project => ({ ...p, tracks: p.tracks.map((t) => (monsters.includes(t.monster) ? { ...t, sleeping: true } : t)) });
+
+  it('Boom crashes and Spark sings "ta-da!" (else the first other monster you can hear)', () => {
+    const band = monsterBandProject(11);
+    const f = finaleSingers(band);
+    expect(f.crash?.monster).toBe('boom');
+    expect(f.tada?.monster).toBe('spark');
+    const noBoom = finaleSingers(asleep(band, 'boom'));
+    expect(noBoom.crash).toBeNull();
+    expect(noBoom.tada?.monster).toBe('spark');
+    const noSpark = finaleSingers(asleep(band, 'spark'));
+    expect(noSpark.tada?.monster).not.toBe('boom');
+    expect(noSpark.tada).toBe(band.tracks.find((t) => t.monster !== 'boom' && t.monster !== 'spark'));
+    const onlyBoom = finaleSingers(asleep(band, ...band.tracks.filter((t) => t.monster !== 'boom').map((t) => t.monster)));
+    expect(onlyBoom.crash?.monster).toBe('boom');
+    expect(onlyBoom.tada).toBeNull();
+  });
+
+  it('the performers bow, and so do the crash and the "ta-da!" without blocks; everyone else watches', () => {
+    const band = monsterBandProject(12);
+    const boom = band.tracks.find((t) => t.monster === 'boom')!;
+    const others = band.tracks.filter((t) => t.monster !== 'boom' && t.monster !== 'spark');
+    expect(others.length).toBeGreaterThan(0);
+    // Only Boom has blocks: Spark sang the ending and bows; the others just watch.
+    const rows = Object.fromEntries(Object.entries(band.arrangement.rows).map(([k, v]) => [k, k === boom.id ? v : v.map(() => null)]));
+    const p: Project = { ...band, arrangement: { ...band.arrangement, rows } };
+    expect(songPerformers(p)).toEqual([boom.id]);
+    const cast = curtainCast(p);
+    expect(kinds(p, cast).sort()).toEqual(['boom', 'spark']);
+    // Row order (stage order), whoever is first.
+    expect(cast).toEqual(p.tracks.filter((t) => cast.includes(t.id)).map((t) => t.id));
+    for (const o of others) expect(cast).not.toContain(o.id);
+    // A sleeping Spark stays asleep: the first other monster you can hear sings the ending and bows.
+    const sleepy = curtainCast(asleep(p, 'spark'));
+    expect(kinds(p, sleepy).sort()).toEqual(['boom', others[0].monster].sort());
+    // The whole band: everyone bows, nobody twice.
+    expect(curtainCast(band)).toEqual(band.tracks.map((t) => t.id));
+  });
+
+  it('no song to hear, nobody bows (the crash and ta-da only end a song with sound)', () => {
+    expect(curtainCast(createProject({ seed: 13 }))).toEqual([]);
+    const band = monsterBandProject(14);
+    expect(curtainCast({ ...band, tracks: band.tracks.map((t) => ({ ...t, sleeping: true })) })).toEqual([]);
+  });
+
+  it('the painting still bows last', () => {
+    const p = createProject({ seed: 15 });
+    const painted: Project = {
+      ...p,
+      painting: { strokes: [stroke], sleeping: false },
+      arrangement: { ...p.arrangement, rows: { ...p.arrangement.rows, [PAINT_ROW]: [PAINT_ROW, ...new Array(p.arrangement.length - 1).fill(null)] } },
+    };
+    const cast = curtainCast(painted);
+    expect(cast[cast.length - 1]).toBe(PAINT_ROW);
+    expect(cast.slice(0, -1)).toEqual(painted.tracks.filter((t) => t.id === finaleSingers(painted).crash?.id || t.id === finaleSingers(painted).tada?.id).map((t) => t.id));
+  });
+});
+
 describe('noteRow · which row head sings a note', () => {
   it('a band note belongs to its track; a painting note to the painting, even in a borrowed voice', () => {
     expect(noteRow({ trackId: 't1', source: 'loop' })).toBe('t1');
@@ -173,6 +235,17 @@ describe('applauseHits · an audience, not a drum machine', () => {
     // Every clap of the rhythm is there, and the second pair of hands is never more than 25 ms late.
     for (const t of CLAP_TIMES) expect(a.filter((h) => h.at >= t - 1e-9 && h.at <= t + 0.025)).toHaveLength(2);
     expect(a[a.length - 1].at).toBeLessThan(0.8);
+  });
+
+  it('one clap on its own (a child clapping along): a strong pair of hands, at once', () => {
+    for (let seed = 1; seed < 20; seed++) {
+      const one = applauseHits(seed, [0]);
+      expect(one).toHaveLength(2);
+      expect(one[0].at).toBe(0);
+      expect(one[1].at).toBeLessThanOrEqual(0.025);
+      expect(Math.max(...one.map((h) => h.vel))).toBeGreaterThanOrEqual(0.47);
+      for (const h of one) expect(h.vel).toBeLessThanOrEqual(MAX_CLAP_VEL);
+    }
   });
 
   it('the last clap is the strongest', () => {

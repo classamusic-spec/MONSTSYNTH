@@ -1,5 +1,5 @@
 import { seededRandom } from '../model/ids';
-import type { Project } from '../model/types';
+import type { Project, Track } from '../model/types';
 import { PAINT_ROW } from '../model/types';
 import { audibleTracks, paintingAudible } from './sequence';
 
@@ -26,6 +26,36 @@ export function songPerformers(project: Project): string[] {
     .filter((t) => used(t.id).some((id) => !!id && (t.clips.find((c) => c.id === id)?.notes.length ?? 0) > 0))
     .map((t) => t.id);
   if (paintingAudible(project) && used(PAINT_ROW).some(Boolean)) out.push(PAINT_ROW);
+  return out;
+}
+
+/**
+ * Who plays the song's last downbeat (the studio's finale): Boom crashes, and
+ * Spark (else the first other monster you can hear) sings "ta-da!". Only
+ * monsters you can hear: a sleeping Boom stays asleep.
+ */
+export function finaleSingers(project: Project): { crash: Track | null; tada: Track | null } {
+  const heard = audibleTracks(project);
+  return {
+    crash: heard.find((t) => t.monster === 'boom') ?? null,
+    tada: heard.find((t) => t.monster === 'spark') ?? heard.find((t) => t.monster !== 'boom') ?? null,
+  };
+}
+
+/**
+ * Who takes the bow, in row order: the song's performers, and whoever sang its
+ * ending (the crash and the "ta-da!" were heard too, so those monsters bow even
+ * without a block). Everyone else watches.
+ */
+export function curtainCast(project: Project): string[] {
+  const performers = new Set(songPerformers(project));
+  // No song to hear, no ending and no bow.
+  if (!performers.size) return [];
+  const { crash, tada } = finaleSingers(project);
+  const out = audibleTracks(project)
+    .filter((t) => performers.has(t.id) || t.id === crash?.id || t.id === tada?.id)
+    .map((t) => t.id);
+  if (performers.has(PAINT_ROW)) out.push(PAINT_ROW);
   return out;
 }
 
@@ -106,14 +136,15 @@ export interface ClapHit {
  * The applause: every clap of the rhythm is two pairs of hands a few ms apart,
  * each tuned and sized a little differently, so it sounds like an audience and
  * not a drum machine. The last clap is the strongest. Deterministic per seed.
+ * `times` [0] is one clap on its own (a child clapping along on the hands).
  */
-export function applauseHits(seed: number): ClapHit[] {
+export function applauseHits(seed: number, times: readonly number[] = CLAP_TIMES): ClapHit[] {
   const rnd = seededRandom(seed);
   const between = (a: number, b: number) => a + rnd() * (b - a);
   const round = (v: number, k = 1000) => Math.round(v * k) / k;
   const hits: ClapHit[] = [];
-  CLAP_TIMES.forEach((at, i) => {
-    const last = i === CLAP_TIMES.length - 1;
+  times.forEach((at, i) => {
+    const last = i === times.length - 1;
     const vel = last ? between(0.47, MAX_CLAP_VEL) : between(0.38, 0.45);
     hits.push({ at, vel: round(vel), bend: round(between(-1.5, 1.5), 10), size: round(between(-0.3, 0.1), 100) });
     hits.push({ at: round(at + between(0.008, 0.022)), vel: round(between(0.26, 0.34)), bend: round(between(-3, 3), 10), size: round(between(-0.4, 0.2), 100) });

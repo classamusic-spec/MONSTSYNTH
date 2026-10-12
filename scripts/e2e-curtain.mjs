@@ -13,6 +13,13 @@
 //   5. Reduced motion: glows, no hops or bows, still hands, no star rain.
 //   6. iPad 1024×768, phone 844×390, upright 820×1180; axe on Blocks during the
 //      finale; smooth under a 4× slower CPU; no console errors.
+//   7. Touches on the curtain's pictures never edit the song (touchscreen): a
+//      tapped bowing monster hops again and stays awake, the hands clap along,
+//      a double tap on "again" or a tap on its sparkles only replays the song.
+//   8. A child busy with the song before "again" comes is not interrupted; no
+//      show and no applause behind Parent Space or while the app is hidden.
+// Checks that depend on per-note detail accept the lite path (one composited
+// bounce of the head) when the machine is slow, so a busy machine cannot fail them.
 // Usage: node scripts/e2e-curtain.mjs [url] [screenshot-dir]
 import { existsSync, readFileSync } from 'node:fs';
 import { chromium } from 'playwright';
@@ -52,8 +59,8 @@ function hookAnimations() {
   };
 }
 
-async function open({ viewport = { width: 1024, height: 768 }, reducedMotion = 'no-preference' } = {}) {
-  const ctx = await browser.newContext({ viewport, reducedMotion });
+async function open({ viewport = { width: 1024, height: 768 }, reducedMotion = 'no-preference', touch = false } = {}) {
+  const ctx = await browser.newContext({ viewport, reducedMotion, hasTouch: touch });
   await ctx.addInitScript(hookAnimations);
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(String(e)));
@@ -72,14 +79,28 @@ async function open({ viewport = { width: 1024, height: 768 }, reducedMotion = '
       return trigger(req, when, dur);
     };
     window.__finale = [];
-    window.__monster.bus.onStudioEvent((e) => e.type === 'finale' && window.__finale.push(performance.now()));
+    window.__monster.bus.onStudioEvent((e) => {
+      if (e.type !== 'finale') return;
+      window.__finale.push(performance.now());
+      // Was the curtain call on the lite path (a slow machine)? The bow's lids are then skipped.
+      window.__liteAtFinale = window.__react?.liteVisuals() ?? null;
+    });
   });
+  // The app's own frame-budget module (the same instance the app uses).
+  await page.evaluate(async () => (window.__react = await import('/src/ui/monsters/react.ts')));
   return { ctx, page };
 }
 
 const S = (page) => page.evaluate(() => window.__monster.getState());
 const shot = async (page, name) => shots && (await page.screenshot({ path: `${shots}/${name}.png` }));
 const resetLogs = (page) => page.evaluate(() => ((window.__anims = []), (window.__trig = []), (window.__finale = [])));
+/** A head reaction: the body squashing inside the drawing, or (lite path, a slow machine) one composited bounce of the head's box. */
+const headMove = (x) => x.body || /\brow-avatar\b/.test(x.cls);
+/** The song as it stands, and how many undo steps there are (a touch that slips through to the blocks changes both). */
+const songState = (page) => page.evaluate(() => {
+  const s = window.__monster.getState();
+  return { rows: JSON.stringify(s.project.arrangement.rows), past: s.past.length, playing: s.transport.playing, sleeping: Object.fromEntries(s.project.tracks.map((t) => [t.monster, t.sleeping])) };
+});
 const anims = (page) => page.evaluate(() => window.__anims);
 
 /**
@@ -149,8 +170,8 @@ const waitSince = async (page, ms) => {
   check('block 1: Bloop, Grumble and Spark (no block here) stay still', inBlock(id.bloop, 0.5, 7.5) + inBlock(id.grumble, 0, 16) + inBlock(id.spark, 0, 16) === 0);
   check('block 2: Bloop’s row head sings when its block comes', inBlock(id.bloop, 8.5, 15.5) >= 4, `${inBlock(id.bloop, 8.5, 15.5)} animations`);
   check('block 2: Boom (no block 2) is quiet again', inBlock(id.boom, 8.5, 15.5) === 0);
-  const bodies = a.filter((x) => x.row === id.boom && x.body);
-  check('the head itself moves (its body squashes), not only its eyes', bodies.length >= 2 && bodies.every((x) => x.props.includes('transform')));
+  const bodies = a.filter((x) => x.row === id.boom && headMove(x));
+  check('the head itself moves (its body squashes), not only its eyes', bodies.length >= 2 && bodies.every((x) => x.props.includes('transform') || x.props.includes('scale')), `${bodies.length} (${bodies.filter((x) => !x.body).length} on the lite path)`);
   await shot(page, 'curtain-1-singing-ipad');
 
   // A dense row (sixteenth hi-hats at 180 bpm, 83 ms apart) is throttled: about every other note.
@@ -170,7 +191,7 @@ const waitSince = async (page, ms) => {
   await page.evaluate(() => window.__monster.studio.play());
   await page.waitForTimeout(2900);
   await page.evaluate(() => window.__monster.studio.stop());
-  const dense = await page.evaluate((boom) => ({ notes: window.__boomNotes, reacts: window.__anims.filter((x) => x.row === boom && x.body).length }), id.boom);
+  const dense = await page.evaluate((boom) => ({ notes: window.__boomNotes, reacts: window.__anims.filter((x) => x.row === boom && (x.body || /\brow-avatar\b/.test(x.cls))).length }), id.boom);
   check('a dense hi-hat row reacts about every other note, never on every one', dense.notes >= 24 && dense.reacts >= dense.notes * 0.3 && dense.reacts <= dense.notes * 0.7, `${dense.reacts} reactions for ${dense.notes} notes`);
 
   // A sleeping row stays asleep, even when its block is previewed; an awake row's preview sings.
@@ -219,9 +240,12 @@ for (const viewport of [
 ]) {
   const tag = `${viewport.width}×${viewport.height}`;
   const { ctx, page } = await open({ viewport });
-  // Bloop and Boom play; Grumble sleeps (with blocks); Spark has no block: two performers.
+  // Bloop and Boom play; Grumble sleeps (with blocks); Spark has no block but sings the ending's
+  // "ta-da!", so it bows too: three performers.
   await bandSong(page, { cols: { bloop: [0], boom: [0], grumble: [0] }, sleeping: ['grumble'], length: 1, tempo: 170 });
   const id = await ids(page);
+  const order = (await S(page)).project.tracks.map((t) => t.id);
+  const cast = order.filter((x) => [id.bloop, id.boom, id.spark].includes(x));
   await resetLogs(page);
   const t0 = await page.evaluate(() => window.__monster.studio.play());
   check(`${tag}: the song ends with a finale`, await waitFinale(page));
@@ -230,18 +254,21 @@ for (const viewport of [
   const hops = a.filter((x) => x.id === 'curtain-hop');
   const bows = a.filter((x) => x.id === 'curtain-bow');
   check(
-    `${tag}: the performers hop one by one in row order (Bloop, then Boom)`,
-    hops.length === 2 && hops[0].row === id.bloop && hops[1].row === id.boom && hops[1].delay > hops[0].delay,
+    `${tag}: the performers hop one by one in row order (Spark, who sang the “ta-da!”, too)`,
+    hops.length === 3 && hops.every((h, i) => h.row === cast[i] && (i === 0 || h.delay > hops[i - 1].delay)),
     hops.map((h) => `${h.row}@${h.delay}`).join(' '),
   );
   check(
     `${tag}: …then bow together, after the last hop`,
-    bows.length === 2 && new Set(bows.map((b) => b.row)).size === 2 && bows.every((b) => b.delay === bows[0].delay && b.delay > hops[1].delay),
+    bows.length === 3 && new Set(bows.map((b) => b.row)).size === 3 && bows.every((b) => b.delay === bows[0].delay && b.delay > hops[2].delay),
     bows.map((b) => `${b.row}@${b.delay}`).join(' '),
   );
-  check(`${tag}: a sleeping monster and one with no blocks just watch`, a.filter((x) => x.id.startsWith('curtain') && (x.row === id.grumble || x.row === id.spark)).length === 0);
+  check(`${tag}: a sleeping monster just watches`, a.filter((x) => x.id.startsWith('curtain') && x.row === id.grumble).length === 0);
   check(`${tag}: the hop and the bow move the whole head (composited), not parts inside it`, [...hops, ...bows].every((x) => x.cls.includes('monster-svg') && x.props.every((p) => ['translate', 'scale'].includes(p))));
-  check(`${tag}: eyes close for the bow`, a.filter((x) => x.id === 'curtain-lids' && x.row === id.bloop).length > 0);
+  const lite = await page.evaluate(() => window.__liteAtFinale);
+  check(`${tag}: eyes close for the bow (unless a slow machine keeps to the composited bow)`, lite === true || a.filter((x) => x.id === 'curtain-lids' && x.row === id.bloop).length > 0, lite ? 'lite path' : '');
+  const claps = await page.evaluate(() => document.getAnimations().filter((x) => x.id === 'curtain-clap').map((x) => x.effect.getTiming().fill));
+  check(`${tag}: the hands stay together after the last clap (no snapping open as they fade)`, claps.length === 3 && claps.every((f) => f === 'forwards'), claps.join(' '));
   check(`${tag}: stars rain for the song`, (await page.locator('.finale .confetti').count()) > 0);
   check(`${tag}: two clapping hands, and the old title is gone`, (await page.locator('.finale-clap svg .clap-l').count()) === 1 && (await page.locator('.finale-title').count()) === 0);
   await shot(page, `curtain-2-bow-${viewport.name}`);
@@ -311,7 +338,10 @@ for (const viewport of [
     const d = await page.evaluate(() => window.__monster.studio.debug());
     check('“again” plays the song again from the top', s.transport.playing && s.transport.mode === 'song' && d.beat < 1, `beat ${d.beat.toFixed(2)}`);
     await page.waitForTimeout(350);
-    check('…and the curtain call is gone (no button, no stars, no bows left running)', (await page.locator('.curtain, .finale').count()) === 0 && (await page.evaluate(() => document.getAnimations().filter((x) => x.id.startsWith('curtain-')).length)) === 0);
+    check('…and the curtain call is gone (no button, no hands, no stars, no bows left running)', (await page.locator('.curtain-again, .finale-clap, .finale').count()) === 0 && (await page.evaluate(() => document.getAnimations().filter((x) => x.id.startsWith('curtain-')).length)) === 0);
+    // Only an invisible shield stays where the button was, for a moment (a double tap must not edit the song).
+    await page.waitForTimeout(400);
+    check('…and a moment later nothing at all is left over the blocks', (await page.locator('.curtain').count()) === 0);
     // That song ends too; this time a touch elsewhere sends "again" away, and the touch still does its job.
     check('the replayed song ends with its own curtain call', await waitFinale(page));
     await page.waitForFunction(() => !!document.querySelector('.curtain-again'), null, { timeout: 6000 });
@@ -319,6 +349,9 @@ for (const viewport of [
     await page.mouse.click(cell.l + cell.w / 2, cell.t + cell.h / 2);
     await page.waitForTimeout(400);
     check('a touch elsewhere sends “again” away, and still does its own job (the block pops)', (await page.locator('.curtain-again').count()) === 0 && !(await S(page)).project.arrangement.rows[id.bloop][0]);
+    // (The hands finish fading half a second after "again" appears.)
+    await page.waitForFunction(() => !document.querySelector('.finale-clap'), null, { timeout: 3000 }).catch(() => {});
+    check('…and nothing is left to catch a touch where it was', (await page.locator('.curtain').count()) === 0);
     await page.evaluate(() => window.__monster.studio.undo());
   }
   if (viewport.name === 'phone') {
@@ -336,13 +369,16 @@ for (const viewport of [
     check('…then goes by itself, leaving nothing in the way of Play or the blocks', !gone.curtain && gone.play && gone.mid, JSON.stringify(gone));
   }
   if (viewport.name === 'upright') {
-    // Pressing Play mid-bow ends the curtain call at once and the song starts from block 1.
-    await bandSong(page, { cols: { bloop: [0], boom: [0], spark: [0] }, length: 1, tempo: 170 });
+    // Only Boom and Spark have blocks: Bloop and Grumble (awake, no blocks, not singing the ending) just watch.
+    await bandSong(page, { cols: { boom: [0], spark: [0] }, length: 1, tempo: 170 });
     Object.assign(id, await ids(page));
     await resetLogs(page);
     await page.evaluate(() => window.__monster.studio.play());
     await waitFinale(page);
     await waitSince(page, 900);
+    const w = (await anims(page)).filter((x) => x.id === 'curtain-hop');
+    check('a monster with no blocks that did not sing the ending just watches', w.length === 2 && w.some((x) => x.row === id.boom) && w.some((x) => x.row === id.spark) && !w.some((x) => x.row === id.bloop || x.row === id.grumble), w.map((x) => x.row).join(' '));
+    // Pressing Play mid-bow ends the curtain call at once and the song starts from block 1.
     await page.locator('.t-play').click();
     await page.waitForTimeout(120);
     const running = await page.evaluate(() => document.getAnimations().filter((x) => x.id.startsWith('curtain-') && x.playState !== 'finished').length);
@@ -472,6 +508,145 @@ for (const viewport of [
   await page.waitForTimeout(1500);
   const voices = await page.evaluate(() => window.__monster.studio.debug());
   check('…and no voice is left sounding after Stop', voices.voices === 0 && voices.held === 0, `${voices.voices} voices`);
+  await ctx.close();
+}
+
+// ── 7. Touches on the curtain never edit the song (a touchscreen) ──────────
+for (const viewport of [
+  { width: 1024, height: 768, name: 'ipad' },
+  { width: 844, height: 390, name: 'phone' },
+]) {
+  const tag = `${viewport.width}×${viewport.height} touch`;
+  const { ctx, page } = await open({ viewport, touch: true });
+  // Every block filled: any touch that slipped through to the grid would take one away.
+  await bandSong(page, { cols: { bloop: [0, 1], boom: [0, 1], grumble: [0, 1], spark: [0, 1] }, length: 2, tempo: 200 });
+  const id = await ids(page);
+  const before = await songState(page);
+  await resetLogs(page);
+  await page.evaluate(() => window.__monster.studio.play());
+  check(`${tag}: the song ends with a finale`, await waitFinale(page, 12000));
+  // A tap on a bowing monster: it hops again and says "yay!", and is not sent to sleep.
+  await waitSince(page, 1000);
+  const head = await rect(page, `.block-row[data-track="${id.grumble}"] .row-avatar`);
+  const sung0 = await page.evaluate((g) => window.__trig.filter((x) => x.ch === g).length, id.grumble);
+  await page.touchscreen.tap(head.l + head.w / 2, head.t + head.h / 2);
+  await page.waitForTimeout(250);
+  const tapped = await page.evaluate(({ g, sung0 }) => ({ hops: window.__anims.filter((x) => x.id === 'curtain-hop' && x.row === g).map((x) => x.delay), yay: window.__trig.filter((x) => x.ch === g).length - sung0 }), { g: id.grumble, sung0 });
+  const afterHead = await songState(page);
+  check(
+    `${tag}: tapping a bowing monster makes it hop again and sing, and it stays awake for the encore`,
+    tapped.hops.length === 2 && tapped.hops[1] === 0 && tapped.yay > 0 && !afterHead.sleeping.grumble && afterHead.past === before.past,
+    JSON.stringify({ ...tapped, sleeping: afterHead.sleeping.grumble, past: afterHead.past }),
+  );
+  // A tap on the clapping hands: one more clap from the crowd, and the blocks under them are untouched.
+  await page.waitForSelector('.finale-clap', { timeout: 4000 });
+  await page.waitForTimeout(250);
+  const hands = await rect(page, '.finale-clap');
+  const underHands = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('.finale-clap, .block, .blocks-grid')?.className ?? '', { x: hands.l + hands.w / 2, y: hands.t + hands.h / 2 });
+  const crowd0 = await page.evaluate(() => window.__trig.filter((x) => x.ch === 'crowd').length);
+  await page.touchscreen.tap(hands.l + hands.w / 2, hands.t + hands.h / 2);
+  await page.waitForTimeout(200);
+  const crowd1 = await page.evaluate(() => window.__trig.filter((x) => x.ch === 'crowd').length);
+  const afterHands = await songState(page);
+  check(
+    `${tag}: tapping the clapping hands claps along and never edits the song under them`,
+    underHands.includes('finale-clap') && crowd1 === crowd0 + 2 && afterHands.rows === before.rows && afterHands.past === before.past,
+    JSON.stringify({ under: underHands, claps: crowd1 - crowd0, past: afterHands.past }),
+  );
+  await shot(page, `curtain-7-hands-${viewport.name}`);
+  // "Again", tapped twice like a little one does (160 ms apart): the song plays, and stays as it was.
+  await page.waitForSelector('.curtain-again', { timeout: 6000 });
+  await page.waitForTimeout(600);
+  const ar = await rect(page, '.curtain-again');
+  const cx = ar.l + ar.w / 2;
+  const cy = ar.t + ar.h / 2;
+  await page.touchscreen.tap(cx, cy);
+  await page.waitForTimeout(160);
+  await page.touchscreen.tap(cx, cy);
+  await page.waitForTimeout(320);
+  await page.touchscreen.tap(cx, cy);
+  await page.waitForTimeout(200);
+  const afterDouble = await songState(page);
+  check(
+    `${tag}: tapping “again” two or three times quickly replays the song and never takes a block away`,
+    afterDouble.playing && afterDouble.rows === before.rows && afterDouble.past === before.past,
+    JSON.stringify({ playing: afterDouble.playing, changed: afterDouble.rows !== before.rows, past: afterDouble.past }),
+  );
+  await page.waitForTimeout(500);
+  check(`${tag}: …and once the moment has passed, nothing is left over the blocks`, (await page.locator('.curtain, .curtain-shield').count()) === 0);
+  // That song ends too: a finger aiming at one of the sparkles round "again" gets the song too.
+  await page.evaluate(() => (window.__finale = []));
+  check(`${tag}: the encore ends with its own curtain call`, await waitFinale(page, 12000));
+  await page.waitForSelector('.curtain-again', { timeout: 6000 });
+  await page.waitForTimeout(600);
+  const spark = await page.evaluate(() => {
+    const b = document.querySelector('.curtain-again').getBoundingClientRect();
+    const s = [...document.querySelectorAll('.curtain-spark')].map((el) => el.getBoundingClientRect()).sort((p, q) => q.left - p.left)[0];
+    return { x: s.left + s.width / 2, y: s.top + s.height / 2, out: s.left + s.width / 2 - (b.left + b.width / 2) > b.width / 2 };
+  });
+  const top = await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.curtain-again'), spark);
+  await page.touchscreen.tap(spark.x, spark.y);
+  await page.waitForTimeout(250);
+  const afterSpark = await songState(page);
+  check(
+    `${tag}: a tap on a sparkle outside the disc counts as “again” (the song plays, no block is touched)`,
+    spark.out && top && afterSpark.playing && afterSpark.rows === before.rows && afterSpark.past === before.past,
+    JSON.stringify({ outsideDisc: spark.out, onTop: top, playing: afterSpark.playing, past: afterSpark.past }),
+  );
+  await page.evaluate(() => window.__monster.studio.stop());
+  await ctx.close();
+}
+
+// ── 8. A busy child is not interrupted; nobody watching, no show ──────────
+{
+  const { ctx, page } = await open();
+  await bandSong(page, { cols: { bloop: [0, 1], boom: [0, 1], grumble: [0, 1], spark: [0, 1] }, length: 1, tempo: 200 });
+  const id = await ids(page);
+  // The child starts fixing the song during the bow: "again" does not pop up over the blocks they are working on.
+  await resetLogs(page);
+  await page.evaluate(() => window.__monster.studio.play());
+  await waitFinale(page);
+  await waitSince(page, 1100);
+  const cell = await rect(page, `.block[data-row="${id.boom}"][data-col="0"]`);
+  await page.mouse.click(cell.l + cell.w / 2, cell.t + cell.h / 2);
+  await waitSince(page, 4600);
+  const busy = await page.evaluate(() => ({ again: !!document.querySelector('.curtain-again'), crowd: window.__trig.filter((x) => x.ch === 'crowd').length }));
+  check('a child who starts editing during the bow is not interrupted: no “again” over the blocks (the applause still comes)', !busy.again && busy.crowd === 10, JSON.stringify(busy));
+  await page.evaluate(() => window.__monster.studio.undo());
+
+  // The song ends behind Parent Space: no stars, no bow, no applause, no "again" waiting behind it.
+  await page.waitForTimeout(300);
+  await resetLogs(page);
+  await page.evaluate(() => window.__monster.studio.play());
+  await page.waitForTimeout(400);
+  await page.evaluate(() => window.__monster.actions.setOverlay('parent'));
+  await waitFinale(page);
+  await waitSince(page, 3600);
+  const parent = await page.evaluate(() => ({
+    shown: !!document.querySelector('.finale, .curtain'),
+    crowd: window.__trig.filter((x) => x.ch === 'crowd').length,
+    hops: window.__anims.filter((x) => x.id.startsWith('curtain')).length,
+  }));
+  await page.evaluate(() => window.__monster.actions.setOverlay(null));
+  await page.waitForTimeout(200);
+  check('a song that ends behind Parent Space gets no show and no applause (and nothing waits behind it)', !parent.shown && parent.crowd === 0 && parent.hops === 0 && (await page.locator('.curtain-again').count()) === 0, JSON.stringify(parent));
+
+  // The app goes out of sight just after the song ends: the curtain call stops, the crowd never claps.
+  await resetLogs(page);
+  await page.evaluate(() => window.__monster.studio.play());
+  await waitFinale(page);
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await waitSince(page, 3600);
+  const hidden = await page.evaluate(() => ({
+    shown: !!document.querySelector('.finale, .curtain'),
+    crowd: window.__trig.filter((x) => x.ch === 'crowd').length,
+    applause: window.__monster.studio.applause(),
+  }));
+  check('the app going out of sight ends the curtain call: no applause in the background', !hidden.shown && hidden.crowd === 0 && hidden.applause === false, JSON.stringify(hidden));
   await ctx.close();
 }
 
