@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { clearLoop, toggleSleep } from '../../model/edits';
 import { fxStepIndex, MONSTERS, presetInfo } from '../../model/monsters';
 import { trackHasLoop } from '../../model/project';
@@ -6,10 +6,12 @@ import type { FxKind, Track } from '../../model/types';
 import { selectTrack } from '../../store/actions';
 import { commit, useApp } from '../../store/store';
 import { studio } from '../../studio/studio';
-import { onNote } from '../../studio/visualBus';
+import { onNote, onStudioEvent } from '../../studio/visualBus';
 import { FxBuddy } from '../monsters/FxBuddy';
 import { MonsterArt } from '../monsters/MonsterArt';
 import { liteVisuals, reactToNote, spawnNoteSprite } from '../monsters/react';
+import { chompOnNote, costumePoof } from '../monsters/scenes';
+import { showTickle } from '../monsters/tickle';
 import { Icon } from '../icons/Icon';
 import { isReducedMotion, useCaps } from '../hooks/useCaps';
 import { getSize, onSize, setSize } from './expression';
@@ -75,6 +77,9 @@ export const MonsterPod = memo(function MonsterPod({ track, selected }: { track:
   // Start watching the frame budget as soon as a monster is on stage.
   useEffect(() => void liteVisuals(), []);
 
+  const chomper = useRef(0);
+  chomper.current = fxStepIndex(track.fx.chomper);
+
   // Sound → animation.
   useEffect(
     () =>
@@ -84,9 +89,33 @@ export const MonsterPod = memo(function MonsterPod({ track, selected }: { track:
         reactOpts.current.reduced = isReducedMotion();
         reactToNote(rootRef.current, v, reactOpts.current);
         spawnNoteSprite(rootRef.current, v, reactOpts.current.reduced);
+        if (chomper.current) chompOnNote(rootRef.current, chomper.current, { reduced: reactOpts.current.reduced, lite: liteVisuals() });
       }),
     [track.id],
   );
+
+  // Tickle time: the giggles, the laugh and the happy blink (the studio says when).
+  useEffect(
+    () =>
+      onStudioEvent((e) => {
+        if (e.type !== 'tickle' || e.trackId !== track.id || !rootRef.current) return;
+        showTickle(rootRef.current, e, { reduced: isReducedMotion(), lite: liteVisuals() });
+      }),
+    [track.id],
+  );
+
+  // A new costume: a puff of smoke and the new hat drops on (never on a fresh
+  // mount, so visiting the Lab again replays nothing; Undo replays it on purpose).
+  // A copy of the hat being worn is kept, so a costume without one can show it fly off.
+  const lastPreset = useRef(track.preset);
+  const lastHat = useRef<Element | null>(null);
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    if (lastPreset.current !== track.preset) costumePoof(root, lastHat.current, { reduced: isReducedMotion(), lite: liteVisuals() });
+    lastPreset.current = track.preset;
+    lastHat.current = (root.querySelector('.squish .m-accessory')?.cloneNode(true) as Element | undefined) ?? null;
+  }, [track.preset]);
 
   // Pinch squish persists as the monster's shape.
   useEffect(() => {
@@ -127,6 +156,8 @@ export const MonsterPod = memo(function MonsterPod({ track, selected }: { track:
     hit.setPointerCapture?.(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (!selected) selectTrack(track.id);
+    // Every new finger counts towards tickle time (a hold, drag, roll, shake or pinch is one contact).
+    studio.tickle(track.id, e.timeStamp);
 
     // Second finger on the same monster → pinch (squish/stretch), no new note.
     if (gesture.current && pointers.current.size === 2) {

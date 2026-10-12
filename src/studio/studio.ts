@@ -11,6 +11,8 @@ import { wandPattern } from '../magic/grooves';
 import { placeNote } from '../magic/recorder';
 import { audibleTracks, collectEvents, songHasSound, type PlayMode, type SeqEvent } from '../magic/sequence';
 import { hasGridFace } from '../magic/steps';
+import { MOON_BELL, moonSteps, SKY_BELL } from '../magic/sky';
+import { LAUGHS, type LaughKind } from '../magic/tickle';
 import { gridLinesIn, isBounce, nextLine, nextOccurrence, snapDuration, wrap } from '../magic/timing';
 import { recordNote, replaceLoopNotes, setRecordedDuration, setTrackSample, tidyLoop } from '../model/edits';
 import { newId } from '../model/ids';
@@ -20,6 +22,7 @@ import type { Clip, MonsterKind, NoteEvent, Project, Settings, Track } from '../
 import { flushSave, loadSample, saveSample } from '../store/persistence';
 import { beginGroup, commit, endGroup, getState, labFace, redo, setState, undo, useApp, type AppState, type TransportFlags } from '../store/store';
 import { noteRequest, type Expression } from './notes';
+import { Tickler } from './tickle';
 import { emitFrame, emitNote, emitStudioEvent, type NoteVisual } from './visualBus';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,13 +123,17 @@ interface AuditionEvent {
   end: number;
 }
 
-/** A monster's little sounds: "huh?" (nothing to play), "yay!" and "pop" (a block goes away). */
-export type ChirpKind = 'huh' | 'yay' | 'pop';
+/**
+ * A monster's little sounds: "huh?" (nothing to play), "yay!" and "pop" (a block
+ * goes away), and tickle time's laughs: "giggle", the bigger "laugh" and "wheee".
+ */
+export type ChirpKind = 'huh' | 'yay' | 'pop' | LaughKind;
 
-/** [scale step (a drum pad for Boom), start (s), length (s), velocity] */
-type ChirpNote = [step: number, at: number, dur: number, vel: number];
+/** [scale step (a drum pad for Boom), start (s), length (s), velocity, drum tuning (semitones)] */
+type ChirpNote = readonly [step: number, at: number, dur: number, vel: number, bend?: number];
 
-const CHIRPS: Record<ChirpKind, { tune: ChirpNote[]; drums: ChirpNote[] }> = {
+/** `by`: a monster with a chirp of its own (Puff's slow "hoooo" laugh, say). */
+const CHIRPS: Record<ChirpKind, { tune: readonly ChirpNote[]; drums: readonly ChirpNote[]; by?: Partial<Record<MonsterKind, readonly ChirpNote[]>> }> = {
   // A question: two notes up, the second one longer.
   huh: {
     tune: [
@@ -159,6 +166,8 @@ const CHIRPS: Record<ChirpKind, { tune: ChirpNote[]; drums: ChirpNote[] }> = {
     ],
     drums: [[4, 0, 0.08, 0.45]],
   },
+  // Tickle time: laughter, not tunes (src/magic/tickle.ts).
+  ...LAUGHS,
 };
 
 /** The metronome: a woodblock tick on a channel of its own that no song change touches. */
@@ -1430,7 +1439,7 @@ class Studio {
    * block popping away, Play with nothing to play): two or three notes in its
    * own sound, never recorded. Monsters off stage sing on a channel of their own.
    */
-  chirp(monster: MonsterKind, kind: ChirpKind) {
+  chirp(monster: MonsterKind, kind: ChirpKind, delay = 0) {
     const ctx = this.ctx;
     const engine = this.engine;
     const s = getState();
@@ -1446,13 +1455,78 @@ class Studio {
       }
     }
     const p = s.project;
-    const notes = monster === 'boom' ? CHIRPS[kind].drums : CHIRPS[kind].tune;
-    for (const [step, at, dur, vel] of notes) {
-      const when = ctx.currentTime + 0.01 + at;
-      engine.trigger(noteRequest(p, monster, channelId, step, { vel }), when, dur);
+    const chirp = CHIRPS[kind];
+    const notes = chirp.by?.[monster] ?? (monster === 'boom' ? chirp.drums : chirp.tune);
+    for (const [step, at, dur, vel, bend = 0] of notes) {
+      const when = ctx.currentTime + 0.01 + Math.max(0, delay) + at;
+      engine.trigger(noteRequest(p, monster, channelId, step, { vel, bend }), when, dur);
       // Shown like a loop note: the monster sings it, but it never counts as the child playing.
       this.queueVisual(when, { trackId: track?.id ?? null, monster, step, vel, dur, source: 'loop' });
     }
+  }
+
+  // ── Tickle time and the musical sky (Lab stage) ───────────────────────────
+  // Both are heard, never recorded, never edits (no undo step, nothing saved).
+
+  private tickler = new Tickler(this);
+  private skyRings = 0;
+
+  /**
+   * A new finger came down on a monster's pod (`atMs`: the touch's own
+   * timestamp). Quick pokes add up to the giggles, then a laugh (src/studio/tickle.ts).
+   */
+  tickle(trackId: string, atMs?: number) {
+    this.tickler.tap(trackId, atMs ?? performance.now());
+  }
+
+  /** The channel the sky's bells ring on: Spark's own sound, kept by the studio (like painting's). */
+  private skyChannel(): string | null {
+    const engine = this.engine;
+    if (!engine) return null;
+    const id = 'paint:spark';
+    if (!engine.hasChannel(id)) {
+      const info = MONSTERS.spark;
+      engine.ensureChannel({ id, monster: 'spark', preset: info.presets[0].id, fx: info.defaultFx, volume: 0.75, maxVoices: info.maxVoices, persistent: true });
+    }
+    return id;
+  }
+
+  /** May the sky ring now? Hushed while a take records (or waits): it would never be in the loop. */
+  private skyOpen(): boolean {
+    const s = getState();
+    return !!this.engine && !!this.ctx && !s.resting && !s.transport.recording && !s.transport.armed;
+  }
+
+  /** A bell from the Lab's night sky: Spark's Star Bells at a scale step (src/magic/sky.ts). False when hushed. */
+  skyBell(step: number): boolean {
+    const channel = this.skyOpen() ? this.skyChannel() : null;
+    const ctx = this.ctx;
+    if (!channel || !ctx || !this.engine) return false;
+    const p = getState().project;
+    this.engine.trigger(noteRequest(p, 'spark', channel, step, { vel: SKY_BELL.vel }), ctx.currentTime, SKY_BELL.dur);
+    emitNote({ trackId: null, monster: 'spark', step, vel: SKY_BELL.vel, dur: SKY_BELL.dur, source: 'sky' });
+    this.skyRings++;
+    return true;
+  }
+
+  /** The moon's soft low bell: the mood's root, an octave down and at home. False when hushed. */
+  moonBell(): boolean {
+    const channel = this.skyOpen() ? this.skyChannel() : null;
+    const ctx = this.ctx;
+    if (!channel || !ctx || !this.engine) return false;
+    const p = getState().project;
+    moonSteps(p.scale).forEach((step, i) => {
+      const vel = MOON_BELL.vels[i];
+      this.engine?.trigger(noteRequest(p, 'spark', channel, step, { vel }), ctx.currentTime + i * 0.012, MOON_BELL.dur);
+      emitNote({ trackId: null, monster: 'spark', step, vel, dur: MOON_BELL.dur, source: 'sky' });
+    });
+    this.skyRings++;
+    return true;
+  }
+
+  /** Diagnostics for tickle time and the sky (automated checks). */
+  delightDebug() {
+    return { tickles: this.tickler.active, laughs: this.tickler.laughs, skyRings: this.skyRings };
   }
 
   // ── Song lessons ──────────────────────────────────────────────────────────

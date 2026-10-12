@@ -75,7 +75,7 @@ function Eye({ uid, n, cx, cy, r, lidColor, iris = '#1a3d8f' }: EyeProps) {
           style={{ transformOrigin: `${cx}px ${cy - r}px` }}
         />
       </g>
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(10,12,41,.18)" strokeWidth={1.4} />
+      <circle className="m-eye-ring" cx={cx} cy={cy} r={r} fill="none" stroke="rgba(10,12,41,.18)" strokeWidth={1.4} />
       <path
         className="m-lid-line"
         d={`M${cx - r * 0.62},${cy + r * 0.02} Q${cx},${cy + r * 0.5} ${cx + r * 0.62},${cy + r * 0.02}`}
@@ -84,9 +84,28 @@ function Eye({ uid, n, cx, cy, r, lidColor, iris = '#1a3d8f' }: EyeProps) {
         strokeWidth={Math.max(2.4, r * 0.15)}
         strokeLinecap="round"
       />
+      {/* Tickle time: a happy ^ (never the sleeping ‿), shown while the monster giggles. */}
+      <path
+        className="m-eye-happy"
+        d={`M${cx - r * 0.6},${cy + r * 0.26} Q${cx},${cy - r * 0.66} ${cx + r * 0.6},${cy + r * 0.26}`}
+        fill="none"
+        stroke="#1a1440"
+        strokeWidth={Math.max(3.2, r * 0.22)}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity={0}
+      />
     </g>
   );
 }
+
+/** Rosy cheeks that only show while the monster giggles (Spark and Puff always have theirs). */
+const TickleCheeks = ({ at, rx = 9, ry = 5.5 }: { at: [number, number, number]; rx?: number; ry?: number }) => (
+  <>
+    <ellipse className="m-cheek m-cheek-tickle" cx={at[0]} cy={at[2]} rx={rx} ry={ry} fill="#ff7aa2" opacity={0} />
+    <ellipse className="m-cheek m-cheek-tickle" cx={at[1]} cy={at[2]} rx={rx} ry={ry} fill="#ff7aa2" opacity={0} />
+  </>
+);
 
 function Shine({ cx, cy, rx, ry, rot = -25, o = 0.35 }: { cx: number; cy: number; rx: number; ry: number; rot?: number; o?: number }) {
   return <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="#fff" opacity={o} transform={`rotate(${rot} ${cx} ${cy})`} />;
@@ -148,6 +167,7 @@ function Bloop({ uid }: { uid: string }) {
         <circle cx={76} cy={168} r={3} />
       </g>
       <g className="m-face">
+        <TickleCheeks at={[64, 136, 140]} />
         <Eye uid={uid} n={1} cx={100} cy={106} r={31} lidColor={p.base} />
         <Mouth closed="M84,150 Q100,164 116,150" d="M80,146 Q100,182 120,146 Q100,154 80,146 Z" tongue={[100, 163, 9, 5.5]} />
       </g>
@@ -185,6 +205,7 @@ function Boom({ uid }: { uid: string }) {
         <path d="M110,86 Q124,78 138,86" stroke="#7a2600" strokeWidth={4.5} strokeLinecap="round" fill="none" />
         <Eye uid={uid} n={1} cx={78} cy={106} r={17} lidColor={p.base} />
         <Eye uid={uid} n={2} cx={122} cy={106} r={17} lidColor={p.base} />
+        <TickleCheeks at={[58, 142, 130]} />
         <g className="m-mouth">
           <path className="m-mouth-closed" d="M76,136 Q100,154 124,136" fill="none" stroke="#1b0a2c" strokeWidth={4} strokeLinecap="round" />
           <g className="m-mouth-open">
@@ -232,6 +253,7 @@ function Grumble({ uid }: { uid: string }) {
       <g className="m-face">
         <Eye uid={uid} n={1} cx={72} cy={112} r={19} lidColor={p.dark} />
         <Eye uid={uid} n={2} cx={128} cy={112} r={19} lidColor={p.dark} />
+        <TickleCheeks at={[48, 152, 138]} rx={10} ry={6} />
         <g className="m-mouth">
           <path className="m-mouth-closed" d="M66,146 Q100,166 134,146" fill="none" stroke="#10301a" strokeWidth={4.5} strokeLinecap="round" />
           <g className="m-mouth-open">
@@ -260,8 +282,8 @@ function Spark({ uid }: { uid: string }) {
       <g className="m-face">
         <Eye uid={uid} n={1} cx={82} cy={112} r={14} lidColor={p.base} iris="#8a4b00" />
         <Eye uid={uid} n={2} cx={118} cy={112} r={14} lidColor={p.base} iris="#8a4b00" />
-        <ellipse cx={67} cy={132} rx={8} ry={5} fill="#ff7aa2" opacity={0.6} />
-        <ellipse cx={133} cy={132} rx={8} ry={5} fill="#ff7aa2" opacity={0.6} />
+        <ellipse className="m-cheek" cx={67} cy={132} rx={8} ry={5} fill="#ff7aa2" opacity={0.6} />
+        <ellipse className="m-cheek" cx={133} cy={132} rx={8} ry={5} fill="#ff7aa2" opacity={0.6} />
         <Mouth closed="M90,136 Q100,146 110,136" d="M86,132 Q100,158 114,132 Q100,138 86,132 Z" tongue={[100, 145, 6, 4]} />
       </g>
       <Sparkles />
@@ -282,8 +304,8 @@ function Puff({ uid }: { uid: string }) {
       <g className="m-face">
         <Eye uid={uid} n={1} cx={84} cy={130} r={10} lidColor={p.base} iris="#4a3b9a" />
         <Eye uid={uid} n={2} cx={116} cy={130} r={10} lidColor={p.base} iris="#4a3b9a" />
-        <ellipse cx={70} cy={146} rx={8} ry={5} fill="#ff9ec4" opacity={0.7} />
-        <ellipse cx={130} cy={146} rx={8} ry={5} fill="#ff9ec4" opacity={0.7} />
+        <ellipse className="m-cheek" cx={70} cy={146} rx={8} ry={5} fill="#ff9ec4" opacity={0.7} />
+        <ellipse className="m-cheek" cx={130} cy={146} rx={8} ry={5} fill="#ff9ec4" opacity={0.7} />
         <Mouth closed="M92,150 Q100,157 108,150" d="M90,147 Q100,164 110,147 Q100,151 90,147 Z" tongue={[100, 156, 5, 3]} />
       </g>
     </>
@@ -314,6 +336,7 @@ function Mimic({ uid }: { uid: string }) {
       <g className="m-face">
         <Eye uid={uid} n={1} cx={80} cy={114} r={15} lidColor={p.base} iris="#7a1745" />
         <Eye uid={uid} n={2} cx={120} cy={114} r={15} lidColor={p.base} iris="#7a1745" />
+        <TickleCheeks at={[62, 138, 134]} rx={9} ry={5.5} />
         <path d="M60,138 l5,-5 l5,5 l-5,5 Z" fill="#fff" opacity={0.5} />
         <path d="M130,138 l5,-5 l5,5 l-5,5 Z" fill="#fff" opacity={0.5} />
         <g className="m-mouth">
@@ -389,8 +412,11 @@ export const MonsterArt = memo(function MonsterArt({ kind, accessory = 'none', c
         <g id={`${uid}-figure`}>
           <Body uid={uid} />
           {accessory !== 'none' && (
-            <g className="m-accessory" transform={`translate(${anchor.x} ${anchor.y}) scale(${anchor.s}) rotate(${anchor.r ?? 0})`}>
-              <AccessoryArt kind={accessory} uid={uid} eyeY={EYE_LINE[kind]} />
+            <g className="m-accessory" data-accessory={accessory} transform={`translate(${anchor.x} ${anchor.y}) scale(${anchor.s}) rotate(${anchor.r ?? 0})`}>
+              {/* An inner group to animate (a costume change drops it in; the giggles lift shades): `.m-accessory` keeps its anchor. */}
+              <g className="m-hat">
+                <AccessoryArt kind={accessory} uid={uid} eyeY={EYE_LINE[kind]} />
+              </g>
             </g>
           )}
         </g>

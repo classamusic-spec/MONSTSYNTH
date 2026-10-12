@@ -24,7 +24,8 @@ export const StageScene = memo(function StageScene() {
         <path d="M0,276 C160,268 300,274 420,276 C560,278 690,268 800,272 L800,300 L0,300 Z" fill="#1c206f" />
       </svg>
       {/* Its own little picture, pinned to the open sky at the top right, so it
-          never hides behind a monster on wide phone stages or tall portrait ones. */}
+          never hides behind a monster on wide phone stages or tall portrait ones.
+          Touching it rings a soft low bell; it glows and winks (StageSky.tsx). */}
       <svg className="stage-moon" viewBox="0 0 124 124">
         <defs>
           <radialGradient id="stage-moon" cx="40%" cy="35%" r="70%">
@@ -37,9 +38,20 @@ export const StageScene = memo(function StageScene() {
           </radialGradient>
         </defs>
         <circle className="moon-glow" cx={62} cy={62} r={62} fill="url(#stage-glow)" />
-        <circle cx={62} cy={62} r={25} fill="url(#stage-moon)" />
-        <circle cx={54} cy={55} r={5} fill="#f2c24e" opacity={0.55} />
-        <circle cx={70} cy={72} r={3.5} fill="#f2c24e" opacity={0.5} />
+        <g className="moon-disc">
+          <circle cx={62} cy={62} r={25} fill="url(#stage-moon)" />
+          <circle cx={54} cy={55} r={5} fill="#f2c24e" opacity={0.55} />
+          <circle cx={70} cy={72} r={3.5} fill="#f2c24e" opacity={0.5} />
+          <g className="moon-face" opacity={0}>
+            <ellipse className="moon-eye-l" cx={54} cy={60} rx={2.4} ry={3} fill="#9a6408" />
+            <ellipse className="moon-eye-r" cx={70} cy={60} rx={2.4} ry={3} fill="#9a6408" />
+            <path d="M54,68 Q62,75 70,68" fill="none" stroke="#9a6408" strokeWidth={2.4} strokeLinecap="round" />
+            <ellipse cx={49} cy={67} rx={3.6} ry={2.2} fill="#ff9e7a" opacity={0.55} />
+            <ellipse cx={75} cy={67} rx={3.6} ry={2.2} fill="#ff9e7a" opacity={0.55} />
+          </g>
+        </g>
+        {/* The moon's touch circle: bigger than the disc, so a small finger always finds it. */}
+        <circle className="moon-hit" cx={62} cy={62} r={40} fill="transparent" />
       </svg>
       <div className="stage-pulse" />
     </div>

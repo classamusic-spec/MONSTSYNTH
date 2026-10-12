@@ -141,19 +141,25 @@ export function reactToNote(root: HTMLElement, v: NoteVisual, o: ReactOptions) {
   const mouthMs = Math.min(1600, Math.max(180, v.dur * 1000 + 80));
   const open = svg.querySelector('.m-mouth-open');
   const closed = svg.querySelector('.m-mouth-closed');
-  anim(open, [
-    { opacity: 0, transform: 'scaleY(.5)' },
-    { opacity: 1, transform: `scaleY(${1 + t * 0.25})`, offset: 0.12 },
-    { opacity: 1, transform: `scaleY(${1 + t * 0.25})`, offset: 0.85 },
-    { opacity: 0, transform: 'scaleY(.6)' },
-  ], { duration: mouthMs, easing: 'ease-out' });
-  anim(closed, [{ opacity: 0 }, { opacity: 0, offset: 0.85 }, { opacity: 1 }], { duration: mouthMs });
+  // Tickle time (src/ui/monsters/tickle.ts): a giggling monster keeps its ^ ^ eyes
+  // and its grin; each note just bounces the grin.
+  if (root.dataset.tickle !== undefined) {
+    anim(open, [{ opacity: 1, transform: 'scaleY(1)' }, { opacity: 1, transform: `scaleY(${1.18 + t * 0.2})`, offset: 0.3 }, { opacity: 1, transform: 'scaleY(1)' }], { duration: 220, easing: 'ease-out' });
+  } else {
+    anim(open, [
+      { opacity: 0, transform: 'scaleY(.5)' },
+      { opacity: 1, transform: `scaleY(${1 + t * 0.25})`, offset: 0.12 },
+      { opacity: 1, transform: `scaleY(${1 + t * 0.25})`, offset: 0.85 },
+      { opacity: 0, transform: 'scaleY(.6)' },
+    ], { duration: mouthMs, easing: 'ease-out' });
+    anim(closed, [{ opacity: 0 }, { opacity: 0, offset: 0.85 }, { opacity: 1 }], { duration: mouthMs });
 
-  // Eyes widen with every note (lids lift), then settle back.
-  const lidRest = o.monster === 'grumble' ? 0.42 : 0;
-  svg.querySelectorAll('.m-lid').forEach((lid) =>
-    anim(lid, [{ transform: 'scaleY(0)' }, { transform: 'scaleY(0)', offset: 0.7 }, { transform: `scaleY(${lidRest})` }], { duration: 420 }),
-  );
+    // Eyes widen with every note (lids lift), then settle back.
+    const lidRest = o.monster === 'grumble' ? 0.42 : 0;
+    svg.querySelectorAll('.m-lid').forEach((lid) =>
+      anim(lid, [{ transform: 'scaleY(0)' }, { transform: 'scaleY(0)', offset: 0.7 }, { transform: `scaleY(${lidRest})` }], { duration: 420 }),
+    );
+  }
 
   if (!o.reduced) {
     svg.querySelectorAll('.m-antenna').forEach((ant, i) =>

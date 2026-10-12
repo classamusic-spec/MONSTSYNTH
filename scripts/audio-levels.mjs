@@ -2,7 +2,9 @@
 // so gain staging stays even across monsters. Also renders Beat Hop's densest
 // drum grids, every wand groove, every melodic monster's fullest bead lane and
 // every wand tune, and the whole band stamped at once, which must all stay
-// inside the master gate.
+// inside the master gate. Tickle time's laughs (every monster's giggle, bigger
+// laugh and "wheee", in its first sound) must peak no louder than a played
+// note of the same sound, and the sky's bells must sit under a Spark key.
 // Usage: node scripts/audio-levels.mjs [url]
 import { chromium } from 'playwright';
 
@@ -150,7 +152,45 @@ const report = await page.evaluate(async () => {
   });
   const whole = measure(await renderSong(all6));
   laneRows.push({ lane: 'whole band: every monster\'s busiest wand idea', notes: all6.tracks.reduce((n, t) => n + t.clips[0].notes.length, 0), peakDb: db(whole.peak), rmsDb: db(whole.rms), peak: whole.peak });
-  return { rows, click, band: { peakDb: db(b.peak), rmsDb: db(b.rms), seconds: band.duration.toFixed(1) }, worst: { peakDb: db(w.peak), rmsDb: db(w.rms), peak: w.peak }, gridRows, laneRows };
+  // Tickle time: each monster's laughs on its own channel (its first sound, no effects), as
+  // chirp() plays them, against the same sound's played notes (the preset table above).
+  const { LAUGHS, laughNotes } = await import('/src/magic/tickle.ts');
+  const laughRows = [];
+  for (const m of Object.values(MONSTERS)) {
+    const preset = m.presets[0].id;
+    const notePeak = rows.find((r) => r.monster === m.kind && r.preset === preset).peakDb;
+    for (const kind of Object.keys(LAUGHS)) {
+      const sr = 44100;
+      const ctx = new OfflineAudioContext(2, sr * 3, sr);
+      const e = new AudioEngine(ctx);
+      e.setOutputLevel(1, 1);
+      e.ensureChannel({ id: 't', monster: m.kind, preset, fx: fx0, volume: 0.8, maxVoices: m.maxVoices });
+      for (const [step, at, dur, vel, bend = 0] of laughNotes(kind, m.kind)) {
+        e.trigger(noteRequest({ scale: 'pentatonicMajor', key: 0 }, m.kind, 't', step, { vel, bend }), 0.05 + at, dur);
+      }
+      const r = measure(await ctx.startRendering());
+      laughRows.push({ monster: m.kind, laugh: kind, peakDb: db(r.peak), rmsDb: db(r.rms), notePeakDb: notePeak, peak: r.peak, overNote: 20 * Math.log10(r.peak) - Number(notePeak) });
+    }
+  }
+  // The musical sky: Star Bells on Spark's studio channel (its own effects, volume 0.75),
+  // the highest sky bell and the moon's two-note bell, against a Spark key (vel 0.85, volume 0.8).
+  const { SKY_BELL, MOON_BELL, SKY_HIGH, moonSteps } = await import('/src/magic/sky.ts');
+  const skyRender = async (notes) => {
+    const sr = 44100;
+    const ctx = new OfflineAudioContext(2, sr * 3, sr);
+    const e = new AudioEngine(ctx);
+    e.setOutputLevel(1, 1);
+    e.ensureChannel({ id: 'sky', monster: 'spark', preset: 'star-bells', fx: MONSTERS.spark.defaultFx, volume: 0.75, maxVoices: 8 });
+    for (const [step, vel, dur, at] of notes) e.trigger(noteRequest({ scale: 'pentatonicMajor', key: 0 }, 'spark', 'sky', step, { vel }), 0.05 + at, dur);
+    return measure(await ctx.startRendering());
+  };
+  const bell = await skyRender([[SKY_HIGH, SKY_BELL.vel, SKY_BELL.dur, 0]]);
+  const moonR = await skyRender(moonSteps('pentatonicMajor').map((st, i) => [st, MOON_BELL.vels[i], MOON_BELL.dur, i * 0.012]));
+  // A sweep: a bell every 70 ms across the whole sky, the busiest the sky can be.
+  const sweep = await skyRender(Array.from({ length: 10 }, (_, i) => [i, SKY_BELL.vel, SKY_BELL.dur, i * 0.07]));
+  const sparkKey = Number(rows.find((r) => r.monster === 'spark' && r.preset === 'star-bells').peakDb);
+  const sky = { bellPeakDb: db(bell.peak), moonPeakDb: db(moonR.peak), sweepPeakDb: db(sweep.peak), sparkKeyPeakDb: sparkKey, bell: bell.peak, moon: moonR.peak, sweep: sweep.peak };
+  return { rows, click, band: { peakDb: db(b.peak), rmsDb: db(b.rms), seconds: band.duration.toFixed(1) }, worst: { peakDb: db(w.peak), rmsDb: db(w.rms), peak: w.peak }, gridRows, laneRows, laughRows, sky };
 });
 console.table(report.rows);
 console.log('Metronome tick (accent) vs kick:', report.click);
@@ -158,6 +198,8 @@ console.log('Monster Band song:', report.band);
 console.log('Worst case (all fx max):', { peakDb: report.worst.peakDb, rmsDb: report.worst.rmsDb });
 console.table(report.gridRows.map(({ peak, ...r }) => r));
 console.table(report.laneRows.map(({ peak, ...r }) => r));
+console.table(report.laughRows.map(({ peak, overNote, ...r }) => ({ ...r, vsNoteDb: overNote.toFixed(1) })));
+console.log('Musical sky (Star Bells on Spark\'s studio channel):', { bell: report.sky.bellPeakDb, moon: report.sky.moonPeakDb, sweep: report.sky.sweepPeakDb, sparkKey: report.sky.sparkKeyPeakDb });
 // The master gate: the limiter and soft clip keep everything under −1 dBFS.
 const GATE_DB = -1;
 const over = [...report.gridRows, ...report.laneRows.map((r) => ({ ...r, grid: r.lane }))].filter((r) => 20 * Math.log10(r.peak) > GATE_DB);
@@ -167,5 +209,16 @@ console.log(
     ? `FAIL  over the ${GATE_DB} dBFS master gate: ${over.map((r) => r.grid).join(', ')}`
     : `PASS  every grid, wand groove, bead lane and wand tune stays under the ${GATE_DB} dBFS master gate`,
 );
+// A laugh is a chirp, not a fanfare: never more than 1 dB over the sound's own played note, and audible.
+const loudLaughs = report.laughRows.filter((r) => r.overNote > 1 || 20 * Math.log10(r.peak) > -6 || 20 * Math.log10(r.peak) < -30);
+console.log(
+  loudLaughs.length
+    ? `FAIL  laughs out of range: ${loudLaughs.map((r) => `${r.monster} ${r.laugh} ${r.peakDb} dB (note ${r.notePeakDb})`).join(', ')}`
+    : 'PASS  every laugh peaks at most 1 dB over its own note, between -30 and -6 dBFS',
+);
+// The sky is a soft bell under the keys: quieter than a Spark key, but clearly there; a sweep stays under the gate.
+const skyDb = (v) => 20 * Math.log10(v);
+const skyOk = skyDb(report.sky.bell) <= report.sky.sparkKeyPeakDb - 2 && skyDb(report.sky.bell) > -26 && skyDb(report.sky.moon) <= report.sky.sparkKeyPeakDb && skyDb(report.sky.moon) > -26 && skyDb(report.sky.sweep) < GATE_DB;
+console.log(skyOk ? 'PASS  sky and moon bells sit under a Spark key (and a sweep under the gate)' : 'FAIL  sky bells out of range');
 await browser.close();
-process.exit(over.length ? 1 : 0);
+process.exit(over.length || loudLaughs.length || !skyOk ? 1 : 0);

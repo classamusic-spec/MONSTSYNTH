@@ -37,8 +37,11 @@ export function FxBuddy({ kind, className }: { kind: FxKind; className?: string 
       return (
         <svg className={className} viewBox="0 0 48 48" aria-hidden>
           <circle cx={24} cy={25} r={18} fill="#b061ff" />
-          <path d="M10,26 L38,26 Q36,42 24,42 Q12,42 10,26 Z" fill="#2a0b45" />
-          <path d="M11,26 L15,32 L19,26 L23,32 L27,26 L31,32 L35,26 L37,26" fill="#fff" />
+          {/* The jaw snaps shut on every note its monster plays (src/ui/monsters/scenes.ts). */}
+          <g className="fx-jaw">
+            <path d="M10,26 L38,26 Q36,42 24,42 Q12,42 10,26 Z" fill="#2a0b45" />
+            <path d="M11,26 L15,32 L19,26 L23,32 L27,26 L31,32 L35,26 L37,26" fill="#fff" />
+          </g>
           <circle cx={18} cy={16} r={4.5} fill="#fff" />
           <circle cx={30} cy={16} r={4.5} fill="#fff" />
           <circle cx={18.5} cy={17} r={2.2} fill="#2a0b45" />

@@ -42,6 +42,35 @@ All touch targets ≥ 44 px; primary actions ≥ 52 px; keys are the largest tar
 * **+ Add Monster** seat at the end of the row opens the Monster friends tray.
 * **Sound toys** for the spotlight monster: costume hat (next preset, the monster changes outfit and plays a preview) and effect buddies (tap cycles asleep → a little → a lot, shown by 2 pips and a glowing ring). On tall screens they sit above the monster's head; on phones they sit at the left of the keys so the stage keeps its room.
 * Maker mode shows the monster name (and sound name on tablets) as a small label.
+* **Tickle time** (Little Monsters): poking the same monster again and again gives it the giggles, then it laughs out loud in its own voice (see *Tickle time* below). Every poke still plays its note.
+* **The musical sky**: the bare night sky and the moon are an instrument too (see *The musical sky* below). Pods, loop badges, the + seat and the toys keep every one of their taps.
+
+### Tickle time
+
+Only **new finger-downs** on a monster's pod count (`src/magic/tickle.ts`, pure and unit-tested). A hold, a drag, a roll, a shake or a pinch is one contact, so ordinary playing never adds up by accident; a second finger of a two-hand mash counts. Each monster keeps its own count.
+
+| Step | Little Monsters | What the child sees and hears |
+|---|---|---|
+| giggles | 5 contacts within 2 s | eyes squeeze into happy ^ ^ (never the sleeping ‿), cheeks blush, a wide grin, a jiggle; star shades hop up onto the forehead |
+| more | each further poke | its note as always, plus a jiggle and a bubble |
+| laugh | 450 ms without a poke | laughs in its own voice (a chirp: 4–6 staccato notes ~170 ms apart, stepping down and getting softer); a belly-laugh shake; then a happy blink and the face goes back |
+| level 2 | tickled again within 3 s of a laugh | a "wheee" squash-hop (never a spin) with a rising chirp, then a bigger laugh |
+| rest | after level 2 | 5 s of plain notes, then it starts over |
+
+* **Guards:** the laugh's sound never plays while the band plays, a take records or waits (armed), a lesson plays, a grown-up panel is open or the first-beat guide runs (the face may still show; over the band the laugh is a silent shake). While recording or armed nothing tickles at all: every poke is just a note in the take. Sleeping monsters keep their closed eyes.
+* Laughs are chirps (`studio.chirp`): heard, never recorded, never an edit (no undo step, nothing saved).
+* **Coach:** the pokes that added up to the giggles are taken back off the Coach's counts, so tickling never uses up the "try Record" or "try Beat Hop" hints (real drumming still earns them).
+* **Monster Makers** need 8 contacts within 1.6 s and see the giggles only: no laugh is heard and there is no level 2, so fast drum fills are never answered with a laugh.
+* Reduced motion: the face, a soft glow and the laugh; no jiggle, shake, bubbles or hop. Lite visuals (a slow tablet): no bubbles and nothing animated inside the drawing.
+
+### The musical sky
+
+* A sky layer sits after the scenery and before the pods, so it only hears touches on the **bare stage** (on tablets: the band above the monsters, the column above the + seat, the edges; on phones mostly around the + seat).
+* A touch rings one of Spark's **Star Bells** in the song's mood and key (`src/magic/sky.ts`: higher on screen and further right is higher, steps 0–9, so a sweep along the sky is a twinkly run), with a sparkle at the finger, and the nearest star flares. A sweep rings one bell per change of note, at most one every 70 ms, with at most 12 sparkles alive.
+* **The moon** rings a soft low bell (the mood's root, an octave down and at home), glows, gives a little boing and shows a face that winks. It is one consistent target on every layout: its touch circle is above the pods' empty sky but below any monster drawn over it (inside a pod, only the drawn monster catches a touch over the moon).
+* Three brighter stars sit in the open band on tall screens only (phones have no open band, so no star there looks tappable but plays a monster).
+* Sky bells play on Spark's own studio channel (`studio.skyBell` / `studio.moonBell`), quieter than a key; they are never recorded, never edits and never saved, and they carry their own visual source (`sky`), so they never count as playing the keys for the Coach. While a take records the sky is hushed and only sparkles.
+* Nothing in the sky animates until it is touched. Reduced motion: a soft glow instead of sparkles and flares; the moon glows without the boing or wink.
 
 ### Monster behaviour on stage
 
@@ -51,10 +80,12 @@ All touch targets ≥ 44 px; primary actions ≥ 52 px; keys are the largest tar
 | plays a note | body reaction by role (see characters doc), mouth opens for the note's length, lids lift, antennae wobble |
 | Echo on | teal ghost copies of the monster flash in time with the echo repeats |
 | Gloop on | a goo puddle under the monster; each note sends a ripple ring |
-| Chomper on | a small Chomper sits on the pod, chomping |
+| Chomper on | a small Chomper sits on the pod and bites on every note the monster plays (its jaw snaps shut, it squashes); at "a lot" each bite drops a few crumbs (at most 6 at once). Reduced motion: a soft flash. Lite visuals: the squash only |
 | Wiggle on | the monster wobbles like jelly |
 | sleeping | eyes shut, desaturated, slow breathing, "z" |
 | recording | small red dot on the spotlight pod |
+| costume change | a puff of coloured smoke and a squash-hop; the new hat drops a short way (from a little bigger) and lands with a squash as the preview's second note sounds, never poking out of the stage's top; a costume with no hat: the old hat flies off and pops. Visual only (the preview's timing is unchanged). Undo replays it; a fresh visit to the Lab does not. Reduced motion: a soft glow, the hat fades in |
+| tickled | the giggles (^ ^ eyes, blush, grin), then a laugh and a happy blink: see *Tickle time* |
 
 ## Keys and pads
 

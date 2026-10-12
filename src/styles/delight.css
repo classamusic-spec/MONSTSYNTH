@@ -1,0 +1,206 @@
+/* ── Wave 1 · the Lab stage's little delights ─────────────────────────────────
+   Tickle time (src/ui/monsters/tickle.ts), the musical sky (src/ui/lab/StageSky.tsx)
+   and little scenes for changes: the costume poof and Chomper's chomp
+   (src/ui/monsters/scenes.ts). Animated only on touch: nothing here runs forever. */
+
+/* ── Tickle time: the giggles ───────────────────────────────────────────────
+   A giggling monster squeezes its eyes into happy ^ ^ (never the sleeping ‿),
+   blushes and grins for as long as it giggles and laughs. */
+
+.monster-svg .m-eye-happy {
+  transition: opacity 120ms ease-out;
+}
+
+.monster-svg .m-cheek {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    opacity 160ms ease-out,
+    transform 240ms var(--ease-pop),
+    fill 160ms ease-out;
+}
+
+.pod[data-tickle] .monster-svg .m-lid {
+  animation: none;
+  transform: scaleY(1);
+}
+
+.pod[data-tickle] .monster-svg .m-eye-happy {
+  opacity: 1;
+}
+
+.pod[data-tickle] .monster-svg .m-eye-ring {
+  opacity: 0;
+}
+
+.pod[data-tickle] .monster-svg .m-cheek {
+  opacity: 0.95;
+  fill: #ff5c8d;
+  transform: scale(1.45);
+}
+
+.pod[data-tickle='2'] .monster-svg .m-cheek {
+  transform: scale(1.65);
+}
+
+.pod[data-tickle] .monster-svg .m-mouth-open {
+  opacity: 1;
+}
+
+.pod[data-tickle] .monster-svg .m-mouth-closed {
+  opacity: 0;
+}
+
+/* Shades would hide the happy eyes: they hop up onto the forehead. */
+.monster-svg .m-hat {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  transition: transform 220ms var(--ease-pop);
+}
+
+.pod[data-tickle] .monster-svg .m-accessory[data-accessory='shades'] .m-hat {
+  transform: translateY(-40px) rotate(-6deg);
+}
+
+/* Bubbles from a giggling monster (note sprites' size, slot and cap). */
+.note-sprite.tickle-bubble {
+  color: color-mix(in srgb, var(--c-light) 70%, white);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+}
+
+/* Hops, squashes and the poof's hop land on the monster's feet. */
+.pod .squish > .monster-svg {
+  transform-origin: 50% 100%;
+}
+
+/* ── The musical sky ────────────────────────────────────────────────────────
+   Only the bare stage hears the sky (pods, badges, the + seat and the toys
+   are above it). Inside a pod, only the drawn monster catches a touch over the
+   moon; its empty sky is the moon's (the rest of the column is still the pod's). */
+
+.stage-sky {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pod .monster-wrap {
+  pointer-events: none;
+}
+
+.pod .monster-wrap .m-body {
+  pointer-events: visiblePainted;
+}
+
+/* The moon: above the pods' empty sky, below any monster drawn over it. */
+.stage-scene > .stage-moon {
+  z-index: 1;
+  overflow: visible;
+}
+
+.stage-moon .moon-hit {
+  pointer-events: all;
+  cursor: pointer;
+}
+
+.stage-moon .moon-disc,
+.stage-moon .moon-eye-r {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Phones: a small moon, so a bigger circle around it (still clear of the + seat). */
+@media (max-height: 559px) {
+  .stage-moon .moon-hit {
+    r: 66px;
+  }
+}
+
+/* A few stars where the sky is open: the band above the monsters on tall
+   screens. Phones have no open band (the monsters reach the top), so no stars
+   that would look tappable but play a monster. */
+.sky-star {
+  --size: calc(clamp(16px, 3.4vmin, 28px) * var(--star, 1));
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2);
+  color: #fff3c2;
+  filter: drop-shadow(0 0 4px rgba(255, 236, 170, 0.75));
+  pointer-events: none;
+}
+
+.sky-star > svg,
+.sky-spark > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-height: 559px) {
+  .sky-star {
+    display: none;
+  }
+}
+
+/* The stage's stars flare from their own middle. */
+.stage-scene .twinkle {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.sky-spark {
+  --size: calc(clamp(18px, 4.4vmin, 32px) * var(--spark, 1));
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  color: #fff6cf;
+  filter: drop-shadow(0 0 5px rgba(255, 236, 170, 0.9));
+  pointer-events: none;
+  opacity: 0;
+}
+
+.sky-spark.sky-glow {
+  --size: clamp(36px, 8vmin, 60px);
+  margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 240, 190, 0.85), rgba(255, 240, 190, 0));
+  filter: none;
+}
+
+/* ── Costume poof and Chomper ───────────────────────────────────────────────── */
+
+.poof-puff {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  /* The middle of the drawing (the art fills the bottom of the wrap). */
+  top: calc(100cqh - min(100cqw, 100cqh) * 0.45);
+  width: 34cqmin;
+  aspect-ratio: 1;
+  margin: -17cqmin 0 0 -17cqmin;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 42% 38%,
+    #fff 0 22%,
+    color-mix(in srgb, var(--c-light) 80%, white) 46%,
+    color-mix(in srgb, var(--c-light) 0%, transparent) 70%
+  );
+  pointer-events: none;
+  opacity: 0;
+}
+
+.chomper-buddy .fx-jaw {
+  transform-box: fill-box;
+  transform-origin: 50% 0;
+}
+
+.chomp-crumb {
+  position: absolute;
+  z-index: 3;
+  width: 5px;
+  height: 5px;
+  border-radius: 1.5px;
+  pointer-events: none;
+}

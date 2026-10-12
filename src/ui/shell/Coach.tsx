@@ -74,6 +74,8 @@ export function Coach() {
     let boomHits = 0;
     let stones = 0;
     let recorded = false;
+    /** Monsters being tickled: their pokes are a game, not playing the keys or drumming. */
+    const tickled = new Set<string>();
     const timers: ReturnType<typeof setTimeout>[] = [];
     const show = (id: string, selector: string, ms: number) => {
       if (done.current.has(id)) return;
@@ -108,6 +110,7 @@ export function Coach() {
         touched = true;
         hide();
       }
+      if (v.trackId && tickled.has(v.trackId)) return;
       // Stone previews and drum pictures on the grid are not playing the keys:
       // they never use up the "try Record" count.
       if (labFace(s) === 'grid') return;
@@ -136,6 +139,17 @@ export function Coach() {
       );
     };
     const offEvent = onStudioEvent((e) => {
+      // Tickle time: the pokes that added up to the giggles are taken back off the
+      // counts, and the monster's pokes stop counting until it calms down.
+      if (e.type === 'tickle') {
+        if (e.phase === 'giggly' && !tickled.has(e.trackId)) {
+          tickled.add(e.trackId);
+          const earlier = Math.max(0, (e.taps ?? 1) - 1);
+          live = Math.max(0, live - earlier);
+          if (getState().project.tracks.find((t) => t.id === e.trackId)?.monster === 'boom') boomHits = Math.max(0, boomHits - earlier);
+        }
+        if (e.phase === 'calm') tickled.delete(e.trackId);
+      }
       if (e.type === 'record-start') {
         recorded = true;
         hide();

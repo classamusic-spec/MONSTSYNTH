@@ -1,6 +1,6 @@
 # 6 · Core monster character specifications
 
-Every musical concept is a character. **A monster's look is a clue to its sound**, and its animation *shows* what the sound is doing. All monsters are layered SVG (`src/ui/monsters/MonsterArt.tsx`) with named parts that can move: `m-body` (squash/stretch from the feet), `m-eye`/`m-pupil` (look at your finger), `m-lid` (blink, sleep), `m-mouth-open`/`m-mouth-closed` (sing), `m-antenna` (wobble), `m-arm`, `m-foot`.
+Every musical concept is a character. **A monster's look is a clue to its sound**, and its animation *shows* what the sound is doing. All monsters are layered SVG (`src/ui/monsters/MonsterArt.tsx`) with named parts that can move: `m-body` (squash/stretch from the feet), `m-eye`/`m-pupil` (look at your finger), `m-lid` (blink, sleep), `m-mouth-open`/`m-mouth-closed` (sing), `m-antenna` (wobble), `m-arm`, `m-foot`, `m-eye-happy` (the giggles' ^), `m-cheek` (blush), `m-hat` (the costume, inside `m-accessory`, so it can drop on or fly off).
 
 ## Instrument monsters
 
@@ -48,13 +48,28 @@ Every musical concept is a character. **A monster's look is a clue to its sound*
 * **After recording:** plays the child's recording at every key, lower to higher (chipmunk and giant voices are part of the fun). Presets: Just Me · Chipmunk · Giant · Robot (ring-modulated).
 * **Privacy:** microphone only after a grown-up allows it; recordings stay on the device.
 
+## Tickle time: how each monster laughs
+
+Poke a monster again and again (Little Monsters: 5 quick pokes) and it gets the giggles: eyes squeeze into happy ^ ^, cheeks blush, it grins and jiggles, and each further poke pops a bubble. When the poking stops it laughs in its own voice, then opens its eyes with a happy blink. Tickled again soon after, it goes "wheee!" with a squash-hop and laughs bigger; then it rests for a few seconds. Laughs are laughter, not tunes (`src/magic/tickle.ts`): quick staccato notes about 170 ms apart that step down and get softer.
+
+| Monster | Its laugh | Its "wheee" |
+|---|---|---|
+| Bloop | "hee-hee-hee-hee-hee", five bubbly notes down from the top | a quick climb |
+| Boom | a drum-roll chuckle: snappy drum, then bongos tuned lower each time, then a tiny cymbal | bongos climbing to the boing |
+| Grumble | a slow, low "ho-ho-ho-ho" (four notes, a little further apart) | a low climb |
+| Spark | a twinkly six-bell giggle down the scale | a soft climb of bells |
+| Puff | one slow soft "hoooo" (its sounds fade in too slowly for staccato) | one high soft "hoo" |
+| Mimic | "ha-ha-ha" in its singing voice (the voice's "ah" vowel) | a quick climb |
+
+The bigger laugh starts higher and lasts longer. Laughs use the monster's current sound (Mimic with a recorded word laughs in its singing voice). They are never recorded and never heard over the band, a take, a lesson or a grown-up panel; Monster Makers see the giggles without the laugh.
+
 ## Effect buddies (they change sound instead of making it)
 
 | Buddy | Effect | Look | What you see on the monster |
 |---|---|---|---|
 | **ECHO** | tempo-synced delay (dotted eighth, darkening repeats) | teal ghost with two fading copies behind it | teal ghost copies of the monster flash on each repeat |
 | **GLOOP** | reverb (procedural room, ~2.6 s) | lime goo blob with drips and one eye | goo puddle grows under the monster; notes send ripples |
-| **CHOMPER** | saturation / distortion (with a tone-taming filter) | violet ball of zig-zag teeth | Chomper sits on top of the monster chomping |
+| **CHOMPER** | saturation / distortion (with a tone-taming filter) | violet ball of zig-zag teeth | Chomper sits on top of the monster and bites on every note it plays (its jaw snaps shut); at "a lot" each bite drops a few crumbs |
 | **WIGGLE** | vibrato / pitch wobble (shared LFO) | magenta squiggly worm | the monster wobbles like jelly |
 
 Every buddy has three levels — asleep, a little, a lot — shown with two pips and a glowing ring. Shaking a monster temporarily wakes a strong Wiggle.
@@ -64,7 +79,8 @@ Every buddy has three levels — asleep, a little, a lot — shown with two pips
 * One identity colour per monster across stage, key panel, blocks, painting swatches, shelf portraits.
 * Monsters never look sad, scared or "wrong" — mistakes don't exist, so there are no fail animations.
 * Sleeping (muted) always means closed eyes + "z", never a red cross.
-* Costumes (hat, shades, crown, flower, bow, halo, beanie, headphones, party hat) change with the sound preset so children can *see* which sound is on.
+* Costumes (hat, shades, crown, flower, bow, halo, beanie, headphones, party hat) change with the sound preset so children can *see* which sound is on. A change is a little magic trick: a puff of the monster's coloured smoke, a squash-hop, and the new hat drops on (or the old one flies off and pops when the new sound has none).
+* Giggling is never sleeping: giggly eyes are happy ^ arcs with rosy cheeks and a wide grin, never the sleeping ‿ or a closed mouth, and never X or spiral eyes. A tickled monster never falls over; its "wheee" is a hop.
 
 ## Future characters (architecture ready)
 

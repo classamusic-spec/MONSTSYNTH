@@ -12,6 +12,7 @@ import { MonsterPod } from './MonsterPod';
 import { PlaySurface } from './PlaySurface';
 import { PodTools } from './PodTools';
 import { StageScene } from './StageScene';
+import { StageSky } from './StageSky';
 import { StepGrid } from './StepGrid';
 import { useLookAt } from './useLookAt';
 
@@ -128,6 +129,7 @@ export function LabScreen() {
     <section className="lab" data-view={face} aria-label="Monster Lab">
       <div className="stage" ref={stageRef}>
         <StageScene />
+        <StageSky stageRef={stageRef} />
         {tracks.map((t) => (
           <MonsterPod key={t.id} track={t} selected={t.id === selected.id} />
         ))}
