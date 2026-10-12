@@ -12,7 +12,7 @@ import { placeNote } from '../magic/recorder';
 import { audibleTracks, collectEvents, songHasSound, type PlayMode, type SeqEvent } from '../magic/sequence';
 import { hasGridFace } from '../magic/steps';
 import { gridLinesIn, isBounce, nextLine, nextOccurrence, snapDuration, wrap } from '../magic/timing';
-import { recordNote, replaceLoopNotes, setRecordedDuration, setTrackSample, tidyLoop } from '../model/edits';
+import { addMonster, recordNote, removeMonster, replaceLoopNotes, setRecordedDuration, setTrackSample, tidyLoop } from '../model/edits';
 import { newId } from '../model/ids';
 import { MODE_CAPS, MONSTERS } from '../model/monsters';
 import { activeClip, projectHasMusic, songBeats, trackHasLoop } from '../model/project';
@@ -120,8 +120,8 @@ interface AuditionEvent {
   end: number;
 }
 
-/** A monster's little sounds: "huh?" (nothing to play), "yay!" and "pop" (a block goes away). */
-export type ChirpKind = 'huh' | 'yay' | 'pop';
+/** A monster's little sounds: "huh?" (nothing to play), "yay!", "pop" (a block goes away) and "bye" (it goes home). */
+export type ChirpKind = 'huh' | 'yay' | 'pop' | 'bye';
 
 /** [scale step (a drum pad for Boom), start (s), length (s), velocity] */
 type ChirpNote = [step: number, at: number, dur: number, vel: number];
@@ -158,6 +158,18 @@ const CHIRPS: Record<ChirpKind, { tune: ChirpNote[]; drums: ChirpNote[] }> = {
       [2, 0.06, 0.1, 0.38],
     ],
     drums: [[4, 0, 0.08, 0.45]],
+  },
+  // Bye-bye (a monster goes home): "huh?" mirrored, two notes falling, the
+  // second one longer. Boom: a bongo, then the big drum.
+  bye: {
+    tune: [
+      [4, 0, 0.14, 0.55],
+      [2, 0.2, 0.32, 0.5],
+    ],
+    drums: [
+      [4, 0, 0.12, 0.55],
+      [0, 0.2, 0.22, 0.6],
+    ],
   },
 };
 
@@ -1455,6 +1467,34 @@ class Studio {
     }
   }
 
+  // ── Monster friends (the Add Monster tray) ────────────────────────────────
+  // Coming and going are project edits like any other (one undo step each). A
+  // take in progress ends first, so the take and the visit stay separate steps
+  // and one Undo brings back exactly what the child changed.
+
+  /** Invite a monster on stage (back from the bench with its loop, if it rested there). Its track id, or null. */
+  invite(monster: MonsterKind): string | null {
+    if (getState().project.tracks.some((t) => t.monster === monster)) return null;
+    this.stopRecording();
+    if (!commit((p) => addMonster(p, monster))) return null;
+    return getState().project.tracks.find((t) => t.monster === monster)?.id ?? null;
+  }
+
+  /**
+   * Send a monster home: it rests on the bench with its loop and blocks, and
+   * sings "bye-bye" on its way (off stage, so on a channel of its own). The
+   * last monster on stage stays (false).
+   */
+  sendHome(trackId: string): boolean {
+    const p = getState().project;
+    const track = p.tracks.find((t) => t.id === trackId);
+    if (!track || p.tracks.length <= 1) return false;
+    this.stopRecording();
+    if (!commit((q) => removeMonster(q, trackId))) return false;
+    this.chirp(track.monster, 'bye');
+    return true;
+  }
+
   // ── Song lessons ──────────────────────────────────────────────────────────
   // Lessons play on their own channels ("lesson:<monster>") and their own
   // transport, so they never touch the open song.
@@ -1481,6 +1521,17 @@ class Studio {
     const dur = Math.max(0.2, opts.durSec ?? 0.4);
     engine.trigger(noteRequest({ scale: 'major', key }, monster, channel, step, { vel }), ctx.currentTime, dur);
     emitNote({ trackId: null, monster, step, vel, dur, source: 'live' });
+  }
+
+  /**
+   * The teacher sings one note because the child asked for it (a tap on the
+   * teacher or on a word). Never over a phrase it is singing or the band
+   * (false then: the child is already hearing the teacher).
+   */
+  lessonSing(monster: MonsterKind, step: number, key: number, durSec = 0.45): boolean {
+    if (!this.engine || this.lessonTransport?.playing || getState().resting) return false;
+    this.lessonHit(monster, step, key, { durSec, vel: 0.8 });
+    return true;
   }
 
   /** Play a lesson timeline; `onEnd` fires when the last beat has been heard. */

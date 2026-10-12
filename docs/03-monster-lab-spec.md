@@ -33,13 +33,17 @@ All touch targets ≥ 44 px; primary actions ≥ 52 px; keys are the largest tar
 
 ## Stage
 
-* Every monster in the song stands on the stage in one row (Little: up to 4, Maker: up to 6).
+* Every monster in the song stands on the stage in one row. Both modes seat all six monsters, so inviting a friend always gets a yes (a new song starts with four). Six fit on iPad (1024×768), a phone sideways (844×390) and an upright tablet (820×1180): every monster inside the stage, none overlapping another or the + seat, each pod at least 89 px wide, and the keys stay at least 62 px wide even with Mimic's ears button beside them (`scripts/e2e-join.mjs` checks all of this).
 * **Touching a monster plays it and puts it in the spotlight** (onto the keys). There is no separate instrument picker.
 * Spotlight monster: wider pod (flex 1.45–2.3), full size, glowing platform, a soft light cone. Others: 86 % scale, still animated.
 * **Loop badge** (monster-coloured circle with ↻) appears when a monster has a loop:
   * tap → the loop sleeps (muted: monster dozes, "z" floats up, badge shows Zz) / wakes;
   * hold 1 s → the badge shakes and the loop is cleared (Undo restores it).
-* **+ Add Monster** seat at the end of the row opens the Monster friends tray.
+* **+ Add Monster** seat at the end of the row opens the Monster friends tray: one card per monster and a dot per seat (always at least one dot per monster on stage, so a song from elsewhere never shows "4 of 4" with six on stage). Every tap answers with sound and motion:
+  * a resting friend → it comes on stage and onto the keys, its card hops and it sings hello (one undo step);
+  * a friend on stage → it goes home to the bench with its loop and blocks: its card waves and it sings a falling "bye-bye" (the "huh?" chirp mirrored; Boom: a bongo then the big drum). A take in progress ends first, so one Undo brings back exactly that monster, in its seat, with its loop;
+  * the last monster on stage → it stays, bounces and sings.
+  Reduced motion: the card glows instead of hopping or waving.
 * **Sound toys** for the spotlight monster: costume hat (next preset, the monster changes outfit and plays a preview) and effect buddies (tap cycles asleep → a little → a lot, shown by 2 pips and a glowing ring). On tall screens they sit above the monster's head; on phones they sit at the left of the keys so the stage keeps its room.
 * Maker mode shows the monster name (and sound name on tablets) as a small label.
 
@@ -64,6 +68,7 @@ All touch targets ≥ 44 px; primary actions ≥ 52 px; keys are the largest tar
 * **Key face = colour + staircase + name sticker.** A white pill at the bottom of each melodic key names its note, like the letter stickers on a toy xylophone: letters (C D E, the default in both modes), movable do re mi (in the Lab the leftmost key is always *do*), or none — a Parent Space choice ("Names on the keys"). Names come from `src/magic/noteNames.ts` (`spellStep` / `keyNames` / `keyLabel`) and follow the song's key and mood live, so picking Mystery re-letters the keys to C E♭ F G B♭. Spelling follows the scale degree (D major has F♯ and C♯), and one piano rule keeps it child-friendly: a white piano key is always its plain letter (no C♭, E♯ or double flats). Notes that are black piano keys get an inverted, dark sticker. Letter only — the staircase already shows the octave. Sharps and flats are drawn as tiny SVGs (the self-hosted font has no ♯/♭). The key's spoken label says the name ("Bloop: F sharp", "Bloop: C (higher)").
   * Puff's sticker names its lowest note (the key's own step), never a chord name.
   * Mimic shows names only while it sings with its built-in voice; with a recording the pitch is the child's own, so no name could be true.
+  * Mimic's **Hold & talk** button sits left of its keys. While a grown-up has not allowed the microphone it is a narrower picture with no words: an ear asleep (z's) over a grown-up holding a little one's hand (self-drawn `ear` and `grownup` icons). Pressing it pops a picture bubble (Mimic's face, the ear, the grown-up, the words in small print for readers) with Mimic's "huh?"; the button's spoken label keeps the words.
   * Boom shows no names (drums have no pitch). Monster Makers with names on see short drum words in the same sticker style (kick, snare, hat, clap, bongo, crash, bell, boing), so a grown-up can say "kick on 1 and 3"; the pictures stay the main cue.
   * The sticker pops (scale 1.12) when a finger or the loop plays the key — CSS on `data-down` / `data-glow`, no React state.
 * Drum pads carry a picture for every drum (big drum, snappy drum, tiny cymbal, clap, bongos, crash, cowbell, boing).
@@ -148,4 +153,4 @@ A pointing hand (and a glowing ring) appears only when a child seems stuck: no s
 
 ## Speech bubbles
 
-Short, icon-led bubbles from a monster for moments that matter ("Draw your music!", "Mimic copied you!", "Record a loop for Bloop first!"). They never block input and disappear after 2.6 s.
+Short, icon-led bubbles from a monster for moments that matter ("Draw your music!", "Mimic copied you!", "Record a loop for Bloop first!"). They never block input and disappear after 2.6 s. A bubble can carry a picture message (`picture`: a row of big icons, such as an ear and a grown-up for Mimic's sleeping ears): the picture is the message, and the words shrink to small print for readers and screen readers.

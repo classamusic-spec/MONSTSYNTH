@@ -262,6 +262,7 @@ export const FX_BUDDIES: Record<FxKind, FxInfo> = {
 export interface ModeCaps {
   keys: number;
   drumPads: number;
+  /** Seats on stage: every mode seats all six monsters, so inviting a friend always gets a yes. */
   maxMonsters: number;
   fx: FxKind[];
   redo: boolean;
@@ -288,7 +289,7 @@ export const MODE_CAPS: Record<AgeMode, ModeCaps> = {
   little: {
     keys: 8,
     drumPads: 6,
-    maxMonsters: 4,
+    maxMonsters: 6,
     fx: ['echo', 'gloop'],
     redo: false,
     magicPanel: false,

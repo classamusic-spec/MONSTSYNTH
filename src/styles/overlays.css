@@ -585,10 +585,6 @@
   transform: scale(0.95);
 }
 
-.tray-card[data-full='true'] {
-  animation: shake 0.3s linear 2;
-}
-
 .tray-art {
   width: 78%;
   aspect-ratio: 1;

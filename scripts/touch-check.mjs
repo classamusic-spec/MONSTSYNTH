@@ -3,7 +3,8 @@
 // under CPU throttle, Beat Hop's stones (rapid multi-finger taps and a paint
 // swipe under CPU throttle, and taps that slide a little), and the bead lane
 // (two-finger bead taps, a bead dragged through the keys and a drawn tune under
-// CPU throttle, with no stuck voices).
+// CPU throttle, with no stuck voices), and a six-monster Little Monster stage
+// (Puff and Mimic invited by touch) under CPU throttle.
 import { chromium } from 'playwright';
 
 const url = process.argv[2] || 'http://127.0.0.1:5173/';
@@ -162,6 +163,83 @@ await page.waitForTimeout(400);
 const end = await dbg();
 check('voice count stays bounded while looping', Math.max(...counts) <= 30, `max ${Math.max(...counts)}`);
 check('stopping silences every scheduled voice', end.voices === 0, `${end.voices} left`);
+
+// 7b. Everyone can join: a Little Monster invites Puff and Mimic with real touch taps
+//     (the + seat, then their cards) while the band plays; all six get a tune and the
+//     six-monster band plays under a 4× slower CPU. Then one goes home by touch, and
+//     nothing is left sounding or stuck.
+{
+  await page.evaluate(async () => {
+    const m = window.__monster;
+    m.studio.stop();
+    m.actions.updateSettings({ ageMode: 'little' });
+    await m.actions.newSong('band');
+    m.studio.play();
+  });
+  await page.waitForTimeout(400);
+  const centre = async (sel) => {
+    const b = await page.locator(sel).boundingBox();
+    return [b.x + b.width / 2, b.y + b.height / 2];
+  };
+  await tap(...(await centre('.add-seat')));
+  await page.waitForTimeout(500);
+  for (const m of ['puff', 'mimic']) {
+    await tap(...(await centre(`.tray-card[data-monster="${m}"]`)));
+    await page.waitForTimeout(300);
+  }
+  const joined = await page.evaluate(() => {
+    const m = window.__monster;
+    const s = m.getState();
+    m.actions.setOverlay(null);
+    // The newcomers get a tune of their own (the wand), so all six monsters sing and dance.
+    for (const t of s.project.tracks) if (t.monster === 'puff' || t.monster === 'mimic') m.studio.gridWand(t.id);
+    return { mode: s.settings.ageMode, monsters: s.project.tracks.map((t) => t.monster).join(','), playing: s.transport.playing };
+  });
+  check('Little: real touch taps on the + seat and two cards bring Puff and Mimic on stage (six) while the band plays', joined.mode === 'little' && joined.monsters === 'bloop,boom,grumble,spark,puff,mimic' && joined.playing, JSON.stringify(joined));
+  await page.waitForTimeout(500);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+  const beat0 = (await dbg()).beat;
+  const perf6 = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const times = [];
+        let last = performance.now();
+        const t0 = last;
+        const step = (now) => {
+          times.push(now - last);
+          last = now;
+          if (now - t0 < 4000) requestAnimationFrame(step);
+          else {
+            times.sort((a, b) => a - b);
+            resolve({ frames: times.length, p95: times[Math.floor(times.length * 0.95)], max: times[times.length - 1] });
+          }
+        };
+        requestAnimationFrame(step);
+      }),
+  );
+  const beat1 = (await dbg()).beat;
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+  const sounding = await page.evaluate(() => window.__monster.getState().project.tracks.filter((t) => t.clips.some((c) => c.notes.length > 0)).length);
+  check('a six-monster Little band stays smooth-ish on a 4× slower CPU', sounding === 6 && perf6.p95 < 40, `${sounding} loops, ${perf6.frames} frames in 4 s, p95 ${perf6.p95.toFixed(1)} ms, max ${perf6.max.toFixed(0)} ms`);
+  check('…and keeps time', beat1 - beat0 > 5, `${beat0.toFixed(2)} → ${beat1.toFixed(2)}`);
+  // Send Puff home by touch while the band plays: it says bye, its channel goes, nothing sticks.
+  await tap(...(await centre('.add-seat')));
+  await page.waitForTimeout(500);
+  await tap(...(await centre('.tray-card[data-monster="puff"]')));
+  await page.waitForTimeout(300);
+  const gone = await page.evaluate(() => {
+    const m = window.__monster;
+    m.actions.setOverlay(null);
+    const s = m.getState();
+    const puff = s.project.bench.find((b) => b.track.monster === 'puff')?.track.id;
+    return { onStage: s.project.tracks.some((t) => t.monster === 'puff'), channel: !!puff && m.studio.engine.hasChannel(puff) };
+  });
+  await page.evaluate(() => window.__monster.studio.stop());
+  // Long enough for Puff's soft "bye" (a pad with a slow release) to ring out.
+  await page.waitForTimeout(2000);
+  const after6 = await dbg();
+  check('a touch sends Puff home mid-song: its channel goes, and after Stop nothing is left sounding or stuck', !gone.onStage && !gone.channel && after6.voices === 0 && after6.held === 0 && after6.live === 0, `${JSON.stringify(gone)}, ${after6.voices} voices, ${after6.held} held, ${after6.live} live`);
+}
 
 // 8. Beat Hop under a 4× slower CPU: rapid two-finger stone taps and a paint swipe
 //    while the band plays. Nothing sticks, every gesture lands, the playhead moves on.

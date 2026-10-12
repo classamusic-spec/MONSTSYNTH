@@ -40,7 +40,9 @@ export type IconName =
   | 'rotate'
   | 'grid'
   | 'keys'
-  | 'magnet';
+  | 'magnet'
+  | 'ear'
+  | 'grownup';
 
 const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 2.6, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
 const F = { fill: 'currentColor' } as const;
@@ -233,6 +235,23 @@ const ICONS: Record<IconName, ReactElement> = {
       <path fill="none" stroke="currentColor" strokeWidth="4.6" d="M7 3.5v8.2a5 5 0 0 0 10 0V3.5" />
       <rect x="4.7" y="2.5" width="4.6" height="3.6" rx="0.8" fill="var(--icon-tip, #fff)" />
       <rect x="14.7" y="2.5" width="4.6" height="3.6" rx="0.8" fill="var(--icon-tip, #fff)" />
+    </>
+  ),
+  // Mimic's ears: an ear seen from the side (the helix round the top, the lobe below, a fold inside).
+  ear: (
+    <>
+      <path {...S} d="M6.5 9.5a6.5 6.5 0 0 1 13 0c0 2.8-1.5 4.1-2.8 5.4-1 1-1.5 2-1.7 3.2-.4 2-1.9 3.4-3.9 3.4-1.8 0-3.1-1-3.6-2.5" />
+      <path {...S} d="M10 9.8a3 3 0 0 1 6 0c0 1.5-1.1 2.2-2 3" />
+    </>
+  ),
+  // A grown-up holding a little one's hand ("ask a grown-up").
+  grownup: (
+    <>
+      <circle {...F} cx="8" cy="4.6" r="2.5" />
+      <path {...F} d="M8 8.2c2 0 3.5 1.5 3.5 3.5v3.6c0 .6-.4 1-1 1h-.4v4.6a1.1 1.1 0 0 1-1.1 1.1H7a1.1 1.1 0 0 1-1.1-1.1v-4.6h-.4c-.6 0-1-.4-1-1v-3.6c0-2 1.5-3.5 3.5-3.5Z" />
+      <circle {...F} cx="17.3" cy="11.6" r="1.9" />
+      <path {...F} d="M17.3 14.2c1.5 0 2.6 1.1 2.6 2.6v2c0 .5-.3.8-.8.8h-.2v1.6a.8.8 0 0 1-.8.8h-1.6a.8.8 0 0 1-.8-.8v-1.6h-.2c-.5 0-.8-.3-.8-.8v-2c0-1.5 1.1-2.6 2.6-2.6Z" />
+      <path {...S} strokeWidth={2.2} d="m11 12.6 4.2 4.6" />
     </>
   ),
 };

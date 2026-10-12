@@ -2,8 +2,10 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import {
   bandMonsters,
   findSong,
+  judgeLessonKey,
   LESSON_KEYS,
   lessonStars,
+  nextLessonNote,
   PHRASE_BEATS,
   phraseBand,
   phraseNotes,
@@ -27,6 +29,7 @@ import { KeyGlyph, KeyName, NoteText } from '../lab/glyphs';
 import { MonsterArt } from '../monsters/MonsterArt';
 import { reactToNote } from '../monsters/react';
 import { SongArt } from './SongArt';
+import { teacherGiggle, wordHop } from './touchAnswers';
 
 // LEARN — a monster teaches a song, one phrase at a time.
 //   listen → the teacher sings the phrase, the keys light up as it goes
@@ -35,10 +38,16 @@ import { SongArt } from './SongArt';
 //   cheer  → stars, then the next phrase
 //   done   → stars for the song, hear it with the band, or keep it as a song
 // No timing to fail, no "wrong" buzzers: a wrong key still makes music.
+// Every touch answers: tapping the teacher (or the stage around it) makes it
+// giggle and sing the note you need next, a hint by ear; tapping a word makes
+// it hop and sing its own note. Neither ever counts as a try.
 
 const HUES: Record<SongPicture, number> = { buns: 28, lamb: 195, star: 245, boat: 205, farm: 125, bridge: 170, joy: 320, bells: 350 };
 const KEYBOARD = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k'];
 const CHEER_MS = 1300;
+/** A tapped teacher sings at most this often; a tapped word a little more often (a run along the words). */
+const TEACHER_GAP_MS = 300;
+const WORD_GAP_MS = 150;
 
 export function LearnScreen() {
   const [songId, setSongId] = useState<string | null>(null);
@@ -160,13 +169,15 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
   const [helper, setHelper] = useState(() => getState().settings.ageMode === 'little');
   const [stars, setStars] = useState(0);
   const mistakes = useRef(0);
-  /** Magic help counts only if it actually played a note for the child. */
-  const usedHelper = useRef(false);
+  /** Wrong keys Magic help turned into the right note (help on a right key counts for nothing). */
+  const helped = useRef(0);
+  /** When a tap on the teacher or a word last made the teacher sing. */
+  const lastSung = useRef(0);
   const phraseRef = useRef(phrase);
   phraseRef.current = phrase;
   const keyEls = useRef<(HTMLButtonElement | null)[]>([]);
   const wordEls = useRef<(HTMLSpanElement | null)[]>([]);
-  const teacherRef = useRef<HTMLDivElement>(null);
+  const teacherRef = useRef<HTMLButtonElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
@@ -258,7 +269,7 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
   };
 
   const finish = () => {
-    const earned = lessonStars(mistakes.current, usedHelper.current);
+    const earned = lessonStars(mistakes.current, helped.current);
     setStars(earned);
     setPhase('done');
     recordLessonStars(song.id, earned);
@@ -297,10 +308,11 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
     const note = notes[i];
     if (!note) return;
     const [, step, dur] = note;
-    if (helper || k === step) {
-      if (helper) usedHelper.current = true;
+    const verdict = judgeLessonKey(k, step, helper);
+    if (verdict !== 'slip') {
+      if (verdict === 'helped') helped.current++;
       studio.lessonHit(song.teacher, step, song.key, { durSec: Math.min(1.2, Math.max(0.25, dur * spb)) });
-      if (helper && k !== step) flash(step, 'down', 180);
+      if (verdict === 'helped') flash(step, 'down', 180);
       if (i + 1 >= notes.length) {
         setIndex(notes.length);
         phraseDone();
@@ -332,8 +344,40 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
 
   const again = () => {
     mistakes.current = 0;
-    usedHelper.current = false;
+    helped.current = 0;
     listen(0);
+  };
+
+  // ── Touches that are not tries: the teacher and the words sing ──────────────
+
+  /**
+   * The teacher sings one note for a tap, lighting its key, unless it is singing
+   * a phrase (or the band plays): then the child is already hearing it.
+   */
+  const singFor = (step: number, beats: number, gapMs: number) => {
+    const ph = phaseRef.current;
+    if (ph !== 'play' && ph !== 'cheer') return;
+    const now = performance.now();
+    if (now - lastSung.current < gapMs) return;
+    if (!studio.lessonSing(song.teacher, step, song.key, Math.min(1, Math.max(0.3, beats * spb)))) return;
+    lastSung.current = now;
+    const key = keyEls.current[step];
+    if (key) glow(key, 320);
+  };
+
+  /** A hint by ear: the note the child needs next (never a try, never a step on). */
+  const tapTeacher = () => {
+    const next = nextLessonNote(song, phraseRef.current, index);
+    if (next) singFor(next[1], next[2], TEACHER_GAP_MS);
+    // After the teacher's note, so its happy squeezed eyes win over the singing face.
+    teacherGiggle(teacherRef.current);
+  };
+
+  /** Another way to sing along: a word sings its own note. */
+  const tapWord = (i: number) => {
+    const note = notes[i];
+    if (note) singFor(note[1], note[2], WORD_GAP_MS);
+    wordHop(wordEls.current[i]);
   };
 
   const withBand = () => {
@@ -392,10 +436,30 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
         </button>
       </header>
 
-      <div className="lesson-stage">
-        <div className="lesson-teacher" ref={teacherRef} data-monster={song.teacher}>
+      <div
+        className="lesson-stage"
+        onPointerDown={(e) => {
+          // A word sings its note; the teacher, or anywhere else on the stage, gets the teacher's hint.
+          if (e.button > 0) return;
+          const t = e.target as Element;
+          if (t.closest('.lesson-done')) return;
+          const word = t.closest<HTMLElement>('.lesson-word');
+          if (word) tapWord(Number(word.dataset.i));
+          else tapTeacher();
+        }}
+      >
+        <button
+          className="lesson-teacher"
+          ref={teacherRef}
+          data-monster={song.teacher}
+          aria-label={`${teacher.name}: hear the next note`}
+          onClick={(e) => {
+            // Keyboard / switch access (pointer presses were handled by the stage on pointerdown).
+            if (e.detail === 0) tapTeacher();
+          }}
+        >
           <MonsterArt kind={song.teacher} />
-        </div>
+        </button>
         <div className="lesson-bubble">
           <span className="lesson-cue" data-phase={phase}>
             {phase === 'listen' && (
@@ -432,6 +496,7 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
                   ref={(el) => {
                     wordEls.current[i] = el;
                   }}
+                  data-i={i}
                   className="lesson-word"
                   data-state={phase === 'play' ? (i < index ? 'sung' : i === index ? 'next' : 'todo') : phase === 'cheer' ? 'sung' : 'todo'}
                 >

@@ -1,0 +1,85 @@
+/* ── Everyone can join: the Add Monster tray, and Mimic's sleeping ears ────── */
+
+/* Tray cards hop (hello), wave (bye) and bounce (sing) from the feet (trayMotion.ts). */
+.tray-art {
+  transform-origin: 50% 100%;
+}
+
+/* Reduced motion: a soft glow in the monster's colour instead of any movement. */
+.tray-card[data-glow='true'] {
+  box-shadow:
+    0 0 0 3px #fff,
+    0 0 22px color-mix(in srgb, var(--c) 80%, transparent);
+}
+
+/* Mimic's locked microphone: a picture instead of words — an ear asleep (z's),
+   and a grown-up who can wake it. Narrower than the "Hold & talk" button, so
+   the keys keep their room. */
+.voice-btn[data-locked='true'] {
+  width: clamp(56px, 11vmin, 104px);
+  padding: 6px 4px;
+}
+
+.lock-picture {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(2px, 1vmin, 10px);
+  pointer-events: none;
+}
+
+.voice-btn .lock-picture svg {
+  width: auto;
+  height: auto;
+}
+
+.lock-ear {
+  position: relative;
+  display: block;
+  width: min(92%, 76px);
+  aspect-ratio: 1;
+}
+
+.voice-btn .lock-ear > svg:first-child {
+  width: 100%;
+  height: 100%;
+}
+
+.voice-btn .lock-ear > .lock-zzz {
+  position: absolute;
+  top: -12%;
+  right: -14%;
+  width: 46%;
+  height: 46%;
+  color: #fff;
+}
+
+.voice-btn .lock-picture > .lock-grownup {
+  width: min(92%, 72px);
+  aspect-ratio: 1;
+  height: auto;
+  color: #ffd1e6;
+}
+
+/* Speech bubbles with a picture: the picture is the message, the words are small print for readers. */
+.bubble-picture {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bubble-picture svg {
+  width: clamp(30px, 6vmin, 40px);
+  height: clamp(30px, 6vmin, 40px);
+}
+
+.bubble-words {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  max-width: 14em;
+  white-space: normal;
+  line-height: 1.2;
+}
