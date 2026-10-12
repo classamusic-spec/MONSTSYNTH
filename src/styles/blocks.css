@@ -82,14 +82,22 @@
   flex: 1 1 auto;
   height: 100%;
   min-width: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
+/* Centred out of flow and fully contained: the monster breathes, blinks and
+   sings inside its own box, so its drawing never re-lays out the whole grid
+   (a grid or flex item could not be its own layout boundary). */
 .row-avatar .monster-svg {
+  position: absolute;
+  inset: 0;
+  margin: auto;
   width: 100%;
   height: 100%;
   max-height: min(120px, 92%);
+  contain: strict;
 }
 
 .block-row[data-sleeping='true'] .row-avatar .monster-svg {

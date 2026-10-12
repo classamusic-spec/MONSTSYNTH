@@ -37,6 +37,8 @@ export type IconName =
   | 'pencil'
   | 'rainbow'
   | 'hand'
+  | 'clap'
+  | 'again'
   | 'rotate'
   | 'grid'
   | 'keys'
@@ -204,6 +206,34 @@ const ICONS: Record<IconName, ReactElement> = {
       {...F}
       d="M9.2 2.8c1 0 1.8.8 1.8 1.8v6.3l.1-.1c.1-1 .9-1.7 1.8-1.7s1.6.6 1.8 1.4c.3-.6 1-1 1.7-1 1 0 1.8.8 1.8 1.8v.3c.3-.3.8-.5 1.3-.5 1 0 1.8.8 1.8 1.8v3.8c0 3.9-3.1 7-7 7h-1.4c-2.1 0-4-.9-5.3-2.5l-3.4-4.2a1.7 1.7 0 0 1 2.4-2.4l1.4 1.2V4.6c0-1 .8-1.8 1.8-1.8Z"
     />
+  ),
+  // The curtain call's applause: two hands meeting, fingers up (each hand is a group, so it can clap).
+  clap: (
+    <>
+      <g className="clap-hand clap-l">
+        <g transform="translate(5.4 21.5) rotate(20)">
+          <path fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" d="M-1.6 -3.4-5.4 -8.3" />
+          <rect {...F} x="-3.3" y="-13.4" width="6.6" height="13.4" rx="3.3" />
+          <path fill="none" stroke="var(--icon-hole, #141646)" strokeWidth="0.8" strokeLinecap="round" d="M-1.05 -12.9v3.4M1.15 -12.8v3.4" />
+        </g>
+      </g>
+      <g className="clap-hand clap-r">
+        <g transform="translate(18.6 21.5) rotate(-20) scale(-1 1)">
+          <path fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" d="M-1.6 -3.4-5.4 -8.3" />
+          <rect {...F} x="-3.3" y="-13.4" width="6.6" height="13.4" rx="3.3" />
+          <path fill="none" stroke="var(--icon-hole, #141646)" strokeWidth="0.8" strokeLinecap="round" d="M-1.05 -12.9v3.4M1.15 -12.8v3.4" />
+        </g>
+      </g>
+      <path className="clap-burst" {...S} strokeWidth={2} d="M12 1.8v3M6.6 3.6l1.7 2M17.4 3.6l-1.7 2" />
+    </>
+  ),
+  // Play it again: a circular arrow around a little play triangle.
+  again: (
+    <>
+      <path {...S} d="M13.3 5.1A7.5 7.5 0 1 1 7.2 6.8" />
+      <path {...F} d="M9.6 4.8 8.4 9 5.1 5.1Z" />
+      <path {...F} d="M10.2 9.4v6.2l5.2-3.1Z" />
+    </>
   ),
   rotate: (
     <>

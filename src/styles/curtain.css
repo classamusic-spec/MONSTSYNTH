@@ -1,0 +1,276 @@
+/* ── The curtain call (Finale) and the singing row heads (Monster Blocks) ─── */
+
+/* Each row head knows its monster's colour (glows at the bow). */
+.block-row[data-monster='bloop'] .row-head {
+  --c: var(--bloop);
+}
+.block-row[data-monster='boom'] .row-head {
+  --c: var(--boom);
+}
+.block-row[data-monster='grumble'] .row-head {
+  --c: var(--grumble);
+}
+.block-row[data-monster='spark'] .row-head {
+  --c: var(--spark);
+}
+.block-row[data-monster='puff'] .row-head {
+  --c: var(--puff);
+}
+.block-row[data-monster='mimic'] .row-head {
+  --c: var(--mimic);
+}
+.block-row[data-monster='paint'] .row-head {
+  --c: #9a5cff;
+}
+
+/* Hops and bows squash towards the feet; a glow sits behind the monster. */
+.row-avatar {
+  isolation: isolate;
+}
+.row-avatar > .monster-svg,
+.row-avatar > .paint-avatar {
+  transform-origin: 50% 100%;
+}
+.row-avatar > .curtain-glow {
+  z-index: -1;
+}
+
+/* The curtain call's pictures sit over the screen's own area (never over the
+   dock or the transport rail), and only "again" takes touches. */
+.curtain {
+  grid-area: screen;
+  position: relative;
+  z-index: 43;
+  min-width: 0;
+  min-height: 0;
+  pointer-events: none;
+}
+
+/* Two hands clapping (the clap icon: each hand swings from its wrist). */
+.finale-clap {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  display: grid;
+  place-items: center;
+  width: clamp(92px, 25vmin, 190px);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  isolation: isolate;
+  color: #ffcf2e;
+  --icon-hole: #8a4b00;
+  filter: drop-shadow(0 6px 0 rgba(106, 63, 224, 0.75)) drop-shadow(0 12px 24px rgba(0, 0, 0, 0.35));
+  animation: curtain-hands 1.7s var(--ease-pop) forwards;
+}
+
+/* A soft night halo behind the hands, so they stand out on bright blocks. */
+.finale-clap::before {
+  content: '';
+  position: absolute;
+  inset: -14%;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(20, 22, 80, 0.62), rgba(20, 22, 80, 0.38) 60%, transparent);
+}
+
+.finale-clap svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.finale-clap .clap-hand {
+  transform-box: view-box;
+}
+.finale-clap .clap-l {
+  transform-origin: 5.4px 21.5px;
+  transform: rotate(-18deg);
+}
+.finale-clap .clap-r {
+  transform-origin: 18.6px 21.5px;
+  transform: rotate(18deg);
+}
+.finale-clap .clap-burst {
+  color: #fff6c7;
+  opacity: 0;
+}
+
+@keyframes curtain-hands {
+  0% {
+    scale: 0.4;
+    opacity: 0;
+  }
+  14% {
+    scale: 1.08;
+    opacity: 1;
+  }
+  22% {
+    scale: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    scale: 1;
+    opacity: 0;
+  }
+}
+
+/* "Again": a big warm sparkle button (a circular arrow round a play triangle). */
+.curtain-again {
+  position: absolute;
+  left: 50%;
+  top: 66%;
+  width: clamp(84px, 22vmin, 150px);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  pointer-events: auto;
+  touch-action: manipulation;
+  animation:
+    curtain-again-in 0.5s var(--ease-pop) both,
+    curtain-again-breathe 1.6s 0.5s ease-in-out infinite;
+}
+
+/* Going away: it fades, and takes no touches from the first moment. */
+.curtain-again[data-leaving='true'] {
+  animation: curtain-fade-out 0.25s ease-out forwards;
+  pointer-events: none;
+}
+
+.curtain-again-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, #ffe27a 0%, #ffb02e 55%, #ff7a2f 100%);
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 0 0 8px rgba(255, 207, 46, 0.25),
+    0 10px 28px rgba(255, 122, 47, 0.5),
+    inset 0 -5px 0 rgba(0, 0, 0, 0.16);
+  color: #fff;
+  font-size: calc(clamp(84px, 22vmin, 150px) * 0.58);
+}
+
+.curtain-again-face svg {
+  filter: drop-shadow(0 2px 0 rgba(160, 60, 0, 0.45));
+}
+
+.curtain-again:active .curtain-again-face {
+  scale: 0.92;
+}
+
+/* Sparkles round the button, twinkling in turn. */
+.curtain-spark {
+  --a: calc(var(--k) * 60deg - 60deg);
+  position: absolute;
+  left: calc(50% + cos(var(--a)) * 62%);
+  top: calc(50% + sin(var(--a)) * 62%);
+  width: 20%;
+  aspect-ratio: 1;
+  margin: -10% 0 0 -10%;
+  background: #fff6c7;
+  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  pointer-events: none;
+  animation: curtain-twinkle 1.2s calc(var(--k) * 0.2s) ease-in-out infinite;
+}
+
+.curtain-spark:nth-child(odd) {
+  background: #ffcf2e;
+}
+
+@keyframes curtain-again-in {
+  0% {
+    scale: 0.3;
+    opacity: 0;
+  }
+  70% {
+    scale: 1.1;
+    opacity: 1;
+  }
+  100% {
+    scale: 1;
+    opacity: 1;
+  }
+}
+
+@keyframes curtain-again-breathe {
+  0%,
+  100% {
+    scale: 1;
+  }
+  50% {
+    scale: 1.05;
+  }
+}
+
+@keyframes curtain-twinkle {
+  0%,
+  100% {
+    scale: 0.55;
+    opacity: 0.35;
+  }
+  50% {
+    scale: 1.1;
+    opacity: 1;
+  }
+}
+
+/* Phones held sideways: a little higher, so both fit above the bottom rows. */
+@media (max-height: 560px) and (orientation: landscape) {
+  .finale-clap {
+    top: 30%;
+  }
+  .curtain-again {
+    top: 68%;
+  }
+}
+
+/* Reduced motion: the pictures fade in and stay still. */
+.app[data-motion='reduce'] .finale-clap {
+  animation: curtain-fade 1.7s ease-out forwards;
+}
+.app[data-motion='reduce'] .finale-clap .clap-l,
+.app[data-motion='reduce'] .finale-clap .clap-r {
+  transform: none;
+}
+.app[data-motion='reduce'] .finale-clap .clap-burst {
+  opacity: 1;
+}
+.app[data-motion='reduce'] .curtain-again {
+  animation: curtain-fade-in 0.3s ease-out both;
+}
+.app[data-motion='reduce'] .curtain-again[data-leaving='true'] {
+  animation: curtain-fade-out 0.25s ease-out forwards;
+}
+.app[data-motion='reduce'] .curtain-spark {
+  animation: none;
+  opacity: 0.8;
+}
+
+@keyframes curtain-fade {
+  0% {
+    opacity: 0;
+  }
+  15%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes curtain-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes curtain-fade-out {
+  to {
+    opacity: 0;
+  }
+}

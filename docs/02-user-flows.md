@@ -47,14 +47,16 @@ Touching a monster on stage plays it directly:
    * Drag a block → it moves (dropping on another block swaps them) and lands with a hello.
    * While the song plays, the song is what you hear: pressing a block adds no preview on top.
 3. A song kept from **Learn** has one phrase per block (A B C A …). Filling a gap there continues the tune: the block gets the phrase to its left.
-4. Tap ▶ → the song plays once from block 1 to block 8 with a playhead. At the end, stars rain down and the monsters bow: *"You made a song!"* (only when the song had something to hear).
-5. ✨ Magic (the wand where Record usually sits) builds an arrangement and plays it at once from block 1, so every tap is heard: monsters enter one by one, a breakdown drops the rhythm, everyone plays the finale. Every tap gives a different arrangement; Undo goes back. Rows that play several phrases (a kept lesson's tune, and the bass and sparkles that follow its chords) keep every phrase in its block, from block 1, however often Magic is tapped: the song still starts at its beginning, and Magic arranges the other layers (the beat) around it. The first Magic of a song with a beat starts on the beat (Boom enters in block 1).
+4. Tap ▶ → the song plays once from block 1 to block 8 with a playhead, and **each row's monster sings its own notes**: the head at the start of the row squashes, opens its mouth and widens its eyes on every note it plays (and on its hello, preview and *pop*), the same way it sings on the Lab's stage, so the child sees who makes which sound. A row with no block in the playing column stays still; a sleeping monster never stirs, even when its block is previewed; the painting's row pulses with the painting's notes. Dense rows react at most every 90 ms (Boom's big drum always shows), and slow tablets get one simple bounce per note.
+5. **The curtain call** (only when the song had something to hear): on the last downbeat Boom crashes and Spark sings *"ta-da!"*, stars rain down, and the band that played hops one by one in row order, then bows together, eyes closed. Sleeping monsters stay asleep and a monster with no blocks just watches. During the bow two big hands clap while the audience claps (*clap, clap, clap-clap-clap* on Boom's clap, on its own quiet channel). Then a big round **again** sparkle (a circular arrow round a play triangle) invites an encore: one tap plays the song again from block 1. It waits about 8 seconds, goes away at the child's next touch elsewhere (which still does its own job), never covers the dock or the transport, and leaves nothing behind. Nothing on screen needs reading: the old title is gone; screen readers hear *"The song is over. The band takes a bow!"* and find the button as *Play the song again*. Demos end exactly the same way (the stars celebrate the music, not the listener). Pressing Play, leaving Blocks, opening an overlay or rest time ends the curtain call at once. Reduced motion: soft glows in each monster's colour instead of hops and bows, the hands fade in without clapping, no star rain.
+6. ✨ Magic (the wand where Record usually sits) builds an arrangement and plays it at once from block 1, so every tap is heard: monsters enter one by one, a breakdown drops the rhythm, everyone plays the finale. Every tap gives a different arrangement; Undo goes back. Rows that play several phrases (a kept lesson's tune, and the bass and sparkles that follow its chords) keep every phrase in its block, from block 1, however often Magic is tapped: the song still starts at its beginning, and Magic arranges the other layers (the beat) around it. The first Magic of a song with a beat starts on the beat (Boom enters in block 1).
 
 ## F5b · Make it a song in one tap (Little Monsters)
 
 1. Once two awake monsters have loops, a **Song** button (a stack of blocks with a play badge, at least 52 px) appears in the rail under Undo, where Monster Makers have their Magic panel button. It never covers Play, Record, Undo or Beat Hop's Surprise wand, and has no wand of its own, so the two never look alike. With hints on, the coach hand points at it once, when a second monster gets a loop (a re-take on the same monster does not count).
-2. One tap → Monster Magic arranges every loop into a song (the beat first, when there is one), Monster Blocks opens and the song plays from block 1.
-3. One Undo takes the arrangement back.
+2. One tap → Monster Magic arranges every loop into a song (the beat first, when there is one), Monster Blocks opens and the song plays from block 1, the row heads singing their parts as their blocks come round.
+3. At the end the band takes its curtain call (F5 step 5): hops, a bow together, clapping hands and the **again** sparkle to hear it once more.
+4. One Undo takes the arrangement back.
 
 ## F6 · Sound Painting
 
@@ -89,7 +91,7 @@ Touching a monster on stage plays it directly:
 
 ## F11 · Nothing to play yet (no dead ends)
 
-Play (or Space, or Magic) on a song with nothing to hear never runs a silent loop, never says *"You made a song!"*, and never adds an empty undo step. Instead the monster on the keys goes *"huh?"* (two rising notes), a bubble says what to do, and the coach hand (when hints are on) points where the music comes from, every time, not once a session:
+Play (or Space, or Magic) on a song with nothing to hear never runs a silent loop, never ends with a curtain call (no stars, bow, applause or "again"), and never adds an empty undo step. Instead the monster on the keys goes *"huh?"* (two rising notes), a bubble says what to do, and the coach hand (when hints are on) points where the music comes from, every time, not once a session:
 
 | Where | What is missing | The hand points at |
 |---|---|---|
@@ -120,7 +122,7 @@ Every bubble has a voice: its monster chirps as it appears (*"yay!"* for good ne
 
 ## F14 · Listen to a demo song
 
-1. Tap a demo card (ribbon *Listen*) on the Songs shelf. It opens in Monster Blocks and plays the whole song.
+1. Tap a demo card (ribbon *Listen*) on the Songs shelf. It opens in Monster Blocks and plays the whole song, each row's monster singing its part, and ends with the same curtain call as the child's own songs (F5 step 5): stars, the band's bow, clapping hands and the **again** sparkle. No words praise the child for a song they only listened to.
 2. The demo is a copy: tapping it again reopens the same untouched copy, and it only joins *My songs* once the child changes something.
 
 ## F15 · Find the step sequencer

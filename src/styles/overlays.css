@@ -424,40 +424,6 @@
   }
 }
 
-.finale-title {
-  position: absolute;
-  left: 50%;
-  top: 38%;
-  transform: translate(-50%, -50%);
-  font-size: var(--fs-xl);
-  font-weight: 700;
-  color: #fff;
-  text-shadow:
-    0 4px 0 #6a3fe0,
-    0 10px 30px rgba(0, 0, 0, 0.4);
-  animation: finale-pop 2.6s var(--ease-pop) forwards;
-  white-space: nowrap;
-}
-
-@keyframes finale-pop {
-  0% {
-    transform: translate(-50%, -50%) scale(0.3);
-    opacity: 0;
-  }
-  15% {
-    transform: translate(-50%, -50%) scale(1.1);
-    opacity: 1;
-  }
-  80% {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 1;
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 0;
-  }
-}
-
 /* ── Coach hand (wordless hints) ──────────────────────────────────────────── */
 
 .coach-hand {

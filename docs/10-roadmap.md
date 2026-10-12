@@ -19,7 +19,7 @@ Everything in 0.1 exists to test that. Anything that doesn't serve it waits.
 | Automatic loop alignment | ✅ shared clock, fixed loop length |
 | Autosave + local persistence | ✅ IndexedDB, versioned schema |
 | Basic delay and reverb | ✅ Echo & Gloop buddies |
-| Monster Blocks arrangement | ✅ tap, swipe, drag, sleep, Magic arrange, song playback + finale |
+| Monster Blocks arrangement | ✅ tap, swipe, drag, sleep, Magic arrange, song playback with singing row heads, and a wordless curtain call (the band hops and bows, clapping hands and applause, an "again" sparkle) |
 | Responsive tablet interface | ✅ phones & tablets sideways, tablets upright, rotate hint |
 | **Learn (added after 0.1 review)** | 8 public-domain songs (Hot Cross Buns → Jingle Bells) taught phrase by phrase: listen, play it back at your own pace with the next key glowing, Magic help (any key plays the right note) on by default for Little Monsters, stars, play-along with the band, and "Keep my song" into Monster Blocks |
 | **Beyond the MVP brief, built because they were cheap on this architecture** | Sound Painting · Puff pads · Mimic voice sampler · Add Monster tray with bench · Monster Maker mode (speed, mood, Chomper, Wiggle, redo, solo) · Parent Space with gate (incl. optional play-time limit) · WAV export · PWA offline install · wordless coach · wavetable oscillators · crash-recovery screen |
