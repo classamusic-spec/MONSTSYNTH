@@ -47,7 +47,7 @@ All touch targets ≥ 44 px; primary actions ≥ 52 px; keys are the largest tar
 
 ### Tickle time
 
-Only **new finger-downs** on a monster's pod count (`src/magic/tickle.ts`, pure and unit-tested). A hold, a drag, a roll, a shake or a pinch is one contact, so ordinary playing never adds up by accident; a second finger of a two-hand mash counts. Each monster keeps its own count.
+Only **new finger-downs** on a monster's pod count (`src/magic/tickle.ts`, pure and unit-tested). A hold, a drag, a roll, a shake or a pinch is one contact, so ordinary playing never adds up by accident. A finger that joins one already down counts only if it lets go within 250 ms without squishing (a two-hand mash counts; a pinch never does). Each monster keeps its own count.
 
 | Step | Little Monsters | What the child sees and hears |
 |---|---|---|
@@ -56,20 +56,21 @@ Only **new finger-downs** on a monster's pod count (`src/magic/tickle.ts`, pure 
 | laugh | 450 ms without a poke | laughs in its own voice (a chirp: 4–6 staccato notes ~170 ms apart, stepping down and getting softer); a belly-laugh shake; then a happy blink and the face goes back |
 | level 2 | tickled again within 3 s of a laugh | a "wheee" squash-hop (never a spin) with a rising chirp, then a bigger laugh |
 | rest | after level 2 | 5 s of plain notes, then it starts over |
+| drumming | still poking 3 s after the giggles began | that is a beat, not a tickle: the face calms with no laugh, and pokes are plain notes until a 1 s pause |
 
-* **Guards:** the laugh's sound never plays while the band plays, a take records or waits (armed), a lesson plays, a grown-up panel is open or the first-beat guide runs (the face may still show; over the band the laugh is a silent shake). While recording or armed nothing tickles at all: every poke is just a note in the take. Sleeping monsters keep their closed eyes.
-* Laughs are chirps (`studio.chirp`): heard, never recorded, never an edit (no undo step, nothing saved).
-* **Coach:** the pokes that added up to the giggles are taken back off the Coach's counts, so tickling never uses up the "try Record" or "try Beat Hop" hints (real drumming still earns them).
+* **Guards:** the laugh's sound never plays while the band plays, a take records or waits (armed), a lesson plays, a grown-up panel is open, Mimic's microphone listens or the first-beat guide runs (the face may still show; over the band the laugh is a silent shake). A laugh already ringing is cut short when the band starts, a take starts or waits, a panel opens, the guide begins or the microphone opens: none of it sounds over the band or lands in a take or a word. While recording or armed nothing tickles at all: every poke is just a note in the take. Sleeping monsters keep their closed eyes.
+* Laughs are chirps (`studio.chirp`): heard, never recorded, never an edit (no undo step, nothing saved). Their notes carry their own visual source (`laugh`): the monster's mouth bounces with them, but no key or drum pad lights up and no note sprites fly over the giggling face.
+* **Coach:** the pokes that added up to the giggles are taken back off the Coach's counts, so tickling never uses up the "try Record" or "try Beat Hop" hints. Real drumming still earns them, on the keys or on a monster's body: when the giggles turn out to be drumming, those pokes count again (and "try Record" still comes eight beats after the Beat Hop hint, never on top of it).
 * **Monster Makers** need 8 contacts within 1.6 s and see the giggles only: no laugh is heard and there is no level 2, so fast drum fills are never answered with a laugh.
 * Reduced motion: the face, a soft glow and the laugh; no jiggle, shake, bubbles or hop. Lite visuals (a slow tablet): no bubbles and nothing animated inside the drawing.
 
 ### The musical sky
 
 * A sky layer sits after the scenery and before the pods, so it only hears touches on the **bare stage** (on tablets: the band above the monsters, the column above the + seat, the edges; on phones mostly around the + seat).
-* A touch rings one of Spark's **Star Bells** in the song's mood and key (`src/magic/sky.ts`: higher on screen and further right is higher, steps 0–9, so a sweep along the sky is a twinkly run), with a sparkle at the finger, and the nearest star flares. A sweep rings one bell per change of note, at most one every 70 ms, with at most 12 sparkles alive.
-* **The moon** rings a soft low bell (the mood's root, an octave down and at home), glows, gives a little boing and shows a face that winks. It is one consistent target on every layout: its touch circle is above the pods' empty sky but below any monster drawn over it (inside a pod, only the drawn monster catches a touch over the moon).
+* A touch rings one of Spark's **Star Bells** in the song's mood and key (`src/magic/sky.ts`: higher on screen and further right is higher, steps 0–9, so a sweep along the sky is a twinkly run), with a sparkle at the finger, and the nearest star flares. A sweep rings one bell per change of note, at most one every 70 ms per finger (so a two-hand slap rings both hands) and at most three from all fingers together, with at most 12 sparkles alive. A lone tap rings out clearly (velocity 0.68); a bell within 200 ms of the last is part of a sweep and softer (0.45), so a run never piles up louder than a key.
+* **The moon** rings a soft low bell (the mood's root, an octave down and at home), glows, gives a little boing and shows a face that winks. It is one consistent target on every layout: its touch circle is above the pods' empty sky but below any monster drawn over it (inside a pod, only the drawn monster catches a touch over the moon). On phones the circle is about a 44 px target and no bigger, since the moon sits over the top of Spark's column: just outside it, Spark plays. Mashing the moon winks every time but rings at most once every 350 ms, and softer while the last bell still rings, so it is never louder than a key.
 * Three brighter stars sit in the open band on tall screens only (phones have no open band, so no star there looks tappable but plays a monster).
-* Sky bells play on Spark's own studio channel (`studio.skyBell` / `studio.moonBell`), quieter than a key; they are never recorded, never edits and never saved, and they carry their own visual source (`sky`), so they never count as playing the keys for the Coach. While a take records the sky is hushed and only sparkles.
+* Sky bells play on Spark's own studio channel (`studio.skyBell` / `studio.moonBell`), quieter than a key; they are never recorded, never edits and never saved, and they carry their own visual source (`sky`), so they never count as playing the keys for the Coach (though ringing the sky does keep the "tap a key" hand away: the child is already playing). While a take records the sky is hushed and only sparkles.
 * Nothing in the sky animates until it is touched. Reduced motion: a soft glow instead of sparkles and flares; the moon glows without the boing or wink.
 
 ### Monster behaviour on stage

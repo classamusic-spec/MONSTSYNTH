@@ -158,7 +158,8 @@ export function PlaySurface({ track }: { track: Track }) {
   useEffect(
     () =>
       onNote((v) => {
-        if (v.trackId !== track.id || v.source === 'live') return;
+        // A tickle-time laugh is the monster's, not a tune on the keys.
+        if (v.trackId !== track.id || v.source === 'live' || v.source === 'laugh') return;
         const el = keyEls.current[v.step];
         if (el) glow(el, Math.min(400, Math.max(120, v.dur * 1000)));
       }),

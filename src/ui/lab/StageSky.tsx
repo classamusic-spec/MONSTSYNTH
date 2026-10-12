@@ -9,8 +9,9 @@ import { twinkle } from '../monsters/shapes';
 // THE MUSICAL SKY. The Lab's night sky rings: a touch on the bare stage plays
 // one of Spark's Star Bells in the song's key (higher on screen, and further
 // right, is higher: src/magic/sky.ts), with a sparkle at the finger, and the
-// nearest star flares. A sweep plays a twinkly run, one bell per change of note.
-// The moon rings a soft low bell, glows and winks.
+// nearest star flares. A sweep plays a twinkly run, one bell per change of note
+// (each finger its own, so a two-hand slap rings both). The moon rings a soft
+// low bell, glows and winks (mashed, it winks every time and rings now and then).
 //
 // The layer sits after the scenery and before the pods, so pods, loop badges,
 // the + seat and the toys keep every tap: it only hears touches on the bare
@@ -35,6 +36,8 @@ const MAX_SPARKS = 12;
 const STAR_REACH = 48;
 /** A sweep leaves a sparkle at least this far apart (px), even between bells. */
 const TRAIL_PX = 30;
+/** Bells from all fingers together in one sweep gap (a two-hand slap rings both, a ten-finger scribble stays light). */
+const MAX_BELLS_PER_GAP = 3;
 
 const SPARK_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${twinkle(12, 12, 11)}" fill="currentColor"/></svg>`;
 let sparkTemplate: HTMLElement | null = null;
@@ -131,6 +134,8 @@ interface Finger {
   step: number;
   x: number;
   y: number;
+  /** When this finger last rang a bell (ms). */
+  at: number;
 }
 
 export const StageSky = memo(function StageSky({ stageRef }: { stageRef: RefObject<HTMLDivElement | null> }) {
@@ -141,9 +146,10 @@ export const StageSky = memo(function StageSky({ stageRef }: { stageRef: RefObje
     const sky = skyRef.current;
     if (!stage || !sky) return;
     const fingers = new Map<number, Finger>();
-    let lastRing = -Infinity;
+    /** When the latest bells rang, from any finger (ms). */
+    let rang: number[] = [];
 
-    /** Ring the bell under (x, y) unless it rang a moment ago; sparkle either way. */
+    /** Ring the bell under (x, y) unless this finger rang a moment ago; sparkle either way. */
     const ring = (e: PointerEvent, finger: Finger | null): Finger => {
       const sr = stage.getBoundingClientRect();
       const lr = sky.getBoundingClientRect();
@@ -153,18 +159,22 @@ export const StageSky = memo(function StageSky({ stageRef }: { stageRef: RefObje
       const now = performance.now();
       const reduced = isReducedMotion();
       const changed = !finger || step !== finger.step;
-      if (changed && skyReady(lastRing, now)) {
-        lastRing = now;
+      rang = rang.filter((t) => !skyReady(t, now));
+      if (changed && skyReady(finger?.at ?? -Infinity, now) && rang.length < MAX_BELLS_PER_GAP) {
+        rang.push(now);
         studio.skyBell(step);
         sparkle(sky, x, y, step, reduced);
         if (!reduced && !liteVisuals()) flareStar(stage, e.clientX, e.clientY);
-        return { step, x, y };
+        return { step, x, y, at: now };
       }
       if (finger && Math.hypot(x - finger.x, y - finger.y) >= TRAIL_PX) {
         if (!reduced) sparkle(sky, x, y, finger.step, reduced);
-        return { step: finger.step, x, y };
+        return { ...finger, x, y };
       }
-      return finger ?? { step: -1, x, y };
+      if (finger) return finger;
+      // A finger that could not ring yet still sparkles where it landed.
+      sparkle(sky, x, y, step, reduced);
+      return { step: -1, x, y, at: -Infinity };
     };
 
     const down = (e: PointerEvent) => {

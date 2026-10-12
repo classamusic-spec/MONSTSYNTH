@@ -61,7 +61,7 @@ Poke a monster again and again (Little Monsters: 5 quick pokes) and it gets the 
 | Puff | one slow soft "hoooo" (its sounds fade in too slowly for staccato) | one high soft "hoo" |
 | Mimic | "ha-ha-ha" in its singing voice (the voice's "ah" vowel) | a quick climb |
 
-The bigger laugh starts higher and lasts longer. Laughs use the monster's current sound (Mimic with a recorded word laughs in its singing voice). They are never recorded and never heard over the band, a take, a lesson or a grown-up panel; Monster Makers see the giggles without the laugh.
+The bigger laugh starts higher and lasts longer. Laughs use the monster's current sound (Mimic with a recorded word laughs in its singing voice). They are never recorded and never heard over the band, a take, a lesson, a grown-up panel or Mimic's microphone (a laugh already ringing stops when one of those starts); Monster Makers see the giggles without the laugh. A laugh shows on the monster's face only: no keys light up and no note sprites fly over the ^ ^. A child who keeps on poking for 3 s is drumming, not tickling: the face calms without a laugh and the beat goes on as plain notes.
 
 ## Effect buddies (they change sound instead of making it)
 

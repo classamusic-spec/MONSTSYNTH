@@ -74,8 +74,12 @@ export function Coach() {
     let boomHits = 0;
     let stones = 0;
     let recorded = false;
-    /** Monsters being tickled: their pokes are a game, not playing the keys or drumming. */
-    const tickled = new Set<string>();
+    /**
+     * Monsters being tickled: their pokes are a game, not playing the keys or
+     * drumming. Kept per monster: the pokes taken off the counts, given back if
+     * the "tickle" turns out to be drumming after all.
+     */
+    const tickled = new Map<string, { live: number; boom: number }>();
     const timers: ReturnType<typeof setTimeout>[] = [];
     const show = (id: string, selector: string, ms: number) => {
       if (done.current.has(id)) return;
@@ -105,15 +109,25 @@ export function Coach() {
       // Only playing on the Lab's keys counts: auditions in Blocks, Paint and Learn
       // (and Beat Hop's stone previews) must not use up the once-per-session hints.
       const s = getState();
+      // Ringing the night sky or the moon is playing too: the "tap a key" hand stays away.
+      if (v.source === 'sky' && s.screen === 'lab' && !touched) {
+        touched = true;
+        hide();
+      }
       if (v.source !== 'live' || s.screen !== 'lab') return;
       if (!touched) {
         touched = true;
         hide();
       }
-      if (v.trackId && tickled.has(v.trackId)) return;
       // Stone previews and drum pictures on the grid are not playing the keys:
       // they never use up the "try Record" count.
       if (labFace(s) === 'grid') return;
+      const held = v.trackId ? tickled.get(v.trackId) : undefined;
+      if (held) {
+        held.live++;
+        if (v.monster === 'boom') held.boom++;
+        return;
+      }
       live++;
       if (live === 16 && !recorded) show('try-record', '.t-rec[data-state]', 5000);
       // Drumming away on Boom without recording: its beat grid might be the thing.
@@ -143,12 +157,31 @@ export function Coach() {
       // counts, and the monster's pokes stop counting until it calms down.
       if (e.type === 'tickle') {
         if (e.phase === 'giggly' && !tickled.has(e.trackId)) {
-          tickled.add(e.trackId);
           const earlier = Math.max(0, (e.taps ?? 1) - 1);
-          live = Math.max(0, live - earlier);
-          if (getState().project.tracks.find((t) => t.id === e.trackId)?.monster === 'boom') boomHits = Math.max(0, boomHits - earlier);
+          const took = { live: Math.min(live, earlier), boom: 0 };
+          live -= took.live;
+          if (getState().project.tracks.find((t) => t.id === e.trackId)?.monster === 'boom') {
+            took.boom = Math.min(boomHits, earlier);
+            boomHits -= took.boom;
+          }
+          tickled.set(e.trackId, took);
         }
-        if (e.phase === 'calm') tickled.delete(e.trackId);
+        if (e.phase === 'calm') {
+          const held = tickled.get(e.trackId);
+          tickled.delete(e.trackId);
+          // Poking on and on was drumming after all: those pokes count as playing.
+          if (held && e.drumming) {
+            live += held.live;
+            boomHits += held.boom;
+            if (!recorded) {
+              if (boomHits >= 8 && !done.current.has('try-grid')) {
+                show('try-grid', '.surface-flip', 5000);
+                // As in ordinary drumming, "try Record" comes eight beats after Beat Hop's hint, not on top of it.
+                live = Math.min(live, 8);
+              } else if (live >= 16) show('try-record', '.t-rec[data-state]', 5000);
+            }
+          }
+        }
       }
       if (e.type === 'record-start') {
         recorded = true;

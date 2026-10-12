@@ -174,7 +174,7 @@ const report = await page.evaluate(async () => {
   }
   // The musical sky: Star Bells on Spark's studio channel (its own effects, volume 0.75),
   // the highest sky bell and the moon's two-note bell, against a Spark key (vel 0.85, volume 0.8).
-  const { SKY_BELL, MOON_BELL, SKY_HIGH, moonSteps } = await import('/src/magic/sky.ts');
+  const { SKY_BELL, MOON_BELL, SKY_HIGH, SKY_GAP_MS, moonSteps, skyVel, moonLevel } = await import('/src/magic/sky.ts');
   const skyRender = async (notes) => {
     const sr = 44100;
     const ctx = new OfflineAudioContext(2, sr * 3, sr);
@@ -186,10 +186,25 @@ const report = await page.evaluate(async () => {
   };
   const bell = await skyRender([[SKY_HIGH, SKY_BELL.vel, SKY_BELL.dur, 0]]);
   const moonR = await skyRender(moonSteps('pentatonicMajor').map((st, i) => [st, MOON_BELL.vels[i], MOON_BELL.dur, i * 0.012]));
-  // A sweep: a bell every 70 ms across the whole sky, the busiest the sky can be.
-  const sweep = await skyRender(Array.from({ length: 10 }, (_, i) => [i, SKY_BELL.vel, SKY_BELL.dur, i * 0.07]));
+  // A sweep: a bell every 70 ms across the whole sky (the first rings out, the rest softer, as on stage).
+  const sweep = await skyRender(Array.from({ length: 10 }, (_, i) => [i, skyVel(i ? SKY_GAP_MS : Infinity), SKY_BELL.dur, (i * SKY_GAP_MS) / 1000]));
+  // Two hands scribbling: three bells (the most the sky rings) every 70 ms, the busiest the sky can be.
+  const scribble = await skyRender(Array.from({ length: 30 }, (_, i) => [(i * 3) % 10, skyVel(i ? 0 : Infinity), SKY_BELL.dur, (Math.floor(i / 3) * SKY_GAP_MS) / 1000]));
+  // Mashing the moon: a tap every 80 ms for 1.6 s rings only as often (and as loud) as moonLevel lets it.
+  const mash = [];
+  let lastMoon = -Infinity;
+  for (let t = 0; t <= 1600; t += 80) {
+    const level = moonLevel(t - lastMoon);
+    if (!level) continue;
+    lastMoon = t;
+    moonSteps('pentatonicMajor').forEach((st, i) => mash.push([st, MOON_BELL.vels[i] * level, MOON_BELL.dur, t / 1000 + i * 0.012]));
+  }
+  const moonMash = await skyRender(mash);
   const sparkKey = Number(rows.find((r) => r.monster === 'spark' && r.preset === 'star-bells').peakDb);
-  const sky = { bellPeakDb: db(bell.peak), moonPeakDb: db(moonR.peak), sweepPeakDb: db(sweep.peak), sparkKeyPeakDb: sparkKey, bell: bell.peak, moon: moonR.peak, sweep: sweep.peak };
+  const sky = {
+    bellPeakDb: db(bell.peak), moonPeakDb: db(moonR.peak), sweepPeakDb: db(sweep.peak), scribblePeakDb: db(scribble.peak), moonMashPeakDb: db(moonMash.peak), sparkKeyPeakDb: sparkKey,
+    bell: bell.peak, moon: moonR.peak, sweep: sweep.peak, scribble: scribble.peak, moonMash: moonMash.peak,
+  };
   return { rows, click, band: { peakDb: db(b.peak), rmsDb: db(b.rms), seconds: band.duration.toFixed(1) }, worst: { peakDb: db(w.peak), rmsDb: db(w.rms), peak: w.peak }, gridRows, laneRows, laughRows, sky };
 });
 console.table(report.rows);
@@ -199,7 +214,7 @@ console.log('Worst case (all fx max):', { peakDb: report.worst.peakDb, rmsDb: re
 console.table(report.gridRows.map(({ peak, ...r }) => r));
 console.table(report.laneRows.map(({ peak, ...r }) => r));
 console.table(report.laughRows.map(({ peak, overNote, ...r }) => ({ ...r, vsNoteDb: overNote.toFixed(1) })));
-console.log('Musical sky (Star Bells on Spark\'s studio channel):', { bell: report.sky.bellPeakDb, moon: report.sky.moonPeakDb, sweep: report.sky.sweepPeakDb, sparkKey: report.sky.sparkKeyPeakDb });
+console.log('Musical sky (Star Bells on Spark\'s studio channel):', { bell: report.sky.bellPeakDb, moon: report.sky.moonPeakDb, sweep: report.sky.sweepPeakDb, scribble: report.sky.scribblePeakDb, moonMash: report.sky.moonMashPeakDb, sparkKey: report.sky.sparkKeyPeakDb });
 // The master gate: the limiter and soft clip keep everything under −1 dBFS.
 const GATE_DB = -1;
 const over = [...report.gridRows, ...report.laneRows.map((r) => ({ ...r, grid: r.lane }))].filter((r) => 20 * Math.log10(r.peak) > GATE_DB);
@@ -216,9 +231,12 @@ console.log(
     ? `FAIL  laughs out of range: ${loudLaughs.map((r) => `${r.monster} ${r.laugh} ${r.peakDb} dB (note ${r.notePeakDb})`).join(', ')}`
     : 'PASS  every laugh peaks at most 1 dB over its own note, between -30 and -6 dBFS',
 );
-// The sky is a soft bell under the keys: quieter than a Spark key, but clearly there; a sweep stays under the gate.
+// The sky is a soft bell under the keys: quieter than a Spark key, but clearly there; a sweep and a
+// two-hand scribble stay under the gate, and mashing the moon is never louder than a Spark key.
 const skyDb = (v) => 20 * Math.log10(v);
-const skyOk = skyDb(report.sky.bell) <= report.sky.sparkKeyPeakDb - 2 && skyDb(report.sky.bell) > -26 && skyDb(report.sky.moon) <= report.sky.sparkKeyPeakDb && skyDb(report.sky.moon) > -26 && skyDb(report.sky.sweep) < GATE_DB;
-console.log(skyOk ? 'PASS  sky and moon bells sit under a Spark key (and a sweep under the gate)' : 'FAIL  sky bells out of range');
+const skyOk =
+  skyDb(report.sky.bell) <= report.sky.sparkKeyPeakDb - 2 && skyDb(report.sky.bell) > -26 && skyDb(report.sky.moon) <= report.sky.sparkKeyPeakDb && skyDb(report.sky.moon) > -26 &&
+  skyDb(report.sky.sweep) < GATE_DB && skyDb(report.sky.scribble) < GATE_DB && skyDb(report.sky.moonMash) <= report.sky.sparkKeyPeakDb;
+console.log(skyOk ? 'PASS  sky and moon bells sit under a Spark key (a sweep and a scribble under the gate, a mashed moon under a key)' : 'FAIL  sky bells out of range');
 await browser.close();
 process.exit(over.length || loudLaughs.length || !skyOk ? 1 : 0);

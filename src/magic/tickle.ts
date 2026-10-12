@@ -15,6 +15,8 @@ import type { AgeMode, MonsterKind } from '../model/types';
 //   `quietMs` without a poke               → laugh (at the level of the giggles)
 //   tickled again within `againMs` of it   → level 2: a "wheee" hop and a bigger laugh
 //   after the top level                    → `restMs` of plain notes, then it starts over
+//   still poking `drumMs` after the giggles began → that's drumming, not tickling:
+//     the face calms (no laugh) and pokes are plain notes until a `drumGapMs` pause
 //
 // Pure: times come in as milliseconds, nothing here touches the DOM or audio.
 // The studio (src/studio/tickle.ts) runs the timers and plays the laughs.
@@ -35,11 +37,19 @@ export interface TickleConfig {
   restMs: number;
   /** Laughs out loud (Little Monsters). Monster Makers only see the giggles: their fast drumming is never answered with a laugh. */
   laughs: boolean;
+  /**
+   * Pokes still coming this long after the giggles began (ms): the child is
+   * drumming, not tickling. The face calms without a laugh. At least `againMs`,
+   * so the next giggles always start again from level 1.
+   */
+  drumMs: number;
+  /** Drumming ends after a pause this long (ms); then pokes count again. */
+  drumGapMs: number;
 }
 
 export const TICKLE: Record<AgeMode, TickleConfig> = {
-  little: { taps: 5, windowMs: 2000, quietMs: 450, againMs: 3000, maxLevel: 2, restMs: 5000, laughs: true },
-  maker: { taps: 8, windowMs: 1600, quietMs: 450, againMs: 3000, maxLevel: 1, restMs: 5000, laughs: false },
+  little: { taps: 5, windowMs: 2000, quietMs: 450, againMs: 3000, maxLevel: 2, restMs: 5000, laughs: true, drumMs: 3000, drumGapMs: 1000 },
+  maker: { taps: 8, windowMs: 1600, quietMs: 450, againMs: 3000, maxLevel: 1, restMs: 5000, laughs: false, drumMs: 3000, drumGapMs: 1000 },
 };
 
 export interface TickleState {
@@ -52,6 +62,10 @@ export interface TickleState {
   lastTap: number;
   laughedAt: number;
   restUntil: number;
+  /** When the giggles began (ms). */
+  giggleAt: number;
+  /** Drumming, not tickling: pokes are plain notes until a pause. */
+  drumming: boolean;
 }
 
 export const NEW_TICKLE: TickleState = Object.freeze({
@@ -61,9 +75,12 @@ export const NEW_TICKLE: TickleState = Object.freeze({
   lastTap: -Infinity,
   laughedAt: -Infinity,
   restUntil: -Infinity,
+  giggleAt: -Infinity,
+  drumming: false,
 });
 
-export type TapOutcome = 'none' | 'giggly' | 'more';
+/** `drumming`: the giggles go away quietly (no laugh): the child is keeping a beat. */
+export type TapOutcome = 'none' | 'giggly' | 'more' | 'drumming';
 
 /** A new finger came down on the monster at `now` (ms). */
 export function tickleTap(s: TickleState, now: number, cfg: TickleConfig): { state: TickleState; out: TapOutcome } {
@@ -72,13 +89,22 @@ export function tickleTap(s: TickleState, now: number, cfg: TickleConfig): { sta
   if (now < s.restUntil) {
     return { state: s.taps.length || s.giggly ? { ...s, taps: [], giggly: false } : s, out: 'none' };
   }
-  if (s.giggly) return { state: { ...s, lastTap: Math.max(s.lastTap, now) }, out: 'more' };
+  if (s.drumming) {
+    // Still keeping the beat: a plain note. After a pause, counting starts over.
+    if (now - s.lastTap < cfg.drumGapMs) return { state: { ...s, lastTap: Math.max(s.lastTap, now) }, out: 'none' };
+    s = { ...s, drumming: false, taps: [] };
+  }
+  if (s.giggly) {
+    const lastTap = Math.max(s.lastTap, now);
+    if (now - s.giggleAt >= cfg.drumMs) return { state: { ...s, taps: [], giggly: false, drumming: true, lastTap }, out: 'drumming' };
+    return { state: { ...s, lastTap }, out: 'more' };
+  }
   // A clock that went backwards (a stale timestamp) never counts twice.
   const taps = [...s.taps.filter((t) => t <= now && now - t < cfg.windowMs), now];
   if (taps.length < cfg.taps) return { state: { ...s, taps, lastTap: now }, out: 'none' };
   const again = now - s.laughedAt <= cfg.againMs;
   const level = again ? Math.min(cfg.maxLevel, s.level + 1) : 1;
-  return { state: { ...s, taps: [], giggly: true, level, lastTap: now }, out: 'giggly' };
+  return { state: { ...s, taps: [], giggly: true, level, lastTap: now, giggleAt: now }, out: 'giggly' };
 }
 
 /**

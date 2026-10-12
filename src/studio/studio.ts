@@ -11,7 +11,7 @@ import { wandPattern } from '../magic/grooves';
 import { placeNote } from '../magic/recorder';
 import { audibleTracks, collectEvents, songHasSound, type PlayMode, type SeqEvent } from '../magic/sequence';
 import { hasGridFace } from '../magic/steps';
-import { MOON_BELL, moonSteps, SKY_BELL } from '../magic/sky';
+import { MOON_BELL, moonLevel, moonSteps, SKY_BELL, skyVel } from '../magic/sky';
 import { LAUGHS, type LaughKind } from '../magic/tickle';
 import { gridLinesIn, isBounce, nextLine, nextOccurrence, snapDuration, wrap } from '../magic/timing';
 import { recordNote, replaceLoopNotes, setRecordedDuration, setTrackSample, tidyLoop } from '../model/edits';
@@ -1457,11 +1457,16 @@ class Studio {
     const p = s.project;
     const chirp = CHIRPS[kind];
     const notes = chirp.by?.[monster] ?? (monster === 'boom' ? chirp.drums : chirp.tune);
+    // A laugh is kept, so it can be cut short when the band starts or a take begins (hushLaughs).
+    const laugh = kind in LAUGHS;
+    if (laugh) this.laughVoices = this.laughVoices.filter((v) => v.endTime > ctx.currentTime);
     for (const [step, at, dur, vel, bend = 0] of notes) {
       const when = ctx.currentTime + 0.01 + Math.max(0, delay) + at;
-      engine.trigger(noteRequest(p, monster, channelId, step, { vel, bend }), when, dur);
-      // Shown like a loop note: the monster sings it, but it never counts as the child playing.
-      this.queueVisual(when, { trackId: track?.id ?? null, monster, step, vel, dur, source: 'loop' });
+      const voice = engine.trigger(noteRequest(p, monster, channelId, step, { vel, bend }), when, dur);
+      if (laugh && voice) this.laughVoices.push(voice);
+      // Shown like a loop note: the monster sings it, but it never counts as the child playing
+      // (a laugh shows on the monster's face only: no keys light up, no note sprites).
+      this.queueVisual(when, { trackId: track?.id ?? null, monster, step, vel, dur, source: laugh ? 'laugh' : 'loop' });
     }
   }
 
@@ -1470,13 +1475,34 @@ class Studio {
 
   private tickler = new Tickler(this);
   private skyRings = 0;
+  private laughVoices: Voice[] = [];
+  /** When the sky and the moon last rang (performance.now() ms). */
+  private lastSkyAt = -Infinity;
+  private lastMoonAt = -Infinity;
 
   /**
    * A new finger came down on a monster's pod (`atMs`: the touch's own
    * timestamp). Quick pokes add up to the giggles, then a laugh (src/studio/tickle.ts).
    */
   tickle(trackId: string, atMs?: number) {
-    this.tickler.tap(trackId, atMs ?? performance.now());
+    // The touch's own time, unless it is from another clock (an epoch-style
+    // timestamp) or stale: then now. Its laugh is timed on performance.now().
+    const now = performance.now();
+    const at = atMs !== undefined && now - atMs > -50 && now - atMs < 1000 ? atMs : now;
+    this.tickler.tap(trackId, at);
+  }
+
+  /** Cut short every laugh still ringing or waiting to start (and the face's bounces queued with it). */
+  hushLaughs() {
+    const now = this.ctx?.currentTime ?? 0;
+    for (const v of this.laughVoices) if (v.endTime > now) v.kill(now, 0.04);
+    this.laughVoices = [];
+    if (this.visuals.some((q) => q.v.source === 'laugh')) this.visuals = this.visuals.filter((q) => q.v.source !== 'laugh');
+  }
+
+  /** Mimic's microphone is listening (a laugh would be in the word). */
+  get micBusy(): boolean {
+    return this.micRecording;
   }
 
   /** The channel the sky's bells ring on: Spark's own sound, kept by the studio (like painting's). */
@@ -1503,20 +1529,29 @@ class Studio {
     const ctx = this.ctx;
     if (!channel || !ctx || !this.engine) return false;
     const p = getState().project;
-    this.engine.trigger(noteRequest(p, 'spark', channel, step, { vel: SKY_BELL.vel }), ctx.currentTime, SKY_BELL.dur);
-    emitNote({ trackId: null, monster: 'spark', step, vel: SKY_BELL.vel, dur: SKY_BELL.dur, source: 'sky' });
+    // A lone tap rings out; a sweep's bells are softer, so a run never piles up louder than a key.
+    const now = performance.now();
+    const vel = skyVel(now - this.lastSkyAt);
+    this.lastSkyAt = now;
+    this.engine.trigger(noteRequest(p, 'spark', channel, step, { vel }), ctx.currentTime, SKY_BELL.dur);
+    emitNote({ trackId: null, monster: 'spark', step, vel, dur: SKY_BELL.dur, source: 'sky' });
     this.skyRings++;
     return true;
   }
 
-  /** The moon's soft low bell: the mood's root, an octave down and at home. False when hushed. */
+  /** The moon's soft low bell: the mood's root, an octave down and at home. False when hushed (or it rang a moment ago). */
   moonBell(): boolean {
     const channel = this.skyOpen() ? this.skyChannel() : null;
     const ctx = this.ctx;
     if (!channel || !ctx || !this.engine) return false;
+    // Mashing the moon never piles up bells: at most one every moment, softer while the last one rings.
+    const now = performance.now();
+    const level = moonLevel(now - this.lastMoonAt);
+    if (!level) return false;
+    this.lastMoonAt = now;
     const p = getState().project;
     moonSteps(p.scale).forEach((step, i) => {
-      const vel = MOON_BELL.vels[i];
+      const vel = MOON_BELL.vels[i] * level;
       this.engine?.trigger(noteRequest(p, 'spark', channel, step, { vel }), ctx.currentTime + i * 0.012, MOON_BELL.dur);
       emitNote({ trackId: null, monster: 'spark', step, vel, dur: MOON_BELL.dur, source: 'sky' });
     });
@@ -1643,6 +1678,7 @@ class Studio {
       await this.mic.open();
       this.mic.start();
       this.micRecording = true;
+      this.tickler.resetAll(); // a laugh still ringing would be in the word
       return true;
     } catch {
       this.micRecording = false;

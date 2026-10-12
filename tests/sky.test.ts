@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { moonSteps, SKY_GAP_MS, SKY_HIGH, SKY_LOW, skyReady, skyStep } from '../src/magic/sky';
+import { MOON_BELL, moonLevel, moonSteps, SKY_BELL, SKY_GAP_MS, SKY_HIGH, SKY_LOW, skyReady, skyStep, skyVel } from '../src/magic/sky';
 import { stepToSemitone } from '../src/magic/scales';
 
 describe('the musical sky', () => {
@@ -64,6 +64,34 @@ describe('the musical sky', () => {
       }
     }
     expect(rang).toBeLessThanOrEqual(3);
+  });
+
+  it('a lone tap rings out clearly; a sweep’s bells are softer', () => {
+    expect(skyVel(Infinity)).toBe(SKY_BELL.vel);
+    expect(skyVel(SKY_BELL.sweepMs)).toBe(SKY_BELL.vel);
+    expect(skyVel(SKY_GAP_MS)).toBe(SKY_BELL.sweepVel);
+    expect(SKY_BELL.sweepVel).toBeLessThan(SKY_BELL.vel);
+    // Still a soft bell under a played key (velocity 0.85).
+    expect(SKY_BELL.vel).toBeLessThan(0.85);
+  });
+
+  it('mashing the moon rings at most one bell every gapMs, softer while the last one rings', () => {
+    expect(moonLevel(Infinity)).toBe(1);
+    expect(moonLevel(0)).toBe(0);
+    expect(moonLevel(MOON_BELL.gapMs - 1)).toBe(0);
+    expect(moonLevel(MOON_BELL.gapMs)).toBe(MOON_BELL.again);
+    expect(moonLevel(MOON_BELL.dur * 1000)).toBe(1);
+    // 20 taps 80 ms apart (1.6 s of mashing) ring only a handful of bells.
+    let last = -Infinity;
+    let rang = 0;
+    for (let i = 0; i < 20; i++) {
+      const now = 1000 + i * 80;
+      if (moonLevel(now - last) > 0) {
+        rang++;
+        last = now;
+      }
+    }
+    expect(rang).toBeLessThanOrEqual(5);
   });
 
   it('the moon rings the mood’s root, an octave down and at home, in every mood', () => {

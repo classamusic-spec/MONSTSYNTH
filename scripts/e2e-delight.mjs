@@ -150,11 +150,18 @@ async function axeLab(page, label) {
   await shot(page, 'tickle-giggly-ipad');
   const tapped = (await notes(page, t0)).filter((n) => n.trackId === boom && n.source === 'live').length;
   check('every poke still plays its note', tapped === 7, `${tapped} notes for 7 pokes`);
-  await page.waitForTimeout(1100);
+  // Watch the drum pads while Boom laughs (the band is stopped: only a laugh could light them).
+  let padGlow = 0;
+  for (let i = 0; i < 22; i++) {
+    await page.waitForTimeout(50);
+    padGlow += await page.locator('.key[data-glow="true"]').count();
+  }
   const ev2 = await events(page, t0);
   const laugh = ev2.find((e) => e.phase === 'laugh');
-  const laughNotes = (await notes(page, laughT)).filter((n) => n.trackId === boom && n.source === 'loop');
+  const laughNotes = (await notes(page, laughT)).filter((n) => n.trackId === boom && n.source === 'laugh');
   check('when the poking stops, Boom laughs out loud (a chuckle on its own drums)', !!laugh && laugh.sound === true && laugh.level === 1 && laughNotes.length >= 4, `${laughNotes.length} laugh notes, ${JSON.stringify(laugh)}`);
+  const laughSprites = await page.evaluate((t) => window.__anims.filter((a) => a.t > t && /note-sprite/.test(a.cls) && !/tickle-bubble/.test(a.cls)).length, laughT + 150);
+  check('…the laugh shows on its face only: no drum pad lights up, no note sprites fly over the ^ ^', padGlow === 0 && laughSprites === 0, `${padGlow} pad glows, ${laughSprites} sprites`);
   check('the laugh steps down: snappy drum, bongos tuned lower, tiny cymbal', laughNotes.length >= 4 && laughNotes[0].step === 1 && laughNotes.at(-1).step === 2);
   check('…and the studio counts one laugh', (await dbg(page)).laughs === 1);
   await page.waitForTimeout(350);
@@ -171,7 +178,7 @@ async function axeLab(page, label) {
   check('level 2: a "wheee" squash-hop (no spin) and a bigger laugh', !!big && big.level === 2 && big.sound && hop.length === 1 && hop[0].props.includes('translate') && !hop[0].props.includes('rotate'), JSON.stringify(big));
   await shot(page, 'tickle-wheee-ipad');
   await page.waitForTimeout(1500);
-  const wheeeNotes = (await notes(page, t2)).filter((n) => n.trackId === boom && n.source === 'loop');
+  const wheeeNotes = (await notes(page, t2)).filter((n) => n.trackId === boom && n.source === 'laugh');
   check('…its bigger laugh is longer than the first', wheeeNotes.length > laughNotes.length, `${wheeeNotes.length} vs ${laughNotes.length} notes`);
   // After the top level: a rest of plain notes.
   const t3 = await mark(page);
@@ -226,9 +233,46 @@ async function axeLab(page, label) {
   await page.mouse.up();
   await page.waitForTimeout(600);
   check('a long drag and shake on a monster is one contact (no giggles)', (await events(page, t6)).length === 0);
+  // A touch timestamp on another clock (an epoch time, as older WebKit gave) never leaves a monster stuck giggling.
+  await settle(page);
+  await page.waitForTimeout(2100);
+  const t7 = await mark(page);
+  await page.evaluate(async () => {
+    const M = window.__monster;
+    const id = M.getState().project.tracks.find((t) => t.monster === 'spark').id;
+    for (let i = 0; i < 5; i++) {
+      M.studio.tickle(id, Date.now());
+      await new Promise((ok) => setTimeout(ok, 90));
+    }
+  });
+  await page.waitForTimeout(2600);
+  const clock = (await events(page, t7)).map((e) => e.phase);
+  check('a touch time from another clock still giggles, laughs and calms (never stuck)', clock[0] === 'giggly' && clock.includes('laugh') && clock.at(-1) === 'calm' && (await tickleAttr(page, 'spark')) === null, clock.join(','));
   await page.waitForTimeout(1800);
   const end = await page.evaluate(() => window.__monster.studio.debug());
   check('no stuck voices after all that tickling', end.held === 0 && end.live === 0, `${end.held} held, ${end.live} live`);
+  await ctx.close();
+}
+
+// ── 1a. Drumming is not tickling ─────────────────────────────────────────────
+{
+  const { ctx, page } = await open();
+  const boom = await trackOf(page, 'boom');
+  const t0 = await mark(page);
+  // A steady beat on Boom's body, about 3 a second for 5 s.
+  await poke(page, 'boom', 18, 280, 0.5);
+  const ev = await events(page, t0);
+  const phases = ev.map((e) => e.phase);
+  check('steady drumming on Boom: the giggles come, then calm by themselves (no laugh in the beat)', phases[0] === 'giggly' && !phases.includes('laugh') && ev.some((e) => e.phase === 'calm' && e.drumming && e.trackId === boom), phases.join(','));
+  check('…the face is back to normal while the drumming goes on', (await tickleAttr(page, 'boom')) === null);
+  await page.waitForTimeout(400);
+  const hand = await page.evaluate(() => {
+    const h = document.querySelector('.coach-hand');
+    const f = document.querySelector('.surface-flip')?.getBoundingClientRect();
+    return !!h && !!f && Math.abs(parseFloat(h.style.left) - (f.left + f.width / 2)) < 3;
+  });
+  check('…and drumming on Boom’s body still earns the Beat Hop hint', hand);
+  check('…no laugh was ever heard', (await dbg(page)).laughs === 0);
   await ctx.close();
 }
 
@@ -265,6 +309,26 @@ async function axeLab(page, label) {
   await page.waitForTimeout(60);
   const ev = await page.evaluate(() => window.__ev.filter((e) => e.type === 'tickle').map((e) => e.phase));
   check('real touch: two fingers mashing one monster both count (6 contacts: the giggles)', ev.includes('giggly'), ev.join(','));
+  // Pinches are one contact each: three quick squish-and-stretches never giggle.
+  await page.waitForFunction(() => window.__monster.studio.delightDebug().tickles === 0, null, { timeout: 5000 }).catch(() => null);
+  await page.waitForTimeout(2100);
+  const gr = await page.locator('.pod[data-monster="grumble"] .pod-hit').boundingBox();
+  const cx = gr.x + gr.width / 2;
+  const gy = gr.y + gr.height * 0.7;
+  const p0 = await page.evaluate(() => window.__ev.length);
+  for (let i = 0; i < 3; i++) {
+    await touch('touchStart', [{ x: cx - 20, y: gy, id: 1 }]);
+    await touch('touchStart', [{ x: cx - 20, y: gy, id: 1 }, { x: cx + 20, y: gy, id: 2 }]);
+    for (let k = 1; k <= 4; k++) {
+      await touch('touchMove', [{ x: cx - 20 - k * 8, y: gy, id: 1 }, { x: cx + 20 + k * 8, y: gy, id: 2 }]);
+      await page.waitForTimeout(25);
+    }
+    await touch('touchEnd', []);
+    await page.waitForTimeout(150);
+  }
+  await page.waitForTimeout(700);
+  const pinched = await page.evaluate((p0) => window.__ev.slice(p0).filter((e) => e.type === 'tickle').map((e) => e.phase), p0);
+  check('real touch: three quick pinches are three contacts (no giggles, no laugh)', pinched.length === 0, pinched.join(','));
   // A hold (a drum roll) is one contact, however long: rolls one after another never giggle.
   await page.waitForFunction(() => window.__monster.studio.delightDebug().tickles === 0, null, { timeout: 5000 }).catch(() => null);
   const boom = await page.locator('.pod[data-monster="boom"] .pod-hit').boundingBox();
@@ -327,6 +391,52 @@ async function axeLab(page, label) {
   await page.waitForTimeout(1200);
   check('…and the face calms down again', (await tickleAttr(page, 'grumble')) === null);
   await page.evaluate(() => window.__monster.studio.stop());
+  // A laugh already ringing stops when Record (or Play) is pressed: nothing of it sounds in the take or over the band.
+  /** The laugh's voices, once it starts (sequenced voices that will still ring: nothing else plays). */
+  const laughVoices = () =>
+    page.evaluate(async () => {
+      const M = window.__monster;
+      const studio = M.studio;
+      const at = await new Promise((ok) => {
+        const off = M.bus.onStudioEvent((e) => {
+          if (e.type === 'tickle' && e.phase === 'laugh') {
+            off();
+            ok(e);
+          }
+        });
+      });
+      await new Promise((ok) => setTimeout(ok, 60));
+      const now = studio.ctx.currentTime;
+      window.__laughV = studio.engine.voices.filter((v) => v.sequenced && v.endTime > now + 0.15);
+      return { level: at.level, sound: at.sound, voices: window.__laughV.length };
+    });
+  const stillRinging = () =>
+    page.evaluate(() => {
+      const now = window.__monster.studio.ctx.currentTime;
+      return window.__laughV.filter((v) => v.endTime > now + 0.1).length;
+    });
+  for (const [what, act] of [
+    ['Record', () => window.__monster.studio.startRecording()],
+    ['Play', () => window.__monster.studio.play()],
+  ]) {
+    await settle(page);
+    await page.waitForTimeout(300);
+    const pending = laughVoices();
+    await poke(page, 'bloop', 6, 100);
+    const l = await pending;
+    await page.evaluate(act);
+    await page.waitForTimeout(80);
+    const left = await stillRinging();
+    const flags = (await S(page)).transport;
+    check(`${what} pressed mid-laugh: the laugh stops at once (none of it in the ${what === 'Record' ? 'take' : 'band'})`, l.sound && l.voices >= 2 && left === 0 && (what === 'Record' ? flags.recording : flags.playing), `${l.voices} laugh voices, ${left} still ringing`);
+    if (what === 'Record') check('…and the face calms with it', (await tickleAttr(page, 'bloop')) === null);
+    await page.evaluate(() => {
+      window.__monster.studio.stopRecording();
+      window.__monster.studio.stop();
+    });
+    const s = await S(page);
+    if (s.past.length) await page.evaluate(() => window.__monster.studio.undo());
+  }
   await ctx.close();
 }
 
@@ -353,7 +463,35 @@ for (const [w, h, name] of [
   );
   check(`${name}: the moon glows and shows a winking face`, (await anims(page, 'moon-glow', t0)).length === 1 && (await anims(page, 'moon-face', t0)).length === 1 && (await anims(page, 'moon-wink', t0)).length === 1);
   if (name === 'iPad') await shot(page, 'sky-moon-ipad');
+  await page.waitForTimeout(1500);
+  // Mashing the moon: it winks every time, but rings only now and then (never a pile of bells).
+  t0 = await mark(page);
+  for (let i = 0; i < 12; i++) {
+    await page.mouse.click(moon.x + (i % 2 ? 3 : -3), moon.y);
+    await page.waitForTimeout(70);
+  }
+  const mashed = (await notes(page, t0)).filter((n) => n.source === 'sky').length / 2;
+  const winks = (await anims(page, 'moon-glow', t0)).length;
+  check(`${name}: mashing the moon winks every time but rings only a few bells`, winks === 12 && mashed >= 2 && mashed <= 4, `${winks} glows, ${mashed} bells for 12 taps`);
+  // Just outside the moon's touch circle, inside a monster's column, the monster plays.
+  const beside = await page.evaluate(() => {
+    const hit = document.querySelector('.stage-moon .moon-hit').getBoundingClientRect();
+    const x = hit.left - 6;
+    const y = hit.top + hit.height / 2;
+    const el = document.elementFromPoint(x, y);
+    const pod = el?.closest?.('.pod');
+    return { x, y, track: pod?.dataset.track ?? null, monster: pod?.dataset.monster ?? null, r: hit.width / 2 };
+  });
+  if (beside.track) {
+    await page.waitForTimeout(400);
+    t0 = await mark(page);
+    await page.mouse.click(beside.x, beside.y);
+    await page.waitForTimeout(80);
+    const played = (await notes(page, t0)).filter((n) => n.trackId === beside.track && n.source === 'live').length;
+    check(`${name}: right beside the moon, ${beside.monster} keeps its touch (moon circle ${Math.round(beside.r)} px)`, played === 1 && (tall || beside.r <= 24), `${played} notes`);
+  }
   await page.waitForTimeout(600);
+  before = await snapshot(page);
   // The bare sky.
   const pts = await skyPoints(page);
   check(`${name}: some bare sky is left for the sky to hear`, pts.length > 0, `${pts.length} points`);
@@ -497,7 +635,7 @@ for (const [w, h, name] of [
     // Pause the hat in mid-drop: it must never poke out of the stage's top edge.
     const drop = await page.evaluate(async () => {
       await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
-      const hat = document.querySelector('.pod[data-monster="boom"] .m-hat');
+      const hat = document.querySelector('.pod[data-monster="boom"] [id$="-figure"] .m-hat');
       const a = hat?.getAnimations().find((x) => x.id === 'poof-hat');
       const stageTop = document.querySelector('.stage').getBoundingClientRect().top;
       if (!a) return { hat: !!hat, top: null, stageTop };
@@ -603,6 +741,53 @@ for (const [w, h, name] of [
   await page.mouse.click(moon.x, moon.y);
   await page.waitForTimeout(80);
   check('reduced motion: the moon rings and glows, without the boing or the wink', (await notes(page, t0)).length === 2 && (await anims(page, 'moon-glow', t0)).length === 1 && (await anims(page, 'moon-boing', t0)).length === 0 && (await anims(page, 'moon-wink', t0)).length === 0);
+  await ctx.close();
+}
+
+// ── 6b. Playing the sky is playing: the "tap a key" hand stays away ───────────
+{
+  const { ctx, page } = await open();
+  const moon = await moonAt(page);
+  const pts = await skyPoints(page);
+  for (let i = 0; i < 6; i++) {
+    const p = i % 2 ? moon : pts[(i * 7) % pts.length];
+    await page.mouse.click(p.x, p.y);
+    await page.waitForTimeout(600);
+  }
+  await page.waitForTimeout(400);
+  check('ringing the sky and the moon in a fresh Lab: no "tap a key" hand', (await page.locator('.coach-hand').count()) === 0);
+  await ctx.close();
+}
+
+// ── 6c. Real touch: a two-hand slap on the sky rings both hands ──────────────
+{
+  const ctx = await browser.newContext({ viewport: { width: 820, height: 1180 }, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  page.on('pageerror', (e) => errors.push(`slap: ${e}`));
+  page.on('console', (m) => m.type() === 'error' && errors.push(`slap: ${m.text()}`));
+  await page.goto(url, { waitUntil: 'load' });
+  await page.waitForFunction(() => window.__monster?.getState().ready);
+  const cdp = await ctx.newCDPSession(page);
+  const touch = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
+  await touch('touchStart', [{ x: 410, y: 590, id: 1 }]);
+  await touch('touchEnd', []);
+  await page.waitForTimeout(900);
+  await page.evaluate(async () => {
+    await window.__monster.actions.newSong('band');
+    window.__monster.studio.stop();
+    window.__notes = [];
+    window.__monster.bus.onNote((v) => window.__notes.push(v));
+  });
+  await page.waitForTimeout(900);
+  const pts = await skyPoints(page);
+  const a = pts.reduce((m, p) => (p.x < m.x ? p : m), pts[0]);
+  const b = pts.reduce((m, p) => (p.x > m.x ? p : m), pts[0]);
+  await touch('touchStart', [{ x: a.x, y: a.y, id: 1 }, { x: b.x, y: b.y, id: 2 }]);
+  await page.waitForTimeout(60);
+  await touch('touchEnd', []);
+  await page.waitForTimeout(100);
+  const rang = await page.evaluate(() => window.__notes.filter((n) => n.source === 'sky').length);
+  check('real touch: a two-hand slap on the sky rings a bell for each hand', rang === 2 && b.x - a.x > 200, `${rang} bells, hands ${Math.round(b.x - a.x)} px apart`);
   await ctx.close();
 }
 

@@ -110,10 +110,12 @@
   transform-origin: center;
 }
 
-/* Phones: a small moon, so a bigger circle around it (still clear of the + seat). */
+/* Phones: a small moon, so a bigger circle around it (still clear of the + seat).
+   About a 44 px target, no bigger: the moon sits over the top of Spark's
+   column, and Spark keeps every touch outside the moon. */
 @media (max-height: 559px) {
   .stage-moon .moon-hit {
-    r: 66px;
+    r: 46px;
   }
 }
 

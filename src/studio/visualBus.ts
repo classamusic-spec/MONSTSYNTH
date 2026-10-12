@@ -14,8 +14,11 @@ export interface NoteVisual {
   vel: number;
   /** Seconds the note lasts. */
   dur: number;
-  /** 'sky': a bell from the Lab's night sky (no monster plays it; never counts as playing the keys). */
-  source: 'live' | 'loop' | 'paint' | 'sky';
+  /**
+   * 'sky': a bell from the Lab's night sky (no monster plays it; never counts as playing the keys).
+   * 'laugh': tickle time's laugh (the monster's face shows it; keys, sprites and the Coach do not).
+   */
+  source: 'live' | 'loop' | 'paint' | 'sky' | 'laugh';
   noteId?: string;
 }
 
@@ -44,9 +47,10 @@ export type StudioEvent =
   /**
    * Tickle time (src/studio/tickle.ts): `giggly` when quick pokes add up (`taps` is
    * how many it took), `more` for each extra poke, `laugh` once the poking stops
-   * (`sound`: heard, `ms`: how long), `calm` when the face goes back.
+   * (`sound`: heard, `ms`: how long), `calm` when the face goes back (`drumming`:
+   * the pokes went on and on, a beat rather than a tickle, so no laugh came).
    */
-  | { type: 'tickle'; trackId: string; phase: 'giggly' | 'more' | 'laugh' | 'calm'; level: number; taps?: number; sound?: boolean; ms?: number };
+  | { type: 'tickle'; trackId: string; phase: 'giggly' | 'more' | 'laugh' | 'calm'; level: number; taps?: number; sound?: boolean; ms?: number; drumming?: boolean };
 
 type NoteListener = (v: NoteVisual) => void;
 type FrameListener = (p: StudioPosition) => void;

@@ -79,6 +79,55 @@ describe('tickle time: counting pokes', () => {
   });
 });
 
+describe('tickle time: drumming is not tickling', () => {
+  it('poking on and on past drumMs: the giggles go away quietly (no laugh), then plain notes', () => {
+    // Steady drumming at about 3 a second for 10 s.
+    const { outs, state } = poke(every(30, 330));
+    const giggly = outs.indexOf('giggly');
+    const drum = outs.indexOf('drumming');
+    expect(giggly).toBe(4);
+    expect(drum).toBeGreaterThan(giggly);
+    // It took drumMs from the giggles to give up on them.
+    expect((drum - giggly) * 330).toBeGreaterThanOrEqual(little.drumMs);
+    expect((drum - giggly - 1) * 330).toBeLessThan(little.drumMs);
+    // Every poke after that is a plain note: no new giggles while the beat goes on.
+    expect(outs.slice(drum + 1).every((o) => o === 'none')).toBe(true);
+    expect(state).toMatchObject({ giggly: false, drumming: true });
+    expect(tickleQuiet(state, 20_000, little).out).toBe('none');
+  });
+
+  it('short breaths inside the beat keep it drumming; a real pause lets pokes count again', () => {
+    let r = poke(every(16, 300));
+    expect(r.outs).toContain('drumming');
+    const last = 15 * 300;
+    // Six more hits after a short breath (under drumGapMs): still plain notes.
+    const breath = last + little.drumGapMs - 200;
+    r = poke(every(6, 300, breath), little, r.state);
+    expect(r.outs.every((o) => o === 'none')).toBe(true);
+    // After a real pause, five quick pokes are a tickle again, from level 1.
+    const after = breath + 5 * 300 + little.drumGapMs + 100;
+    r = poke(every(5, 100, after), little, r.state);
+    expect(r.outs.at(-1)).toBe('giggly');
+    expect(r.state.level).toBe(1);
+  });
+
+  it('a short tickle never reaches drumMs: it still ends in a laugh', () => {
+    const r = poke(every(8, 120));
+    expect(r.outs).not.toContain('drumming');
+    expect(tickleQuiet(r.state, 7 * 120 + little.quietMs, little).out).toBe('laugh');
+  });
+
+  it('drumMs is at least againMs, so the giggles after drumming always start from level 1', () => {
+    for (const cfg of [little, maker]) expect(cfg.drumMs).toBeGreaterThanOrEqual(cfg.againMs);
+  });
+
+  it('Monster Makers drumming on and on: the same', () => {
+    const { outs } = poke(every(40, 110), maker);
+    expect(outs.filter((o) => o === 'giggly')).toHaveLength(1);
+    expect(outs).toContain('drumming');
+  });
+});
+
 describe('tickle time: the laugh', () => {
   const giggling = () => poke(every(5, 100)).state; // last poke at 400
 

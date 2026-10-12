@@ -50,6 +50,10 @@ interface Pinch {
 }
 
 const HOLD_MS = 320;
+/** Tickle time: a finger that joins one already down counts as a poke only if it lets go this quickly … */
+const QUICK_POKE_MS = 250;
+/** … without squishing (the two fingers' distance changing by more than this, px): a pinch is never a poke. */
+const PINCH_SLOP = 12;
 
 function drumPadFor(rel: number): number {
   if (rel < 0.36) return 0; // feet & belly: big drum
@@ -67,6 +71,8 @@ export const MonsterPod = memo(function MonsterPod({ track, selected }: { track:
   const gesture = useRef<Gesture | null>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<Pinch | null>(null);
+  /** Fingers that joined one already down (pointerId → when): a quick one is a poke (a two-hand mash), a pinch is not. */
+  const joined = useRef(new Map<number, number>());
   const [clearing, setClearing] = useState(false);
   const info = MONSTERS[track.monster];
   const preset = presetInfo(track.monster, track.preset);
@@ -88,7 +94,8 @@ export const MonsterPod = memo(function MonsterPod({ track, selected }: { track:
         // Read at note time: switching motion in Parent Space does not re-render pods.
         reactOpts.current.reduced = isReducedMotion();
         reactToNote(rootRef.current, v, reactOpts.current);
-        spawnNoteSprite(rootRef.current, v, reactOpts.current.reduced);
+        // A laugh shows on the face (and in its bubbles), not as notes flying over it.
+        if (v.source !== 'laugh') spawnNoteSprite(rootRef.current, v, reactOpts.current.reduced);
         if (chomper.current) chompOnNote(rootRef.current, chomper.current, { reduced: reactOpts.current.reduced, lite: liteVisuals() });
       }),
     [track.id],
@@ -114,7 +121,8 @@ export const MonsterPod = memo(function MonsterPod({ track, selected }: { track:
     if (!root) return;
     if (lastPreset.current !== track.preset) costumePoof(root, lastHat.current, { reduced: isReducedMotion(), lite: liteVisuals() });
     lastPreset.current = track.preset;
-    lastHat.current = (root.querySelector('.squish .m-accessory')?.cloneNode(true) as Element | undefined) ?? null;
+    // The hat on the figure itself (never the copy of an old one flying off).
+    lastHat.current = (root.querySelector('.squish [id$="-figure"] > .m-accessory')?.cloneNode(true) as Element | undefined) ?? null;
   }, [track.preset]);
 
   // Pinch squish persists as the monster's shape.
@@ -157,7 +165,9 @@ export const MonsterPod = memo(function MonsterPod({ track, selected }: { track:
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (!selected) selectTrack(track.id);
     // Every new finger counts towards tickle time (a hold, drag, roll, shake or pinch is one contact).
-    studio.tickle(track.id, e.timeStamp);
+    // A finger joining one already down waits: it is a poke only if it lets go quickly without a squish.
+    if (gesture.current) joined.current.set(e.pointerId, e.timeStamp);
+    else studio.tickle(track.id, e.timeStamp);
 
     // Second finger on the same monster → pinch (squish/stretch), no new note.
     if (gesture.current && pointers.current.size === 2) {
@@ -212,8 +222,10 @@ export const MonsterPod = memo(function MonsterPod({ track, selected }: { track:
       const a = pointers.current.get(p.ids[0]);
       const b = pointers.current.get(p.ids[1]);
       if (a && b) {
-        const ratio = Math.hypot(a.x - b.x, a.y - b.y) / p.startDist;
-        setSize(track.id, p.startSize + Math.log2(ratio) * 1.4);
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        setSize(track.id, p.startSize + Math.log2(dist / p.startDist) * 1.4);
+        // A squish: the joining finger was a pinch, not a poke.
+        if (Math.abs(dist - p.startDist) > PINCH_SLOP) joined.current.clear();
       }
       return;
     }
@@ -253,6 +265,12 @@ export const MonsterPod = memo(function MonsterPod({ track, selected }: { track:
   };
 
   const onPointerUp = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    const joinedAt = joined.current.get(e.pointerId);
+    if (joinedAt !== undefined) {
+      joined.current.delete(e.pointerId);
+      // A quick extra finger (a two-hand mash) counts as a poke; a held or cancelled one never does.
+      if (e.type === 'pointerup' && e.timeStamp - joinedAt <= QUICK_POKE_MS) studio.tickle(track.id, e.timeStamp);
+    }
     pointers.current.delete(e.pointerId);
     if (pinch.current && pinch.current.ids.includes(e.pointerId)) pinch.current = null;
     if (gesture.current?.pointerId === e.pointerId) endGesture(e.timeStamp);

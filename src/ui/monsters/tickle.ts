@@ -6,7 +6,7 @@ import { MAX_NOTE_SPRITES } from './react';
 //   giggly → ^ ^ eyes, rosy cheeks, a wide grin (CSS on .pod[data-tickle]) and a jiggle
 //   more   → a little jiggle and a bubble for every extra poke
 //   laugh  → a belly-laugh shake; level 2 hops first ("wheee"), squash and stretch
-//   calm   → the face goes back with a happy blink
+//   calm   → the face goes back with a happy blink (a laugh cut short stops shaking)
 // Imperative (data attributes + Web Animations), never React state. Reduced
 // motion: no jiggle, shake or hop, just the face, a soft glow and the sound.
 // Lite visuals (a slow tablet): no bubbles and nothing animated inside the
@@ -164,6 +164,8 @@ export function showTickle(root: HTMLElement, e: TickleEvent, look: TickleLook) 
     case 'calm':
       if (root.dataset.tickle === undefined) break;
       delete root.dataset.tickle;
+      // A laugh cut short (Record, say) stops shaking with it.
+      for (const a of squishOf(root)?.getAnimations?.() ?? []) if (a.id === 'tickle-shake') a.cancel();
       if (!look.lite && !look.reduced) happyBlink(root);
       break;
   }

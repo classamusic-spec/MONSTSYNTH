@@ -12,15 +12,22 @@ import { emitStudioEvent, onStudioEvent } from './visualBus';
 //   laugh  → the laugh (and a hop at level 2)   calm → back to normal, a happy blink
 // A laugh is a chirp: heard, never recorded, never an edit (no undo step).
 // Its SOUND never plays while the band plays, a take is recording or armed, a
-// lesson plays, a grown-up panel is open or the first-beat guide runs (the face
-// may still show). While recording or armed nothing tickles at all: every poke
-// is just a note in the take.
+// lesson plays, a grown-up panel is open, Mimic's microphone listens or the
+// first-beat guide runs (the face may still show), and a laugh already ringing
+// is cut short when one of those starts. While recording or armed nothing
+// tickles at all: every poke is just a note in the take. Poking on and on is
+// drumming, not tickling: the face calms without a laugh (`calm` with
+// `drumming`, so the Coach counts those pokes as playing after all).
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface TickleHost {
   readonly ready: boolean;
   readonly lessonPlaying: boolean;
+  /** Mimic's microphone is listening (its echo cancelling is off: a laugh would be in the word). */
+  readonly micBusy: boolean;
   chirp(monster: MonsterKind, kind: LaughKind, delay?: number): void;
+  /** Cut short every laugh still ringing (or waiting to start). */
+  hushLaughs(): void;
 }
 
 /** A laugh with no sound (the band is playing) still shakes for this long (s). */
@@ -65,6 +72,12 @@ export class Tickler {
     if (out === 'none') return;
     // Giggly again before the last laugh's face settled: the face just stays.
     this.clear(this.calmTimers, trackId);
+    if (out === 'drumming') {
+      // Poking on and on: that's a beat, not a tickle. The face calms, no laugh.
+      this.clear(this.quietTimers, trackId);
+      emitStudioEvent({ type: 'tickle', trackId, phase: 'calm', level: 0, drumming: true });
+      return;
+    }
     emitStudioEvent({ type: 'tickle', trackId, phase: out, level: state.level, taps: cfg.taps });
     this.armQuiet(trackId, cfg.quietMs);
   }
@@ -115,10 +128,10 @@ export class Tickler {
     emitStudioEvent({ type: 'tickle', trackId, phase: 'calm', level: 0 });
   }
 
-  /** May the laugh be heard now? Never over the band, a take, a lesson, a grown-up panel or the guide. */
+  /** May the laugh be heard now? Never over the band, a take, a lesson, a grown-up panel, the microphone or the guide. */
   private mayLaugh(s: AppState): boolean {
     const t = s.transport;
-    return this.host.ready && !s.resting && s.screen === 'lab' && !s.overlay && !s.guide && !t.playing && !t.recording && !t.armed && !this.host.lessonPlaying;
+    return this.host.ready && !s.resting && s.screen === 'lab' && !s.overlay && !s.guide && !t.playing && !t.recording && !t.armed && !this.host.lessonPlaying && !this.host.micBusy;
   }
 
   /** Forget one monster's tickle; its face goes back to normal if it was showing. */
@@ -130,8 +143,10 @@ export class Tickler {
     if (showing) emitStudioEvent({ type: 'tickle', trackId, phase: 'calm', level: 0 });
   }
 
+  /** Everyone calms down, and a laugh still ringing stops. */
   resetAll() {
     for (const id of new Set([...this.states.keys(), ...this.calmTimers.keys()])) this.reset(id);
+    this.host.hushLaughs();
   }
 
   private clear(map: Map<string, Timer>, id: string) {
@@ -140,7 +155,11 @@ export class Tickler {
     map.delete(id);
   }
 
-  /** Start over when a take starts, the Lab is left, the monsters rest or the age mode changes. */
+  /**
+   * Start over when a take starts (or waits), the Lab is left, the monsters rest
+   * or the age mode changes. When the band starts, a grown-up panel opens or the
+   * guide begins, a laugh still ringing stops (the face may finish its laugh).
+   */
   private watch() {
     if (this.watching) return;
     this.watching = true;
@@ -152,6 +171,7 @@ export class Tickler {
         this.resetAll();
         return;
       }
+      if ((s.transport.playing && !prev.transport.playing) || (s.overlay && !prev.overlay) || (s.guide && !prev.guide)) this.host.hushLaughs();
       if (s.project !== prev.project) {
         for (const id of [...this.states.keys()]) {
           const t = s.project.tracks.find((x) => x.id === id);

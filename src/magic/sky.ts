@@ -22,9 +22,28 @@ const ACROSS = 0.7;
 /** A sweep rings at most one bell this often (ms). */
 export const SKY_GAP_MS = 70;
 
-/** How a sky bell and the moon's bell are played (Spark's own Star Bells, softer than a key). */
-export const SKY_BELL = { vel: 0.5, dur: 0.6 } as const;
-export const MOON_BELL = { vels: [0.52, 0.3], dur: 1.4 } as const;
+/**
+ * How a sky bell is played (Spark's own Star Bells, softer than a key). A lone
+ * tap rings out clearly; a bell within `sweepMs` of the last one is part of a
+ * sweep and rings softer, so a run never piles up louder than a key.
+ */
+export const SKY_BELL = { vel: 0.68, sweepVel: 0.45, sweepMs: 200, dur: 0.6 } as const;
+/**
+ * The moon's bell. Mashing it rings at most one bell every `gapMs` (the moon
+ * still winks), and a bell while the last one still rings is softer (`again`).
+ */
+export const MOON_BELL = { vels: [0.52, 0.3], dur: 1.4, gapMs: 350, again: 0.5 } as const;
+
+/** A sky bell's velocity, `sinceMs` after the sky last rang. */
+export function skyVel(sinceMs: number): number {
+  return sinceMs < SKY_BELL.sweepMs ? SKY_BELL.sweepVel : SKY_BELL.vel;
+}
+
+/** How loud the moon rings, `sinceMs` after it last rang: 1, softer (`again`), or 0 (not yet). */
+export function moonLevel(sinceMs: number): number {
+  if (sinceMs < MOON_BELL.gapMs) return 0;
+  return sinceMs < MOON_BELL.dur * 1000 ? MOON_BELL.again : 1;
+}
 
 const clamp01 = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.5);
 
