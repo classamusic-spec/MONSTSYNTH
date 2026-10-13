@@ -63,7 +63,7 @@ High contrast turns stickers solid white with `#0b0d30` ink and a 2 px outline (
 | `--fs-s` | `clamp(12px, 2.4vmin, 16px)` | card names |
 | `--fs-m` | `clamp(14px, 3vmin, 20px)` | body, bubbles |
 | `--fs-l` | `clamp(18px, 4.4vmin, 30px)` | sheet titles, wake text |
-| `--fs-xl` | `clamp(26px, 7vmin, 56px)` | finale |
+| `--fs-xl` | `clamp(26px, 7vmin, 56px)` | rest-time title |
 
 Weights: 500 body, 600 labels, 700 titles. Parent Space uses a conventional 16 px / 1.45 reading size.
 

@@ -575,7 +575,8 @@ for (const v of VIEWS) {
           const grid = document.querySelector('.blocks-grid');
           return {
             col: Number(grid.dataset.col),
-            inCol: parseFloat(grid.style.getPropertyValue('--in-col')),
+            // Set on the playing column's blocks only (on the whole grid it would restyle every block, every frame).
+            inCol: parseFloat(grid.querySelector('[data-cell][data-now="true"]')?.style.getPropertyValue('--in-col') ?? 'NaN'),
             cells: [...new Set([...grid.querySelectorAll('[data-cell][data-now="true"]')].map((e) => e.dataset.col))],
             nums: grid.querySelectorAll('.col-num[data-now="true"]').length,
           };

@@ -161,12 +161,12 @@ async function recordKeys(page, monster, keys) {
   const arrangementBefore = JSON.stringify((await S(page)).project.arrangement);
   await page.locator('.t-magic').click();
   const finale = await page
-    .waitForSelector('.finale', { timeout: 1500 })
+    .waitForSelector('.finale, .curtain', { timeout: 1500 })
     .then(() => true)
     .catch(() => false);
   s = await S(page);
   check('Blocks: Magic on nothing changes nothing and adds no undo step', s.past.length === 0 && JSON.stringify(s.project.arrangement) === arrangementBefore && !s.transport.playing);
-  check('no "You made a song!" for a song with nothing in it', !finale);
+  check('no finale for a song with nothing in it (no stars, no bow, no clapping, no "again")', !finale);
   check('Magic on nothing answers too', (await nothing(page)) === 4);
 
   // Loops, but every block taken away: the hand shows an empty block of a monster with a loop.

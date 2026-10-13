@@ -14,6 +14,7 @@ import { Icon } from '../icons/Icon';
 import { MonsterArt } from '../monsters/MonsterArt';
 import { say } from '../shell/bubbles';
 import { ClipThumb, PaintThumb } from './Thumbnail';
+import { useSingingRows } from './useSingingRows';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MONSTER BLOCKS — the song, as rows of blocks (one row per monster, one column
@@ -130,6 +131,8 @@ export function BlocksScreen() {
   const cols = project.arrangement.length;
   const tabRow = rows.find((r) => r.id === focus?.rowId)?.id ?? rows[0]?.id;
   const tabCol = Math.max(0, Math.min(cols - 1, focus?.col ?? 0));
+  // The row heads sing their own notes (the song, hellos, previews and pops).
+  useSingingRows(gridRef);
 
   // Playhead: highlight the block column that is playing, fill its blocks as
   // the loop goes by (--in-col), and hop the playhead's star on every beat.
@@ -143,11 +146,17 @@ export function BlocksScreen() {
       const frac = song ? Math.min(1, Math.max(0, p.beat / p.songBeats)) : 0;
       if (grid.dataset.col !== String(col)) {
         grid.dataset.col = String(col);
-        grid.querySelectorAll<HTMLElement>('[data-now="true"]').forEach((el) => (el.dataset.now = 'false'));
+        grid.querySelectorAll<HTMLElement>('[data-now="true"]').forEach((el) => {
+          el.dataset.now = 'false';
+          el.style.removeProperty('--in-col');
+        });
         if (col >= 0) grid.querySelectorAll<HTMLElement>(`[data-col="${col}"][data-cell], .col-num[data-c="${col}"]`).forEach((el) => (el.dataset.now = 'true'));
       }
-      grid.style.setProperty('--playhead', frac.toFixed(4));
-      grid.style.setProperty('--in-col', song ? ((p.beat % p.loopBeats) / p.loopBeats).toFixed(3) : '0');
+      // Only the playhead and the playing column's blocks change every frame: a
+      // property set on the whole grid restyles every block and its picture.
+      grid.querySelector<HTMLElement>('.playhead')?.style.setProperty('--playhead', frac.toFixed(4));
+      const inCol = song ? ((p.beat % p.loopBeats) / p.loopBeats).toFixed(3) : '0';
+      grid.querySelectorAll<HTMLElement>('[data-cell][data-now="true"]').forEach((el) => el.style.setProperty('--in-col', inCol));
       const beat = song ? Math.floor(p.beat) : -1;
       if (beat !== lastBeat) {
         lastBeat = beat;
@@ -336,7 +345,7 @@ export function BlocksScreen() {
           // A block shows the loop it actually plays (learned songs have one per phrase).
           const cellClip = (c: number) => track?.clips.find((x) => x.id === cells[c]) ?? null;
           return (
-            <div key={row.id} className="block-row" data-monster={row.monster} data-sleeping={row.sleeping} data-empty={!row.clipId}>
+            <div key={row.id} className="block-row" data-track={row.id} data-monster={row.monster} data-sleeping={row.sleeping} data-empty={!row.clipId}>
               <div className="row-head">
                 <button
                   className="row-avatar"

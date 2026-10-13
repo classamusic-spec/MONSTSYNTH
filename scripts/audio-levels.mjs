@@ -2,7 +2,8 @@
 // so gain staging stays even across monsters. Also renders Beat Hop's densest
 // drum grids, every wand groove, every melodic monster's fullest bead lane and
 // every wand tune, and the whole band stamped at once, which must all stay
-// inside the master gate. Tickle time's laughs (every monster's giggle, bigger
+// inside the master gate; the curtain call's applause, which must sit under
+// the child's kick. Tickle time's laughs (every monster's giggle, bigger
 // laugh and "wheee", in its first sound) must peak no louder than a played
 // note of the same sound, and the sky's bells must sit under a Spark key.
 // Usage: node scripts/audio-levels.mjs [url]
@@ -65,6 +66,23 @@ const report = await page.evaluate(async () => {
   const tick = await single({ preset: METRONOME.preset, volume: METRONOME.volume }, { pad: TICK_PAD, vel: METRONOME.accentVel, bend: METRONOME.accentBend });
   const kick = await single({ preset: METRONOME.preset, volume: 0.8 }, { pad: 0, vel: 0.85 });
   const click = { tickPeakDb: db(tick.peak), kickPeakDb: db(kick.peak), tickQuieter: tick.peak < kick.peak };
+  // The curtain call's applause (Boom's clap on the crowd's channel, every seed's loudest moment) against the child's kick.
+  const { CROWD } = await import('/src/audio/presets.ts');
+  const { applauseHits } = await import('/src/magic/curtain.ts');
+  let applausePeak = 0;
+  let applauseRms = 0;
+  for (const seed of [1, 2, 3, 4, 5]) {
+    const sr = 44100;
+    const ctx = new OfflineAudioContext(2, sr * 1.4, sr);
+    const e = new AudioEngine(ctx);
+    e.setOutputLevel(1, 1);
+    e.ensureChannel({ id: 'crowd', monster: 'boom', preset: CROWD.preset, fx: fx0, volume: CROWD.volume, maxVoices: 12 });
+    for (const h of applauseHits(seed)) e.trigger({ channelId: 'crowd', midi: [], pad: CROWD.pad, vel: h.vel, bend: h.bend, size: h.size, tone: 0 }, 0.05 + h.at, 0.3);
+    const m = measure(await ctx.startRendering());
+    applausePeak = Math.max(applausePeak, m.peak);
+    applauseRms = Math.max(applauseRms, m.rms);
+  }
+  const applause = { peakDb: db(applausePeak), rmsDb: db(applauseRms), kickPeakDb: db(kick.peak), underKick: applausePeak < kick.peak, peak: applausePeak };
   const band = await renderSong(monsterBandProject(3));
   const b = measure(band);
   // Worst case: every monster with every effect cranked.
@@ -205,10 +223,12 @@ const report = await page.evaluate(async () => {
     bellPeakDb: db(bell.peak), moonPeakDb: db(moonR.peak), sweepPeakDb: db(sweep.peak), scribblePeakDb: db(scribble.peak), moonMashPeakDb: db(moonMash.peak), sparkKeyPeakDb: sparkKey,
     bell: bell.peak, moon: moonR.peak, sweep: sweep.peak, scribble: scribble.peak, moonMash: moonMash.peak,
   };
-  return { rows, click, band: { peakDb: db(b.peak), rmsDb: db(b.rms), seconds: band.duration.toFixed(1) }, worst: { peakDb: db(w.peak), rmsDb: db(w.rms), peak: w.peak }, gridRows, laneRows, laughRows, sky };
+  return { rows, click, applause, band: { peakDb: db(b.peak), rmsDb: db(b.rms), seconds: band.duration.toFixed(1) }, worst: { peakDb: db(w.peak), rmsDb: db(w.rms), peak: w.peak }, gridRows, laneRows, laughRows, sky };
 });
 console.table(report.rows);
 console.log('Metronome tick (accent) vs kick:', report.click);
+const { peak: applausePeak, ...applause } = report.applause;
+console.log('Curtain-call applause (5 seeds) vs kick:', applause);
 console.log('Monster Band song:', report.band);
 console.log('Worst case (all fx max):', { peakDb: report.worst.peakDb, rmsDb: report.worst.rmsDb });
 console.table(report.gridRows.map(({ peak, ...r }) => r));
@@ -219,10 +239,13 @@ console.log('Musical sky (Star Bells on Spark\'s studio channel):', { bell: repo
 const GATE_DB = -1;
 const over = [...report.gridRows, ...report.laneRows.map((r) => ({ ...r, grid: r.lane }))].filter((r) => 20 * Math.log10(r.peak) > GATE_DB);
 if (20 * Math.log10(report.worst.peak) > GATE_DB) over.push({ grid: 'worst case' });
+// The audience claps under the child's own drums, inside the single-hit window (about −6 to −13 dBFS).
+const applauseDb = 20 * Math.log10(applausePeak);
+if (!report.applause.underKick || applauseDb > -6 || applauseDb < -16) over.push({ grid: `applause (${applauseDb.toFixed(1)} dBFS)` });
 console.log(
   over.length
     ? `FAIL  over the ${GATE_DB} dBFS master gate: ${over.map((r) => r.grid).join(', ')}`
-    : `PASS  every grid, wand groove, bead lane and wand tune stays under the ${GATE_DB} dBFS master gate`,
+    : `PASS  every grid, wand groove, bead lane and wand tune stays under the ${GATE_DB} dBFS master gate, and the applause (${applauseDb.toFixed(1)} dBFS) sits under the kick`,
 );
 // A laugh is a chirp, not a fanfare: never more than 1 dB over the sound's own played note, and audible.
 const loudLaughs = report.laughRows.filter((r) => r.overNote > 1 || 20 * Math.log10(r.peak) > -6 || 20 * Math.log10(r.peak) < -30);

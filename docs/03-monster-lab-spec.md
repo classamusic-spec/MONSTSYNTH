@@ -163,7 +163,7 @@ While the band plays, the key panel breathes on every beat: a soft light, a litt
 
 | Control | Behaviour |
 |---|---|
-| ▶ / ■ | Lab & Paint: loop playback. Blocks: plays the song once, then the finale. A ring around the button shows loop (or song) position with one dot per beat (or per block); red while recording. |
+| ▶ / ■ | Lab & Paint: loop playback. Blocks: plays the song once, then the curtain call (the band bows; an "again" sparkle replays it). A ring around the button shows loop (or song) position with one dot per beat (or per block); red while recording. |
 | ● Record | idle → armed (empty & stopped: first note starts the loop) or recording (plays immediately if there is music). Tap again to stop; stops by itself after two quiet loops. Undo removes a whole take. |
 | ✨ Magic (Blocks) | Auto-arrange the song (replaces Record on Blocks). |
 | ✨ Surprise (Beat Hop) | Stamps the next ready-made groove (Boom) or tune (a bead lane) into the spotlight monster's loop (replaces Record under the grid). |

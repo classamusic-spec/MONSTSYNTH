@@ -362,6 +362,12 @@ export const MIMIC_SINGER: SynthPatch = {
  */
 export const METRONOME = { preset: 'stompy-kit', volume: 0.28, vel: 0.6, accentVel: 0.9, accentBend: 3 } as const;
 
+/**
+ * The audience: Boom's plain kit playing its clap (drum `pad`), on a quiet
+ * channel of its own, so applause sits under the child's own drums.
+ */
+export const CROWD = { preset: 'stompy-kit', volume: 0.5, pad: 3 } as const;
+
 export function patchFor(presetId: string): Patch {
   return PATCHES[presetId] ?? PATCHES['bubble-lead'];
 }

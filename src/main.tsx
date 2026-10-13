@@ -10,6 +10,7 @@ import './styles/guide.css';
 import './styles/monsters.css';
 import './styles/overlays.css';
 import './styles/blocks.css';
+import './styles/curtain.css';
 import './styles/paint.css';
 import './styles/songs.css';
 import './styles/parent.css';
