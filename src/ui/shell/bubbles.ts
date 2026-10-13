@@ -9,6 +9,11 @@ import type { IconName } from '../icons/Icon';
 export interface BubbleMsg {
   text: string;
   icon?: IconName;
+  /**
+   * A picture message for non-readers, drawn big before the words (which stay,
+   * smaller, for readers and screen readers): e.g. an ear and a grown-up.
+   */
+  picture?: IconName[];
   /** Who speaks (and chirps); the monster on the keys when left out. */
   monster?: MonsterKind;
   /**

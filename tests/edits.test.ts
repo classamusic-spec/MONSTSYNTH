@@ -16,6 +16,7 @@ import {
   setRecordedDuration,
   tidyLoop,
 } from '../src/model/edits';
+import { ALL_MONSTERS, MODE_CAPS } from '../src/model/monsters';
 import { activeClip, createProject } from '../src/model/project';
 import { migrateProject } from '../src/model/schema';
 import type { NoteEvent, Stroke } from '../src/model/types';
@@ -198,6 +199,16 @@ describe('the monster bench', () => {
     expect(activeClip(back)!.notes).toHaveLength(1);
     expect(p.arrangement.rows[boom.id]).toEqual(row);
     expect(p.bench).toHaveLength(0);
+  });
+
+  it('seats every monster in both modes, so an invite always gets a yes', () => {
+    for (const mode of ['little', 'maker'] as const) expect(MODE_CAPS[mode].maxMonsters, mode).toBeGreaterThanOrEqual(ALL_MONSTERS.length);
+    // A new song starts with four; Puff and Mimic join it: six on stage, one row each in Blocks.
+    let p = createProject({ seed: 9 });
+    expect(p.tracks).toHaveLength(4);
+    p = addMonster(addMonster(p, 'puff'), 'mimic');
+    expect(p.tracks.map((t) => t.monster)).toEqual(ALL_MONSTERS);
+    expect(Object.keys(p.arrangement.rows).sort()).toEqual([...p.tracks.map((t) => t.id), PAINT_ROW].sort());
   });
 
   it('never removes the last monster and never duplicates one', () => {

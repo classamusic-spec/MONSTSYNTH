@@ -45,7 +45,14 @@ export function BubbleLayer() {
             </span>
           )}
           {msg.icon && <Icon name={msg.icon} className="bubble-icon" />}
-          <span>{msg.text}</span>
+          {msg.picture && (
+            <span className="bubble-picture" aria-hidden>
+              {msg.picture.map((name, i) => (
+                <Icon key={i} name={name} />
+              ))}
+            </span>
+          )}
+          <span className={msg.picture ? 'bubble-words' : undefined}>{msg.text}</span>
         </div>
       )}
     </div>

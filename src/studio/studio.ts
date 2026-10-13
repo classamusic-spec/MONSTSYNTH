@@ -16,7 +16,7 @@ import { hasGridFace } from '../magic/steps';
 import { MOON_BELL, moonLevel, moonSteps, SKY_BELL, skyVel } from '../magic/sky';
 import { LAUGHS, type LaughKind } from '../magic/tickle';
 import { gridLinesIn, isBounce, nextLine, nextOccurrence, snapDuration, wrap } from '../magic/timing';
-import { recordNote, replaceLoopNotes, setRecordedDuration, setTrackSample, tidyLoop } from '../model/edits';
+import { addMonster, recordNote, removeMonster, replaceLoopNotes, setRecordedDuration, setTrackSample, tidyLoop } from '../model/edits';
 import { newId } from '../model/ids';
 import { MODE_CAPS, MONSTERS } from '../model/monsters';
 import { activeClip, projectHasMusic, songBeats, trackHasLoop } from '../model/project';
@@ -126,10 +126,11 @@ interface AuditionEvent {
 }
 
 /**
- * A monster's little sounds: "huh?" (nothing to play), "yay!" and "pop" (a block
- * goes away), and tickle time's laughs: "giggle", the bigger "laugh" and "wheee".
+ * A monster's little sounds: "huh?" (nothing to play), "yay!", "pop" (a block goes
+ * away), "bye" (it goes home), and tickle time's laughs: "giggle", the bigger
+ * "laugh" and "wheee".
  */
-export type ChirpKind = 'huh' | 'yay' | 'pop' | LaughKind;
+export type ChirpKind = 'huh' | 'yay' | 'pop' | 'bye' | LaughKind;
 
 /** [scale step (a drum pad for Boom), start (s), length (s), velocity, drum tuning (semitones)] */
 type ChirpNote = readonly [step: number, at: number, dur: number, vel: number, bend?: number];
@@ -145,6 +146,20 @@ const CHIRPS: Record<ChirpKind, { tune: readonly ChirpNote[]; drums: readonly Ch
     drums: [
       [4, 0, 0.12, 0.6],
       [7, 0.16, 0.3, 0.6],
+    ],
+  },
+  // Bye-bye (a monster goes home): "huh?" mirrored, two notes falling, the
+  // second one longer, as loud as "huh?" (a goodbye is meant to be heard over
+  // the band; a slow pad like Puff's needs the longer first note to speak).
+  // Boom: a bongo, then the big drum.
+  bye: {
+    tune: [
+      [4, 0, 0.18, 0.62],
+      [2, 0.2, 0.38, 0.68],
+    ],
+    drums: [
+      [4, 0, 0.12, 0.55],
+      [0, 0.2, 0.22, 0.6],
     ],
   },
   // A cheer: a quick climb to the top.
@@ -1089,6 +1104,35 @@ class Studio {
     }
   }
 
+  // ── Monster friends (the Add Monster tray) ────────────────────────────────
+  // Coming and going are project edits like any other (one undo step each). A
+  // take in progress ends first, so the take and the visit stay separate steps
+  // and one Undo brings back exactly what the child changed.
+
+  /** Invite a monster on stage (back from the bench with its loop, if it rested there). Its track id, or null. */
+  invite(monster: MonsterKind): string | null {
+    if (getState().project.tracks.some((t) => t.monster === monster)) return null;
+    this.stopRecording();
+    if (!commit((p) => addMonster(p, monster))) return null;
+    return getState().project.tracks.find((t) => t.monster === monster)?.id ?? null;
+  }
+
+  /**
+   * Send a monster home: it rests on the bench with its loop and blocks, and
+   * sings "bye-bye" on its way (off stage, so on a channel of its own). The
+   * last monster on stage stays (false), and so does the first-beat guide's.
+   */
+  sendHome(trackId: string): boolean {
+    const p = getState().project;
+    const track = p.tracks.find((t) => t.id === trackId);
+    // The monster the first-beat guide is teaching on stays too (the guide would end).
+    if (!track || p.tracks.length <= 1 || getState().guide?.trackId === trackId) return false;
+    this.stopRecording();
+    if (!commit((q) => removeMonster(q, trackId))) return false;
+    this.chirp(track.monster, 'bye');
+    return true;
+  }
+
   // ── History ───────────────────────────────────────────────────────────────
 
   /** Undo always ends a recording first, so a take is undone as one piece. */
@@ -1640,6 +1684,17 @@ class Studio {
     const dur = Math.max(0.2, opts.durSec ?? 0.4);
     engine.trigger(noteRequest({ scale: 'major', key }, monster, channel, step, { vel }), ctx.currentTime, dur);
     emitNote({ trackId: null, monster, step, vel, dur, source: 'live' });
+  }
+
+  /**
+   * The teacher sings one note because the child asked for it (a tap on the
+   * teacher or on a word). Never over a phrase it is singing or the band
+   * (false then: the child is already hearing the teacher).
+   */
+  lessonSing(monster: MonsterKind, step: number, key: number, durSec = 0.45): boolean {
+    if (!this.engine || this.lessonTransport?.playing || getState().resting) return false;
+    this.lessonHit(monster, step, key, { durSec, vel: 0.8 });
+    return true;
   }
 
   /** Play a lesson timeline; `onEnd` fires when the last beat has been heard. */

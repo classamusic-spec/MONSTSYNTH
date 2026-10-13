@@ -312,14 +312,18 @@ check('"None" hides the lane names too', (await page.locator('.paint-lane-name')
 await settings({ noteNames: 'letters' });
 
 // ── Add Monster + Mimic with a (fake) microphone ───────────────────────────
-await page.evaluate(() => window.__monster.actions.updateSettings({ ageMode: 'maker', micAllowed: true }));
+// Little Monsters seat all six monsters too: the starter band's four plus Puff and Mimic.
+await page.evaluate(() => window.__monster.actions.updateSettings({ ageMode: 'little', micAllowed: true }));
 await page.locator('.dock-btn[data-screen="lab"]').click();
 await page.locator('.add-seat').click();
 await page.locator('.tray-card[data-monster="puff"]').click();
 await page.locator('.tray-card[data-monster="mimic"]').click();
 await page.keyboard.press('Escape');
 s = await S();
-check('Puff and Mimic join the stage (Maker: 6 seats)', s.project.tracks.some((t) => t.monster === 'puff') && s.project.tracks.some((t) => t.monster === 'mimic'));
+check(
+  'Puff and Mimic join the stage (Little Monsters: 6 seats, all six on stage)',
+  s.settings.ageMode === 'little' && s.project.tracks.length === 6 && s.project.tracks.some((t) => t.monster === 'puff') && s.project.tracks.some((t) => t.monster === 'mimic'),
+);
 check('the newest monster is on the keys', s.project.tracks.find((t) => t.id === s.selectedTrackId)?.monster === 'mimic');
 check('Mimic singing with its own voice shows letters', (await stickers()) === 'C D E G A C D E', await stickers());
 const voice = page.locator('.voice-btn');
@@ -339,6 +343,7 @@ await page.locator('.tray-card[data-monster="puff"]').click();
 s = await S();
 check('sending a monster home benches it', !s.project.tracks.some((t) => t.monster === 'puff') && s.project.bench.some((b) => b.track.monster === 'puff'));
 await page.keyboard.press('Escape');
+await page.evaluate(() => window.__monster.actions.updateSettings({ ageMode: 'maker' }));
 
 // ── Grown-up gate: hold both corners for 3 seconds ─────────────────────────
 const tr = await page.locator('.corner-tr').boundingBox();

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  judgeLessonKey,
   LESSON_KEYS,
   lessonProject,
   lessonStars,
   lessonBlocks,
+  nextLessonNote,
   PHRASE_BEATS,
   phraseBand,
   phraseNotes,
@@ -62,10 +64,85 @@ describe('song lessons', () => {
   });
 
   it('awards stars kindly', () => {
-    expect(lessonStars(0, false)).toBe(3);
-    expect(lessonStars(5, false)).toBe(2);
-    expect(lessonStars(20, false)).toBe(1);
-    expect(lessonStars(0, true)).toBe(2);
+    expect(lessonStars(0)).toBe(3);
+    expect(lessonStars(2, 0)).toBe(3);
+    expect(lessonStars(5, 0)).toBe(2);
+    expect(lessonStars(20, 0)).toBe(1);
+  });
+
+  it('stars follow the keys Magic help had to fix, not the help switch', () => {
+    // A child plays Hot Cross Buns (17 notes), missing the presses in `wrong`.
+    // As the Learn screen does: help turns a wrong key into the right note (and
+    // counts it); with help off a wrong key is a slip and the child tries again.
+    const buns = TEACH_SONGS.find((s) => s.id === 'hot-cross-buns')!;
+    const notes = songNotes(buns);
+    expect(notes).toHaveLength(17);
+    const run = (wrong: number[], helper: boolean) => {
+      let slips = 0;
+      let helped = 0;
+      notes.forEach((n, i) => {
+        let key = wrong.includes(i) ? (n.step + 3) % LESSON_KEYS : n.step;
+        for (;;) {
+          const v = judgeLessonKey(key, n.step, helper);
+          if (v === 'helped') helped++;
+          if (v !== 'slip') break;
+          slips++;
+          key = n.step;
+        }
+      });
+      return { slips, helped, stars: lessonStars(slips, helped) };
+    };
+    // Every key right: three stars, with Magic help on or off.
+    expect(run([], true)).toEqual({ slips: 0, helped: 0, stars: 3 });
+    expect(run([], false)).toEqual({ slips: 0, helped: 0, stars: 3 });
+    // Two fixes are still three stars; three or four fixes are two.
+    expect(run([4, 11], true)).toEqual({ slips: 0, helped: 2, stars: 3 });
+    expect(run([1, 5, 9], true)).toEqual({ slips: 0, helped: 3, stars: 2 });
+    expect(run([0, 1, 2, 3], true)).toEqual({ slips: 0, helped: 4, stars: 2 });
+    // The same misses with help off are slips, and earn the same stars.
+    expect(run([1, 5, 9], false)).toEqual({ slips: 3, helped: 0, stars: 2 });
+    // Help carried every key: still one star, never zero.
+    expect(run([...notes.keys()], true)).toEqual({ slips: 0, helped: 17, stars: 1 });
+  });
+
+  it('counts a key Magic help fixed like a slip, never below one star', () => {
+    expect(judgeLessonKey(3, 2, true)).toBe('helped');
+    expect(judgeLessonKey(3, 2, false)).toBe('slip');
+    expect(judgeLessonKey(2, 2, false)).toBe('right');
+    expect(lessonStars(0, 2)).toBe(3);
+    expect(lessonStars(0, 3)).toBe(2);
+    expect(lessonStars(1, 1)).toBe(3);
+    expect(lessonStars(1, 2)).toBe(2);
+    expect(lessonStars(2, 1)).toBe(2);
+    expect(lessonStars(4, 4)).toBe(2);
+    expect(lessonStars(0, 9)).toBe(1);
+    // A whole song carried by help (every key wrong) still earns a star.
+    const jingle = TEACH_SONGS.find((s) => s.id === 'jingle-bells')!;
+    const all = songNotes(jingle).map((n) => judgeLessonKey((n.step + 1) % LESSON_KEYS, n.step, true));
+    expect(all.every((v) => v === 'helped')).toBe(true);
+    expect(lessonStars(0, all.length)).toBe(1);
+    // Stars are always 1..3, whatever the counts.
+    for (const [slips, helped] of [
+      [0, 0],
+      [-3, 0],
+      [0, 1e6],
+      [1e6, 1e6],
+      [3, 7],
+    ]) {
+      const s = lessonStars(slips, helped);
+      expect(s >= 1 && s <= 3, `${slips}/${helped}`).toBe(true);
+    }
+  });
+
+  it('knows the note the child needs next (and the next phrase’s first after a phrase)', () => {
+    const buns = TEACH_SONGS.find((s) => s.id === 'hot-cross-buns')!;
+    expect(nextLessonNote(buns, 0, 0)?.[1]).toBe(2);
+    expect(nextLessonNote(buns, 0, 2)?.[3]).toBe('buns');
+    // Phrase 1 played through: the next phrase starts on "One" (do).
+    expect(nextLessonNote(buns, 0, buns.phrases[0].notes.length)?.[3]).toBe('One');
+    // The end of the song: nothing more to play.
+    expect(nextLessonNote(buns, 1, buns.phrases[1].notes.length)).toBeUndefined();
+    expect(nextLessonNote(buns, 5, 0)).toBeUndefined();
   });
 
   it('turns a lesson into a valid Monster Blocks song', () => {

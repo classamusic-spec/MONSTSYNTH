@@ -708,3 +708,44 @@
   width: 78%;
   height: 78%;
 }
+
+/* ── Every touch answers: the teacher and the words ───────────────────────── */
+
+/* The teacher is a button (a hint by ear); it squashes from its feet. */
+.lesson-teacher {
+  cursor: pointer;
+  border-radius: var(--radius-l);
+}
+
+.lesson-teacher .monster-svg {
+  transform-origin: 50% 100%;
+}
+
+.lesson-teacher[data-tapped='true'] .monster-svg {
+  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--spark) 70%, transparent));
+}
+
+/* Words can be tapped to hear their note: a finger on a word is never a key press. */
+.lesson-word {
+  cursor: pointer;
+}
+
+/* A tapped word hops (touchAnswers.ts) and lights up in its own key's colour:
+   no white ring, no growing and no yellow, so it never looks like the word to
+   play next (or the word the teacher is singing). */
+.lesson-word[data-tapped='true']:not([data-state='next'], [data-now='true']) .word-text {
+  color: color-mix(in srgb, var(--k) 65%, white);
+}
+
+.lesson-word[data-tapped='true']:not([data-state='next'], [data-now='true']) .word-note {
+  box-shadow:
+    0 3px 0 color-mix(in srgb, var(--k) 55%, black),
+    0 0 14px 4px color-mix(in srgb, var(--k) 75%, transparent);
+}
+
+/* …and the picture on its key pops for a moment (the key itself does not
+   light up: a lit key means "the teacher is singing this one"). */
+.lesson-key[data-peek='true'] .glyph-stair {
+  opacity: 0.95;
+  transform: translate(-50%, -50%) scale(1.3);
+}

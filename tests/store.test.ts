@@ -4,7 +4,7 @@ vi.mock('../src/store/persistence', () => ({ scheduleSave: () => {} }));
 
 import { GROOVES, grooveNotes } from '../src/magic/grooves';
 import type { CellWrite } from '../src/magic/steps';
-import { cycleFx, recordNote, replaceLoopNotes, setCellEdit, setTempo, tidyLoop } from '../src/model/edits';
+import { addMonster, cycleFx, recordNote, removeMonster, replaceLoopNotes, setCellEdit, setTempo, tidyLoop } from '../src/model/edits';
 import { activeClip, createProject } from '../src/model/project';
 import type { NoteEvent, Project } from '../src/model/types';
 import { beginGroup, commit, endGroup, getState, labFace, redo, setProject, setState, undo } from '../src/store/store';
@@ -71,6 +71,49 @@ describe('undo groups (a take is one step)', () => {
     undo();
     commit((p) => cycleFx(p, bloop(), 'echo'));
     expect(getState().past).toHaveLength(1);
+  });
+});
+
+describe('monster friends (the Add Monster tray)', () => {
+  it('sending a monster home is one undo step that brings it back in its seat with its loop', () => {
+    const spark = () => getState().project.tracks.find((t) => t.monster === 'spark');
+    commit((p) => recordNote(p, spark()!.id, note('s', 1), opts));
+    const before = getState().project;
+    const id = spark()!.id;
+    expect(commit((p) => removeMonster(p, id))).toBe(true);
+    expect(spark()).toBeUndefined();
+    expect(getState().past).toHaveLength(2);
+    expect(undo()).toBe(true);
+    const back = getState().project;
+    expect(back.tracks).toBe(before.tracks);
+    expect(back.bench).toBe(before.bench);
+    expect(back.arrangement).toBe(before.arrangement);
+    expect(activeClip(spark()!)!.notes.map((n) => n.id)).toEqual(['s']);
+    expect(back.tracks.findIndex((t) => t.id === id)).toBe(before.tracks.findIndex((t) => t.id === id));
+  });
+
+  it('once the take is closed (the studio ends it first), one Undo brings the monster back and keeps the take', () => {
+    const token = beginGroup('record');
+    commit((p) => recordNote(p, bloop(), note('a', 0), opts), { undoable: false });
+    endGroup(token);
+    const boom = getState().project.tracks.find((t) => t.monster === 'boom')!.id;
+    commit((p) => removeMonster(p, boom));
+    expect(getState().past).toHaveLength(2);
+    undo();
+    expect(getState().project.tracks.some((t) => t.id === boom)).toBe(true);
+    expect(notesOf(getState().project)).toBe(1);
+  });
+
+  it('inviting all six (Little Monsters too) and sending one home are separate steps', () => {
+    commit((p) => addMonster(p, 'puff'));
+    commit((p) => addMonster(p, 'mimic'));
+    expect(getState().project.tracks).toHaveLength(6);
+    expect(getState().past).toHaveLength(2);
+    const puff = getState().project.tracks.find((t) => t.monster === 'puff')!.id;
+    commit((p) => removeMonster(p, puff));
+    expect(getState().project.tracks).toHaveLength(5);
+    undo();
+    expect(getState().project.tracks.map((t) => t.monster)).toEqual(['bloop', 'boom', 'grumble', 'spark', 'puff', 'mimic']);
   });
 });
 

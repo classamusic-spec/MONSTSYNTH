@@ -343,14 +343,39 @@ export function bandMonsters(song: TeachSong): MonsterKind[] {
 // ── Stars ────────────────────────────────────────────────────────────────────
 
 /**
- * Everyone who finishes gets a star. With the helper on (any key plays the right
- * note) a song is worth two; three for playing it yourself with few slips.
+ * What a press on the lesson keys was: the key the tune needed, a wrong key
+ * that Magic help turned into the right note, or a slip (help off: the wrong
+ * note plays and the right key is shown again).
  */
-export function lessonStars(mistakes: number, helper: boolean): 1 | 2 | 3 {
-  if (helper) return 2;
-  if (mistakes <= 2) return 3;
-  if (mistakes <= 8) return 2;
+export type KeyVerdict = 'right' | 'helped' | 'slip';
+
+export function judgeLessonKey(key: number, step: number, helper: boolean): KeyVerdict {
+  if (key === step) return 'right';
+  return helper ? 'helped' : 'slip';
+}
+
+/**
+ * Stars for a finished song. Everyone who finishes gets at least one, and
+ * nobody is told off. Magic help only counts when it actually replaced a wrong
+ * key: each fix counts like a slip. So a perfect run earns three stars with
+ * help on or off, and a run that help carried all the way still earns one.
+ */
+export function lessonStars(slips: number, helped = 0): 1 | 2 | 3 {
+  const n = Math.max(0, slips) + Math.max(0, helped);
+  if (n <= 2) return 3;
+  if (n <= 8) return 2;
   return 1;
+}
+
+/**
+ * The note the child needs next: the one at `index` in the phrase, or (once
+ * the phrase is played) the first note of the next phrase. Undefined at the
+ * very end of the song.
+ */
+export function nextLessonNote(song: TeachSong, phrase: number, index: number): LessonNote | undefined {
+  const here = song.phrases[phrase]?.notes;
+  if (here && index < here.length) return here[Math.max(0, index)];
+  return song.phrases[phrase + 1]?.notes[0];
 }
 
 // ── From lesson to song ──────────────────────────────────────────────────────

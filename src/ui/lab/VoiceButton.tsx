@@ -38,7 +38,8 @@ export function VoiceButton({ track }: { track: Track }) {
 
   const start = async () => {
     if (!allowed) {
-      say({ text: 'Ask a grown-up to wake Mimic’s ears', icon: 'lock', monster: 'mimic' });
+      // A picture for non-readers: Mimic's ear, and a grown-up (the words stay for readers).
+      say({ text: 'Ask a grown-up to wake Mimic’s ears', picture: ['ear', 'grownup'], monster: 'mimic' });
       return;
     }
     active.current = true;
@@ -85,13 +86,26 @@ export function VoiceButton({ track }: { track: Track }) {
         if (e.key === 'Enter' || e.key === ' ') void finish();
       }}
     >
-      <Icon name={allowed ? 'mic' : 'lock'} />
-      {recording ? (
-        <span className="voice-level">
-          <i ref={levelRef} />
+      {!allowed ? (
+        // Ears asleep (an ear with z's) until a grown-up wakes them: a picture, no words to read.
+        <span className="lock-picture" aria-hidden>
+          <span className="lock-ear">
+            <Icon name="ear" />
+            <Icon name="zzz" className="lock-zzz" />
+          </span>
+          <Icon name="grownup" className="lock-grownup" />
         </span>
       ) : (
-        <span>{allowed ? 'Hold & talk' : 'Ears off'}</span>
+        <>
+          <Icon name="mic" />
+          {recording ? (
+            <span className="voice-level">
+              <i ref={levelRef} />
+            </span>
+          ) : (
+            <span>Hold &amp; talk</span>
+          )}
+        </>
       )}
     </button>
   );

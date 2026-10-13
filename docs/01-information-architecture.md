@@ -35,6 +35,7 @@ MONSTER SYNTH
 │   ├── 🎵 Learn              a monster teaches 8 classic songs, one phrase at a time:
 │   │                         listen → your turn (the next key glows) → stars → with the band
 │   │                         → "Keep my song" turns it into a Monster Blocks song
+│   │                         (tap the teacher: it sings the next note; tap a word: it sings)
 │   └── Transport rail       ▶ Play/Stop · ● Record (Lab) / ✨ Magic (Blocks) · ↶ Undo
 │                            (Maker: ↷ Redo · ✨ Monster Magic panel: speed & mood)
 │
@@ -54,7 +55,7 @@ MONSTER SYNTH
 | | **Little Monster** (≈3–5) | **Monster Maker** (≈6–10) |
 |---|---|---|
 | Reading required | none (pictures + sound) | optional labels (monster & sound names) |
-| Monsters on stage | up to 4 | up to 6 |
+| Monsters on stage | all 6 (a seat for every monster) | all 6 |
 | Drum pads | 6 big pads | 8 pads (adds cowbell, boing) |
 | Effect buddies | Echo, Gloop | Echo, Gloop, Chomper, Wiggle |
 | Timing help | strong (8th-note grid, 90 %) | lighter (16th-note grid, 75 %) |

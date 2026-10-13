@@ -70,7 +70,7 @@ Touching a monster on stage plays it directly:
 2. Child invites Mimic from **+ Add Monster**. The keys show a pink **Hold & talk** button.
 3. Child holds it and says "banana" (max 3 s). Mimic trims silence, evens the volume, and plays it back.
 4. Every key now plays "banana" lower or higher, locked to the song's scale. Mimic can record loops like any monster.
-5. Without permission the button shows a lock; tapping it makes Mimic say *"Ask a grown-up to wake Mimic's ears"*.
+5. Without permission the button is a picture instead of words: an ear asleep (z's) and a grown-up holding a little one's hand. Pressing it makes Mimic go *"huh?"* and pops a picture bubble (Mimic's face, the ear, the grown-up); the words *"Ask a grown-up to wake Mimic's ears"* stay in small print for readers and screen readers. Until then Mimic sings "la" on every key.
 
 ## F8 · Come back to an earlier idea
 
@@ -130,6 +130,25 @@ Every bubble has a voice: its monster chirps as it appears (*"yay!"* for good ne
 1. The dock's *Beats* button (a grid of stones, between Lab and Blocks) opens the Lab on Boom's stones from any screen. If the song has no Boom, Boom joins first.
 2. *Lab* always shows the keys again. Beside the keys, the flip button carries the word of where it goes (*Beats* / *Keys*) on tablets.
 
+## F16 · Monster friends join (Add Monster)
+
+1. The dashed **+** seat at the end of the stage opens the Monster friends tray: six cards, sleepy faces for friends at home, and a dot per seat. Both modes seat all six monsters, so a new song (four on stage) always has room for Puff and Mimic. With all six on stage there is no one left to add: the seat loses its **+** and shows two little monsters instead (still the way into the tray, to send one home).
+2. Tap a sleepy friend → its card hops, the friend joins the stage, takes the keys and sings hello. One Undo sends it back.
+3. Tap a friend on stage → its card waves and the friend sings a falling *"bye-bye"* as it goes home to the bench, keeping its loop and blocks. One Undo brings it back to its seat with its loop (invite it again, and it also comes back with its loop). A take in progress ends first, so the take and the goodbye are separate undo steps.
+4. The last monster on stage never leaves: a tap makes it bounce and sing instead. So does Boom while *My first beat* is teaching on it (the guide would end).
+5. Reduced motion: the card glows instead of hopping or waving; the sounds are the same.
+
+## F17 · Learn a song
+
+1. **Learn** shows a shelf of song pictures (and *My first beat*). Tap one → the teacher monster sings the first phrase while the keys light up and the words follow along (*listen*).
+2. *Your turn*: the next key glows and a hand points at it; the child plays the phrase back at their own pace. No timing to fail. A wrong key still plays its note and the right one bounces; with **Magic help** (the wand, on by default for Little Monsters) any key plays the right note.
+3. Every touch on the lesson answers, and none counts as a try:
+   * tap the teacher (or the stage around it) → it squishes, giggles with happy ^ ^ eyes (never closed, sleepy ones) and sings the note the child needs next, lighting its key: a hint by ear (between phrases, the next phrase's first note). Keyboard: the teacher is a button, Enter does the same;
+   * tap a word → the word hops and lights up in its own key's colour (never like the word to play next: no white ring, no yellow), the picture on its key pops, and the teacher sings that word's note: a second way to sing along;
+   * while the teacher sings a phrase (or the band plays) these taps only move, they never sing over it, nor in the last moment before the teacher starts the next phrase (its first note would stutter). A palm resting on the stage while a finger plays a key is not a tap. A teacher sings at most every 0.3 s for taps (words every 0.15 s).
+4. Each phrase ends with a burst of stars and *"Yay!"*; then the next phrase. At the end: stars, *With the band*, *Keep my song* (a Monster Blocks song), *Again*, *More songs*.
+5. **Fair stars** (best result kept per song): everyone who finishes gets at least one. Magic help only counts when it actually replaced a wrong key, and each such fix counts like a slip: up to 2 → ★★★, up to 8 → ★★, more → ★. So a perfect run earns three stars with help on or off, and a song help carried all the way still earns one.
+
 ## Recovery flows (no destructive mistakes)
 
 | Accident | Recovery |
@@ -138,7 +157,7 @@ Every bubble has a voice: its monster chirps as it appears (*"yay!"* for good ne
 | Deleted a block / moved it | Undo |
 | Magic or **Song** rearranged the song | Undo (one step) |
 | Cleared a monster's loop (hold its loop badge 1 s) | Undo |
-| Sent a monster home | It waits on the bench with its loop; invite it back |
+| Sent a monster home | One Undo brings it back to its seat with its loop; or invite it back from the tray (it waits on the bench with its loop) |
 | Started a new song | Old song is still on the shelf |
 | Deleting songs | Only in Parent Space, with confirmation |
 | Something unexpected breaks | A sleepy-monster screen with one "Wake them up again" button; autosave is flushed before restarting |

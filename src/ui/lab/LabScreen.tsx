@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { audibleTracks } from '../../magic/sequence';
-import { surfaceSize } from '../../model/monsters';
+import { ALL_MONSTERS, surfaceSize } from '../../model/monsters';
 import { trackHasLoop } from '../../model/project';
 import { selectTrack, setLabView, setOverlay } from '../../store/actions';
 import { canGrid, getState, labFace, useApp } from '../../store/store';
@@ -45,6 +45,7 @@ export function LabScreen() {
   const selectedId = useApp((s) => s.selectedTrackId);
   const face = useApp(labFace);
   const selected = tracks.find((t) => t.id === selectedId) ?? tracks[0];
+  const full = tracks.length >= ALL_MONSTERS.length;
   const stageRef = useRef<HTMLDivElement>(null);
   useLookAt(stageRef);
 
@@ -134,8 +135,9 @@ export function LabScreen() {
           <MonsterPod key={t.id} track={t} selected={t.id === selected.id} />
         ))}
         <PodTools track={selected} className="pod-tools stage-tools" />
-        <button className="add-seat" aria-label="Add Monster" onClick={() => setOverlay('tray')}>
-          <Icon name="plus" />
+        {/* With every friend on stage there is no one left to add: no "+", the seat shows the friends (the tray still sends one home). */}
+        <button className="add-seat" data-full={full} aria-label={full ? 'Monster friends' : 'Add Monster'} onClick={() => setOverlay('tray')}>
+          <Icon name={full ? 'friends' : 'plus'} />
         </button>
       </div>
       {face === 'grid' ? <StepGrid key={selected.id} track={selected} /> : <PlaySurface track={selected} />}
