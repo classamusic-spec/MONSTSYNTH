@@ -41,13 +41,14 @@ const DURATION: Record<CardMotion, number> = { hello: 560, bye: 900, sing: 420 }
 export function cardMotion(card: HTMLElement | null, kind: CardMotion) {
   if (!card) return;
   const art = card.querySelector<HTMLElement>('.tray-art');
+  // A new tap starts afresh (a quick bye then hello never stacks two motions,
+  // and one still running stops when a grown-up has just turned motion down).
+  art?.getAnimations?.().forEach((a) => {
+    if (a.id.startsWith('tray-')) a.cancel();
+  });
   if (isReducedMotion() || !art || typeof art.animate !== 'function') {
     glow(card, 700);
     return;
   }
-  // A new tap starts afresh (a quick bye then hello never stacks two motions).
-  art.getAnimations().forEach((a) => {
-    if (a.id.startsWith('tray-')) a.cancel();
-  });
   art.animate(FRAMES[kind], { duration: DURATION[kind], easing: 'ease-out', id: `tray-${kind}` });
 }

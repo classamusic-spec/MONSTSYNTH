@@ -42,10 +42,15 @@ export type IconName =
   | 'keys'
   | 'magnet'
   | 'ear'
-  | 'grownup';
+  | 'grownup'
+  | 'friends';
 
 const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 2.6, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
 const F = { fill: 'currentColor' } as const;
+
+/** A little monster (the Lab's), drawn twice for "friends". */
+const BLOB =
+  'M12 3.5c4.6 0 7.8 3.4 7.8 8.1v7.6c0 1-.9 1.6-1.8 1.2-.8-.4-1.6.8-2.6.8-1 0-1.4-.9-2.3-.9-.9 0-1.2 1.2-2.4 1.2s-1.5-1.2-2.4-1.2-1.3.9-2.3.9c-1 0-1.8-1.2-2.6-.8-.9.4-1.8-.2-1.8-1.2v-7.6c0-4.7 3.2-8.1 7.8-8.1Z';
 
 const ICONS: Record<IconName, ReactElement> = {
   home: (
@@ -252,6 +257,21 @@ const ICONS: Record<IconName, ReactElement> = {
       <circle {...F} cx="17.3" cy="11.6" r="1.9" />
       <path {...F} d="M17.3 14.2c1.5 0 2.6 1.1 2.6 2.6v2c0 .5-.3.8-.8.8h-.2v1.6a.8.8 0 0 1-.8.8h-1.6a.8.8 0 0 1-.8-.8v-1.6h-.2c-.5 0-.8-.3-.8-.8v-2c0-1.5 1.1-2.6 2.6-2.6Z" />
       <path {...S} strokeWidth={2.2} d="m11 12.6 4.2 4.6" />
+    </>
+  ),
+  // Monster friends: two little monsters side by side (the + seat, once every friend is on stage).
+  friends: (
+    <>
+      <g transform="translate(9.6 7.8) scale(.6)" opacity=".7">
+        <path {...F} d={BLOB} />
+        <circle cx="12" cy="11" r="3.6" fill="var(--icon-hole, #141646)" />
+        <circle cx="11.2" cy="11.4" r="1.6" fill="currentColor" />
+      </g>
+      <g transform="translate(-1.4 5.6) scale(.7)">
+        <path {...F} d={BLOB} />
+        <circle cx="12" cy="11" r="3.6" fill="var(--icon-hole, #141646)" />
+        <circle cx="12.8" cy="11.4" r="1.6" fill="currentColor" />
+      </g>
     </>
   ),
 };

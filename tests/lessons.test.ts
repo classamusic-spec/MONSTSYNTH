@@ -70,12 +70,39 @@ describe('song lessons', () => {
     expect(lessonStars(20, 0)).toBe(1);
   });
 
-  it('a perfect run earns three stars with Magic help on (help that fixed nothing does not count)', () => {
-    for (const song of TEACH_SONGS) {
-      const verdicts = songNotes(song).map((n) => judgeLessonKey(n.step, n.step, true));
-      expect(verdicts.every((v) => v === 'right'), song.id).toBe(true);
-      expect(lessonStars(0, verdicts.filter((v) => v === 'helped').length), song.id).toBe(3);
-    }
+  it('stars follow the keys Magic help had to fix, not the help switch', () => {
+    // A child plays Hot Cross Buns (17 notes), missing the presses in `wrong`.
+    // As the Learn screen does: help turns a wrong key into the right note (and
+    // counts it); with help off a wrong key is a slip and the child tries again.
+    const buns = TEACH_SONGS.find((s) => s.id === 'hot-cross-buns')!;
+    const notes = songNotes(buns);
+    expect(notes).toHaveLength(17);
+    const run = (wrong: number[], helper: boolean) => {
+      let slips = 0;
+      let helped = 0;
+      notes.forEach((n, i) => {
+        let key = wrong.includes(i) ? (n.step + 3) % LESSON_KEYS : n.step;
+        for (;;) {
+          const v = judgeLessonKey(key, n.step, helper);
+          if (v === 'helped') helped++;
+          if (v !== 'slip') break;
+          slips++;
+          key = n.step;
+        }
+      });
+      return { slips, helped, stars: lessonStars(slips, helped) };
+    };
+    // Every key right: three stars, with Magic help on or off.
+    expect(run([], true)).toEqual({ slips: 0, helped: 0, stars: 3 });
+    expect(run([], false)).toEqual({ slips: 0, helped: 0, stars: 3 });
+    // Two fixes are still three stars; three or four fixes are two.
+    expect(run([4, 11], true)).toEqual({ slips: 0, helped: 2, stars: 3 });
+    expect(run([1, 5, 9], true)).toEqual({ slips: 0, helped: 3, stars: 2 });
+    expect(run([0, 1, 2, 3], true)).toEqual({ slips: 0, helped: 4, stars: 2 });
+    // The same misses with help off are slips, and earn the same stars.
+    expect(run([1, 5, 9], false)).toEqual({ slips: 3, helped: 0, stars: 2 });
+    // Help carried every key: still one star, never zero.
+    expect(run([...notes.keys()], true)).toEqual({ slips: 0, helped: 17, stars: 1 });
   });
 
   it('counts a key Magic help fixed like a slip, never below one star', () => {

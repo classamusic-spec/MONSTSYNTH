@@ -7,8 +7,11 @@
 //   · Mimic's sleeping ears are a picture (and so is its bubble)
 //   · a perfect lesson with Magic help on earns three stars; wrong keys that
 //     help fixed lower the stars, never below one
-//   · tapping the teacher sings the next note you need (never a try), tapping
-//     a word sings its note, and neither talks over the teacher's own phrase
+//   · tapping the teacher sings the next note you need (never a try) with
+//     happy ^ ^ eyes, tapping a word sings its note in its own colour, and
+//     neither talks over (or stutters) the teacher's own phrase
+//   · with all six on stage the + seat shows the friends; the first-beat
+//     guide's Boom stays while it teaches
 //   · axe on the tray and a lesson, and no console errors
 // Usage: node scripts/e2e-join.mjs [url] [screenshot-dir]
 import { existsSync, readFileSync } from 'node:fs';
@@ -141,6 +144,11 @@ const axe = async (page, label) => {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(400);
   check('six pods on the Lab stage', (await page.locator('.stage .pod').count()) === 6);
+  const seat = await page.evaluate(() => {
+    const b = document.querySelector('.add-seat');
+    return { full: b.dataset.full, label: b.getAttribute('aria-label'), paths: b.querySelectorAll('svg path').length };
+  });
+  check('with all six on stage, the + seat shows the friends instead (no "+" promising more)', seat.full === 'true' && seat.label === 'Monster friends' && seat.paths >= 2, JSON.stringify(seat));
   await ctx.close();
 }
 
@@ -242,6 +250,7 @@ for (const [label, width, height] of [
   await shot(page, 'join-bye');
   await page.keyboard.press('Escape');
   await page.waitForTimeout(250);
+  check('…and the stage has a + seat again', (await page.locator('.add-seat').getAttribute('data-full')) === 'false' && (await page.locator('.add-seat').getAttribute('aria-label')) === 'Add Monster');
   await page.getByRole('button', { name: 'Undo' }).click();
   await page.waitForTimeout(250);
   s = await S(page);
@@ -325,6 +334,28 @@ for (const [label, width, height] of [
   });
   const calmLevel = await peak(page, 900);
   check('reduced motion: a goodbye glows instead of waving, and still sounds', calm.anims === 0 && calm.glow === 'true' && calmLevel > 0.01, JSON.stringify({ ...calm, peak: calmLevel.toFixed(3) }));
+  await ctx.close();
+}
+
+// ── 3b. The first-beat guide's Boom stays while it teaches ─────────────────
+{
+  const { ctx, page } = await open();
+  await page.evaluate(() => window.__monster.actions.startFirstBeat());
+  await page.waitForTimeout(600);
+  const guide = (await S(page)).guide;
+  await page.locator('.add-seat').click();
+  await page.waitForTimeout(450);
+  const label = await page.locator('.tray-card[data-monster="boom"]').getAttribute('aria-label');
+  const past0 = (await S(page)).past.length;
+  await page.locator('.tray-card[data-monster="boom"]').click();
+  const anims = await animIds(page, '.tray-card[data-monster="boom"]');
+  const level = await peak(page, 900);
+  const s = await S(page);
+  check(
+    'during “My first beat”, Boom stays on stage: a tap makes it bounce and play, and the guide goes on',
+    !!guide && s.guide?.trackId === guide.trackId && s.project.tracks.some((t) => t.id === guide.trackId) && s.past.length === past0 && anims.includes('tray-sing') && level > 0.01 && /Tap to hear it/.test(label),
+    `${label}; peak ${level.toFixed(3)}, ${anims.join(',')}`,
+  );
   await ctx.close();
 }
 
@@ -474,6 +505,12 @@ async function playThrough(page, wrong = () => false, between = async () => {}) 
     sung.length === 1 && sung[0].step === need && sung[0].track === null && anims.includes('teacher-squish') && anims.includes('teacher-giggle'),
     `need ${need}, sung ${sung.map((n) => n.step).join(',')}; ${anims.filter((a) => a.startsWith('teacher')).join(',')}`,
   );
+  const face = await page.evaluate(() => {
+    const t = document.querySelector('.lesson-teacher');
+    const lids = [...t.querySelectorAll('.m-lid')].flatMap((l) => l.getAnimations().map((a) => a.id));
+    return { eyes: t.querySelectorAll('.m-eye').length, happy: t.querySelectorAll('.m-eye > .m-giggle-eye').length, lidGiggles: lids.filter((id) => id === 'teacher-giggle').length };
+  });
+  check('…with happy ^ ^ eyes over its own (never sleepy, half-closed lids)', face.eyes > 0 && face.happy === face.eyes && face.lidGiggles === 0, JSON.stringify(face));
   check('…and it is not a try: the same key and word are still next', (await nextKey(page)) === need && (await nextWord()) === word0 && (await phase(page)) === 'play');
   await shot(page, 'join-learn-teacher');
 
@@ -487,6 +524,11 @@ async function playThrough(page, wrong = () => false, between = async () => {}) 
   await page.waitForTimeout(100);
   const burst = (await live()).length;
   check('eight quick taps on the teacher sing at most once per 0.3 s', burst >= 1 && burst <= Math.floor(span / 300) + 1, `${burst} notes in ${span} ms`);
+  const pile = await page.evaluate(() => {
+    const t = document.querySelector('.lesson-teacher');
+    return { eyes: t.querySelectorAll('.m-eye').length, faces: t.querySelectorAll('.m-giggle-eye').length, giggles: document.getAnimations().filter((a) => a.id === 'teacher-giggle').length };
+  });
+  check('…and the giggles never pile up (one happy face per eye at most)', pile.faces <= pile.eyes && pile.giggles <= pile.eyes, JSON.stringify(pile));
 
   // Keyboard and switch users: the teacher is a button.
   await page.waitForTimeout(350);
@@ -512,6 +554,22 @@ async function playThrough(page, wrong = () => false, between = async () => {}) 
     wordNotes.length === 1 && wordNotes[0].step === 0 && hop.includes('word-hop') && lit === 'true',
     `${wordNotes.map((n) => n.step).join(',')}; ${hop.join(',')}`,
   );
+  const look = await page.evaluate(() => {
+    const w = document.querySelector('.lesson-word[data-i="2"]');
+    const n = document.querySelector('.lesson-word[data-state="next"]');
+    const keys = [...document.querySelectorAll('.lesson-key')];
+    return {
+      peek: keys[0].dataset.peek,
+      lit: keys.filter((k) => k.dataset.glow === 'true').length,
+      sameColour: getComputedStyle(w.querySelector('.word-text')).color === getComputedStyle(n.querySelector('.word-text')).color,
+      ring: /rgb\(255, 255, 255\)/.test(getComputedStyle(w.querySelector('.word-note')).boxShadow),
+    };
+  });
+  check(
+    '…in its own key colour (never looking like the word to play next), and only the picture on its key pops',
+    look.peek === 'true' && look.lit === 0 && !look.sameColour && !look.ring,
+    JSON.stringify(look),
+  );
   check('…and the lesson does not move on', (await nextKey(page)) === need && (await nextWord()) === word0);
   await page.waitForTimeout(300);
   await axe(page, 'a lesson (after teacher and word taps)');
@@ -529,23 +587,45 @@ async function playThrough(page, wrong = () => false, between = async () => {}) 
   check('reduced motion: a tapped teacher glows (no squish) and still sings', calm.squish === 0 && calm.glow === 'true' && (await live()).length === 1, JSON.stringify(calm));
   await page.evaluate(() => window.__monster.actions.updateSettings({ motion: 'full' }));
 
-  // Play the song through, tapping the teacher at the cheer: it sings the next phrase's first note.
+  // A palm resting on the stage while a finger plays a key: one sound, not two.
+  await page.waitForTimeout(350);
+  await page.evaluate(() => (window.__notes = []));
+  await page.evaluate((k) => {
+    const opts = { bubbles: true, cancelable: true, pointerId: 7, isPrimary: true, button: 0 };
+    document.querySelectorAll('.lesson-key')[k].dispatchEvent(new PointerEvent('pointerdown', opts));
+    document.querySelector('.lesson-teacher').dispatchEvent(new PointerEvent('pointerdown', { ...opts, pointerId: 8, isPrimary: false }));
+  }, (need + 2) % 8);
+  await page.waitForTimeout(120);
+  const palm = await live();
+  check('a palm on the stage while a finger plays a key: only the key sounds', palm.length === 1 && palm[0].step === (need + 2) % 8, palm.map((n) => n.step).join(','));
+
+  // Play the song through, tapping the teacher at the cheer: it sings the next
+  // phrase's first note; just before the teacher sings that phrase, it does not.
   let cheerHint = null;
+  let lateHint = null;
   const run = await playThrough(
     page,
     () => false,
     async (n) => {
       if (n !== 1) return;
+      const t0 = Date.now();
+      await page.waitForTimeout(60); // a moment after the last key (not a palm)
       await page.evaluate(() => (window.__notes = []));
       await page.mouse.click(...(await teacherAt()));
       await page.waitForTimeout(80);
       cheerHint = (await live()).map((x) => x.step);
+      await page.waitForTimeout(Math.max(0, 950 - (Date.now() - t0)));
+      await page.evaluate(() => (window.__notes = []));
+      await page.mouse.click(...(await teacherAt()));
+      await page.waitForTimeout(80);
+      lateHint = (await live()).map((x) => x.step);
     },
   );
   await page.waitForTimeout(900);
   check('between phrases, the teacher hints the next phrase’s first note (“One” = do)', JSON.stringify(cheerHint) === '[0]', JSON.stringify(cheerHint));
+  check('…but not just before it sings that phrase (no stuttered first note)', JSON.stringify(lateHint) === '[]', JSON.stringify(lateHint));
   check(
-    'a dozen teacher and word taps never counted: help off, no slips, three stars',
+    'a dozen teacher and word taps never counted: help off, one real slip, three stars',
     run.done && run.presses === 17 && (await doneStars(page)) === 3,
     `${run.presses} presses, ${await doneStars(page)} stars`,
   );

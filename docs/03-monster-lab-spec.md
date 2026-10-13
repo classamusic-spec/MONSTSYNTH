@@ -41,8 +41,9 @@ All touch targets ≥ 44 px; primary actions ≥ 52 px; keys are the largest tar
   * hold 1 s → the badge shakes and the loop is cleared (Undo restores it).
 * **+ Add Monster** seat at the end of the row opens the Monster friends tray: one card per monster and a dot per seat (always at least one dot per monster on stage, so a song from elsewhere never shows "4 of 4" with six on stage). Every tap answers with sound and motion:
   * a resting friend → it comes on stage and onto the keys, its card hops and it sings hello (one undo step);
-  * a friend on stage → it goes home to the bench with its loop and blocks: its card waves and it sings a falling "bye-bye" (the "huh?" chirp mirrored; Boom: a bongo then the big drum). A take in progress ends first, so one Undo brings back exactly that monster, in its seat, with its loop;
-  * the last monster on stage → it stays, bounces and sings.
+  * a friend on stage → it goes home to the bench with its loop and blocks: its card waves and it sings a falling "bye-bye" (the "huh?" chirp mirrored and as loud; Boom: a bongo then the big drum). A take in progress ends first, so one Undo brings back exactly that monster, in its seat, with its loop;
+  * the last monster on stage → it stays, bounces and sings (so does Boom while *My first beat* teaches on it).
+  With all six on stage the seat drops its **+** (no one is left to invite) and shows two little monsters (`friends` icon, "Monster friends"); it still opens the tray.
   Reduced motion: the card glows instead of hopping or waving.
 * **Sound toys** for the spotlight monster: costume hat (next preset, the monster changes outfit and plays a preview) and effect buddies (tap cycles asleep → a little → a lot, shown by 2 pips and a glowing ring). On tall screens they sit above the monster's head; on phones they sit at the left of the keys so the stage keeps its room.
 * Maker mode shows the monster name (and sound name on tablets) as a small label.

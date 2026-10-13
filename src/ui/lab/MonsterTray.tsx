@@ -13,11 +13,14 @@ import { cardMotion } from './trayMotion';
 // (both modes). Tap a resting monster to invite it on stage: it hops and sings
 // hello. Tap one on stage to let it go home: it waves and sings bye-bye, and
 // keeps its loop on the bench (one Undo brings it back). The last monster on
-// stage stays and sings instead, so a tap always answers.
+// stage stays and sings instead (so does the one the first-beat guide is
+// teaching on), so a tap always answers.
 
 export function MonsterTray() {
   const tracks = useApp((s) => s.project.tracks);
   const bench = useApp((s) => s.project.bench);
+  /** The first-beat guide's monster stays on stage while it teaches (it sings instead). */
+  const guideTrack = useApp((s) => s.guide?.trackId ?? null);
   const caps = useCaps();
   const onStage = new Set(tracks.map((t) => t.monster));
   // A song from elsewhere may hold more monsters than the mode seats: never show "4 of 4" with 6 on stage.
@@ -69,6 +72,7 @@ export function MonsterTray() {
           {ALL_MONSTERS.map((m) => {
             const info = MONSTERS[m];
             const on = onStage.has(m);
+            const stays = on && (alone || tracks.find((t) => t.monster === m)?.id === guideTrack);
             const benched = bench.find((b) => b.track.monster === m);
             const hasLoop = on ? trackHasLoop(tracks.find((t) => t.monster === m)!) : benched ? trackHasLoop(benched.track) : false;
             return (
@@ -78,7 +82,7 @@ export function MonsterTray() {
                 data-monster={m}
                 data-on={on}
                 aria-pressed={on}
-                aria-label={`${info.name}, ${info.role}. ${on ? (alone ? 'On stage. Tap to hear it.' : 'On stage. Tap to send home.') : 'Tap to invite on stage.'}`}
+                aria-label={`${info.name}, ${info.role}. ${on ? (stays ? 'On stage. Tap to hear it.' : 'On stage. Tap to send home.') : 'Tap to invite on stage.'}`}
                 onClick={(e) => toggle(m, e.currentTarget)}
               >
                 <span className="tray-art">

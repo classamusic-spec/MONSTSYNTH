@@ -730,13 +730,22 @@
   cursor: pointer;
 }
 
-.lesson-word[data-tapped='true'] {
-  color: var(--spark);
+/* A tapped word hops (touchAnswers.ts) and lights up in its own key's colour:
+   no white ring, no growing and no yellow, so it never looks like the word to
+   play next (or the word the teacher is singing). */
+.lesson-word[data-tapped='true']:not([data-state='next'], [data-now='true']) .word-text {
+  color: color-mix(in srgb, var(--k) 65%, white);
 }
 
-.lesson-word[data-tapped='true'] .word-note {
-  transform: scale(1.15);
+.lesson-word[data-tapped='true']:not([data-state='next'], [data-now='true']) .word-note {
   box-shadow:
-    0 0 0 3px #fff,
-    0 0 16px var(--k);
+    0 3px 0 color-mix(in srgb, var(--k) 55%, black),
+    0 0 14px 4px color-mix(in srgb, var(--k) 75%, transparent);
+}
+
+/* …and the picture on its key pops for a moment (the key itself does not
+   light up: a lit key means "the teacher is singing this one"). */
+.lesson-key[data-peek='true'] .glyph-stair {
+  opacity: 0.95;
+  transform: translate(-50%, -50%) scale(1.3);
 }

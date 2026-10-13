@@ -48,6 +48,10 @@ const CHEER_MS = 1300;
 /** A tapped teacher sings at most this often; a tapped word a little more often (a run along the words). */
 const TEACHER_GAP_MS = 300;
 const WORD_GAP_MS = 150;
+/** A stage tap this soon after a key press is a palm resting on the screen, not a tap. */
+const PALM_MS = 80;
+/** No hint this close to the teacher starting the next phrase (its first note would stutter). */
+const HANDOFF_MS = 450;
 
 export function LearnScreen() {
   const [songId, setSongId] = useState<string | null>(null);
@@ -173,6 +177,10 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
   const helped = useRef(0);
   /** When a tap on the teacher or a word last made the teacher sing. */
   const lastSung = useRef(0);
+  /** When a key was last pressed (a palm resting on the stage is not a second tap). */
+  const lastPress = useRef(0);
+  /** When the cheer moves on to the next phrase (the teacher then sings it from the top). */
+  const cheerEnds = useRef(0);
   const phraseRef = useRef(phrase);
   phraseRef.current = phrase;
   const keyEls = useRef<(HTMLButtonElement | null)[]>([]);
@@ -283,6 +291,7 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
   const phraseDone = () => {
     setPhase('cheer');
     clearTimer();
+    cheerEnds.current = performance.now() + CHEER_MS;
     timer.current = setTimeout(() => {
       const next = phraseRef.current + 1;
       if (next < song.phrases.length) listen(next);
@@ -291,6 +300,7 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
   };
 
   const press = (k: number) => {
+    lastPress.current = performance.now();
     flash(k, 'down', 140);
     if (phase !== 'listen' && phase !== 'play') {
       // Between lessons the keys are free to play.
@@ -351,32 +361,37 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
   // ── Touches that are not tries: the teacher and the words sing ──────────────
 
   /**
-   * The teacher sings one note for a tap, lighting its key, unless it is singing
-   * a phrase (or the band plays): then the child is already hearing it.
+   * The teacher sings one note for a tap, unless it is singing a phrase (or the
+   * band plays), or is about to: then the child is already hearing it, and a
+   * hint would stutter the phrase's first note. A palm resting on the stage
+   * while a finger plays a key is not a tap either. The teacher's hint lights
+   * its key ("this one"); a word only makes the picture on its key pop, so it
+   * never looks like the key to play next.
    */
-  const singFor = (step: number, beats: number, gapMs: number) => {
+  const singFor = (step: number, beats: number, gapMs: number, light: 'glow' | 'peek') => {
     const ph = phaseRef.current;
     if (ph !== 'play' && ph !== 'cheer') return;
     const now = performance.now();
-    if (now - lastSung.current < gapMs) return;
+    if (now - lastSung.current < gapMs || now - lastPress.current < PALM_MS) return;
+    if (ph === 'cheer' && cheerEnds.current - now < HANDOFF_MS) return;
     if (!studio.lessonSing(song.teacher, step, song.key, Math.min(1, Math.max(0.3, beats * spb)))) return;
     lastSung.current = now;
     const key = keyEls.current[step];
-    if (key) glow(key, 320);
+    if (key) glow(key, 320, light);
   };
 
   /** A hint by ear: the note the child needs next (never a try, never a step on). */
   const tapTeacher = () => {
     const next = nextLessonNote(song, phraseRef.current, index);
-    if (next) singFor(next[1], next[2], TEACHER_GAP_MS);
-    // After the teacher's note, so its happy squeezed eyes win over the singing face.
+    if (next) singFor(next[1], next[2], TEACHER_GAP_MS, 'glow');
+    // After the teacher's note: its happy ^ ^ eyes cover the singing face's wide eyes.
     teacherGiggle(teacherRef.current);
   };
 
   /** Another way to sing along: a word sings its own note. */
   const tapWord = (i: number) => {
     const note = notes[i];
-    if (note) singFor(note[1], note[2], WORD_GAP_MS);
+    if (note) singFor(note[1], note[2], WORD_GAP_MS, 'peek');
     wordHop(wordEls.current[i]);
   };
 
@@ -498,6 +513,7 @@ function Lesson({ song, onExit }: { song: TeachSong; onExit: () => void }) {
                   }}
                   data-i={i}
                   className="lesson-word"
+                  style={{ '--k': `var(--key-${notes[i][1]})` } as CSSProperties}
                   data-state={phase === 'play' ? (i < index ? 'sung' : i === index ? 'next' : 'todo') : phase === 'cheer' ? 'sung' : 'todo'}
                 >
                   {/* A tag in the key's colour, so non-readers can follow the colours and readers the names. */}
