@@ -158,8 +158,8 @@ export function ParentSpace() {
           <div className="ps-choices" role="radiogroup" aria-labelledby="ps-mode">
             {(
               [
-                ['little', 'Little Monster', 'About ages 3–5. Big buttons, no reading, 4 monsters, extra timing help.'],
-                ['maker', 'Monster Maker', 'About ages 6–10. Adds 8 drum pads, up to 6 monsters, speed & mood, Chomper and Wiggle effects, solo, redo, names.'],
+                ['little', 'Little Monster', 'About ages 3–5. Big buttons, no reading, all six monsters, extra timing help.'],
+                ['maker', 'Monster Maker', 'About ages 6–10. Adds 8 drum pads, speed & mood, Chomper and Wiggle effects, solo, redo, names.'],
               ] as const
             ).map(([value, title, desc]) => (
               <label key={value} className="ps-choice" data-checked={settings.ageMode === value}>

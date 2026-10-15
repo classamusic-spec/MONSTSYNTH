@@ -14,7 +14,7 @@ import { star5 } from '../monsters/shapes';
 // hear: the studio sends no `finale` otherwise). No words needed:
 //   stars rain down (for every song, demos too: they celebrate the music)
 //   the band that played hops one by one in row order, then bows together
-//     (Monster Blocks' row heads, or the Lab's monsters if they are on screen;
+//     (Monster Blocks' row heads: a song only plays to its end in Blocks;
 //     sleeping monsters stay asleep; a monster with no blocks just watches,
 //     unless it sang the ending's crash or "ta-da!"). A tap on a performer while
 //     it bows makes it hop again with a happy "yay!" (not the sleep toggle).
@@ -58,7 +58,7 @@ interface Performer {
   /** What hops and bows: an HTML-level box, so the compositor does the work. */
   body: HTMLElement;
   colour: string;
-  /** Monster Blocks' row head (a tap there hops again during the bow); null for the Lab's monsters. */
+  /** Monster Blocks' row head (a tap there hops again during the bow). */
   head: HTMLElement | null;
   /** Who says "yay!" when tapped (the painting's row has no voice of its own). */
   monster: MonsterKind | null;
@@ -73,7 +73,7 @@ function colourOf(el: Element): string {
   return getComputedStyle(el).getPropertyValue('--c').trim() || '#ffd84d';
 }
 
-/** The performers on screen, in row order: Monster Blocks' row heads, else the Lab's monsters. */
+/** The performers on screen, in row order: Monster Blocks' row heads (songs only finish in Blocks). */
 function performersOnScreen(cast: string[]): Performer[] {
   const out: Performer[] = [];
   for (const id of cast) {
@@ -85,11 +85,7 @@ function performersOnScreen(cast: string[]): Performer[] {
       const kind = row.dataset.monster;
       const monster = kind && kind !== 'paint' ? (kind as MonsterKind) : null;
       if (host && body && row.dataset.sleeping !== 'true') out.push({ host, body, colour: colourOf(row.querySelector('.row-head') ?? row), head: host, monster });
-      continue;
     }
-    const pod = document.querySelector<HTMLElement>(`.pod[data-track="${sel}"]`);
-    const body = pod?.querySelector<HTMLElement>('.squish > .monster-svg');
-    if (pod && body) out.push({ host: pod.querySelector<HTMLElement>('.pod-hit') ?? pod, body, colour: colourOf(pod), head: null, monster: null });
   }
   return out;
 }

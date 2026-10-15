@@ -15,8 +15,8 @@ import type { FxLevels, MonsterKind, NoteEvent, Project, ScaleId } from '../mode
 //   Skeleton Tiptoe          96  spooky (not scary): heartbeat and ticking clock
 //   Cloud Castle             76  dreamy chill: Puff's big soft chords
 //
-// Every song is 8 blocks of 8 beats and four monsters (a Little Monsters stage
-// holds four; nobody needs a recording). Each one starts with its own tune and
+// Every song is 8 blocks of 8 beats and four monsters (room left for a child to
+// invite the other two; nobody needs a recording). Each one starts with its own tune and
 // groove in the very first block, so a few seconds are enough to tell them
 // apart, and no two songs share a lead sound. More of the band joins, it takes
 // a breath in block 6 and plays all together in the last block.

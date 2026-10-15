@@ -111,8 +111,9 @@
 }
 
 /* Phones: a small moon, so a bigger circle around it (still clear of the + seat).
-   About a 44 px target, no bigger: the moon sits over the top of Spark's
-   column, and Spark keeps every touch outside the moon. */
+   About a 44 px target, no bigger: the moon sits over the top of the right-most
+   monster's column (Spark in the starter band, whoever joined last otherwise),
+   and that monster keeps every touch outside the moon. */
 @media (max-height: 559px) {
   .stage-moon .moon-hit {
     r: 46px;

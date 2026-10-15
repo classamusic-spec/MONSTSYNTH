@@ -181,7 +181,7 @@ export function FirstBeatGuide() {
           </button>
         </div>
       )}
-      {onward && (
+      {onward && screen === 'lab' && !overlay && (
         <div className="guide-onward" role="dialog" aria-label="What next?">
           <button className="guide-choice" aria-label="A friend joins in" onClick={friend}>
             <span className="guide-choice-art">

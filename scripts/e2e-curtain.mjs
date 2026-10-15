@@ -332,11 +332,15 @@ for (const viewport of [
     const onTop = await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.curtain-again'), { x: ar.l + ar.w / 2, y: ar.t + ar.h / 2 });
     check('“again” is on top of the blocks, where a finger lands', onTop);
     await resetLogs(page);
+    const t0 = await page.evaluate(() => performance.now());
     await page.mouse.click(ar.l + ar.w / 2, ar.t + ar.h / 2);
     await page.waitForTimeout(150);
     const s = await S(page);
-    const d = await page.evaluate(() => window.__monster.studio.debug());
-    check('“again” plays the song again from the top', s.transport.playing && s.transport.mode === 'song' && d.beat < 1, `beat ${d.beat.toFixed(2)}`);
+    // Read the beat and the clock together: "from the top" means the song is no further
+    // in than the time since the tap allows (half a beat of slack), however busy the machine.
+    const d = await page.evaluate(() => ({ ...window.__monster.studio.debug(), now: performance.now(), tempo: window.__monster.getState().project.tempo }));
+    const allowed = ((d.now - t0) / 1000) * (d.tempo / 60) + 0.5;
+    check('“again” plays the song again from the top', s.transport.playing && s.transport.mode === 'song' && d.beat <= allowed, `beat ${d.beat.toFixed(2)} (at most ${allowed.toFixed(2)})`);
     await page.waitForTimeout(350);
     check('…and the curtain call is gone (no button, no hands, no stars, no bows left running)', (await page.locator('.curtain-again, .finale-clap, .finale').count()) === 0 && (await page.evaluate(() => document.getAnimations().filter((x) => x.id.startsWith('curtain-')).length)) === 0);
     // Only an invisible shield stays where the button was, for a moment (a double tap must not edit the song).
